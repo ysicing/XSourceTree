@@ -77,6 +77,20 @@ export interface Operation {
   token: string;
 }
 
+/** Patch 只包含后端生成的区块标识；Supported 为 false 时应使用整文件操作。 */
+export interface Patch {
+  token: string;
+  text: string;
+  hunks: PatchHunk[];
+  supported: boolean;
+}
+
+/** PatchHunk 的 ID 从零开始，仅对同一 Token 有效。 */
+export interface PatchHunk {
+  id: number;
+  header: string;
+}
+
 export interface Recent {
   name: string;
   path: string;
@@ -114,6 +128,9 @@ export interface Stash {
 export const RepositoryService = {
   addRepositories(paths: string[], groupID: string): Promise<Library> {
     return call("RepositoryService.AddRepositories", paths, groupID);
+  },
+  applyHunk(path: string, file: string, staged: boolean, token: string, id: number): Promise<void> {
+    return call("RepositoryService.ApplyHunk", path, file, staged, token, id);
   },
   applyStash(path: string, hash: string, pop: boolean): Promise<void> {
     return call("RepositoryService.ApplyStash", path, hash, pop);
@@ -174,6 +191,9 @@ export const RepositoryService = {
   },
   operationAction(path: string, kind: string, token: string, action: string): Promise<void> {
     return call("RepositoryService.OperationAction", path, kind, token, action);
+  },
+  patch(path: string, file: string, staged: boolean): Promise<Patch> {
+    return call("RepositoryService.Patch", path, file, staged);
   },
   recent(): Promise<Recent[]> {
     return call("RepositoryService.Recent");

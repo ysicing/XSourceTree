@@ -111,6 +111,8 @@ main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: colu
 .commit-button span { overflow: hidden; text-overflow: ellipsis; }
 .conflict-hint { font-size: 11px; color: var(--orange); margin-top: 8px; }
 .diff-panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.diff-line.hunk { position: relative; padding-right: 120px; }
+.hunk-action { position: sticky; right: 6px; margin-left: auto; align-self: center; padding: 2px 7px; font-size: 10px; color: var(--accent); background: var(--surface); }
 .diff-heading { height: 49px; flex: none; padding: 0 18px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 11px; }
 .diff-heading strong { color: var(--text); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .diff-heading > span:not(.badge) { margin-left: auto; white-space: nowrap; font-size: 10px; color: var(--subtle); }

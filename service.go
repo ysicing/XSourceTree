@@ -208,6 +208,22 @@ func (service *RepositoryService) Diff(ctx context.Context, path, file string, s
 	return repo.Diff(ctx, file, staged)
 }
 
+func (service *RepositoryService) Patch(ctx context.Context, path, file string, staged bool) (gitrepo.Patch, error) {
+	repo, err := service.manager.Get(path)
+	if err != nil {
+		return gitrepo.Patch{}, err
+	}
+	return repo.Patch(ctx, file, staged)
+}
+
+func (service *RepositoryService) ApplyHunk(ctx context.Context, path, file string, staged bool, token string, id int) error {
+	repo, err := service.manager.Get(path)
+	if err != nil {
+		return err
+	}
+	return repo.ApplyHunk(ctx, file, staged, token, id)
+}
+
 func (service *RepositoryService) Stage(ctx context.Context, path string, files []string) error {
 	repo, err := service.manager.Get(path)
 	if err != nil {

@@ -14,18 +14,23 @@ import (
 const outputLimit = 4 << 20
 
 type limitedBuffer struct {
-	bytes.Buffer
+	// 不嵌入 bytes.Buffer，避免 io.Copy 通过提升的 ReadFrom 绕过 Write 限制。
+	content  bytes.Buffer
 	overflow bool
+}
+
+func (buffer *limitedBuffer) String() string {
+	return buffer.content.String()
 }
 
 func (buffer *limitedBuffer) Write(data []byte) (int, error) {
 	size := len(data)
-	remaining := outputLimit - buffer.Len()
+	remaining := outputLimit - buffer.content.Len()
 	if size > remaining {
 		buffer.overflow = true
 		data = data[:remaining]
 	}
-	_, _ = buffer.Buffer.Write(data)
+	_, _ = buffer.content.Write(data)
 	return size, nil
 }
 

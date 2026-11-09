@@ -1,5 +1,5 @@
 import "./style.css";
-import { RepositoryService as api, events, type Branch, type Commit, type Conflict, type ConflictSide, type Diff, type File, type Library, type LocalRepository, type ScanResult, type Snapshot, type Stash } from "./mygo";
+import { RepositoryService as api, events, type Branch, type Commit, type Conflict, type ConflictSide, type Diff, type File, type Library, type LocalRepository, type Patch, type ScanResult, type Snapshot, type Stash } from "./mygo";
 import { escapeHTML as escape, fileGroups, graphRows, parseDiff, type GraphRow } from "./presentation";
 import { icon } from "./icons";
 import { settleMutation } from "./mutations";
@@ -23,6 +23,7 @@ const state = {
   view: "changes" as View,
   selection: null as Selection | null,
   diff: null as Diff | null,
+  patch: null as Patch | null,
   diffLoading: false,
   diffError: "",
   busy: "",
@@ -391,11 +392,17 @@ function renderDiffPanel(): string {
   else if (!state.diff?.text) body = '<div class="empty-state"><span>没有可显示的文本差异</span></div>';
   else {
     const rows = parseDiff(state.diff.text);
-    body = `<div class="diff-scroll"><div class="diff-code" role="region" aria-label="统一差异" tabindex="0">${rows.slice(0, 4000).map((row) => `
-      <div class="diff-line ${row.kind}"><span class="line-number" aria-hidden="true">${row.before ?? ""}</span><span class="line-number" aria-hidden="true">${row.after ?? ""}</span><code>${escape(row.content) || " "}</code></div>`).join("")}</div>
+    let hunk = -1;
+    body = `<div class="diff-scroll"><div class="diff-code" role="region" aria-label="统一差异" tabindex="0">${rows.slice(0, 4000).map((row) => {
+      if (row.kind === "hunk") hunk++;
+      const action = row.kind === "hunk" && rows.length <= 4000 && !state.diff!.truncated && state.patch?.supported && state.patch.hunks[hunk]?.header === row.content && "path" in selection
+        ? `<button class="hunk-action" data-action="apply-hunk" data-hunk="${state.patch.hunks[hunk]!.id}" data-mutates ${disabled()}>${selection.staged ? "取消暂存此块" : "暂存此块"}</button>` : "";
+      return `<div class="diff-line ${row.kind}" ${row.kind === "hunk" ? 'tabindex="-1"' : ""}><span class="line-number" aria-hidden="true">${row.before ?? ""}</span><span class="line-number" aria-hidden="true">${row.after ?? ""}</span><code>${escape(row.content) || " "}</code>${action}</div>`;
+    }).join("")}</div>
       ${state.diff.truncated || rows.length > 4000 ? '<div class="diff-limit">预览已截断，请使用命令行查看完整差异。</div>' : ""}</div>`;
   }
-  return `<div class="diff-heading">${icon("file", 16)}<strong title="${escape(title)}">${escape(title)}</strong><span>${subtitle}</span>${state.diff?.binary ? '<span class="badge">二进制</span>' : ""}</div>${stashActions}${body}`;
+  const navigation = state.diff?.text ? '<button class="small-button" data-action="previous-hunk" title="上一差异块">↑</button><button class="small-button" data-action="next-hunk" title="下一差异块">↓</button>' : "";
+  return `<div class="diff-heading">${icon("file", 16)}<strong title="${escape(title)}">${escape(title)}</strong><span>${subtitle}</span>${state.diff?.binary ? '<span class="badge">二进制</span>' : ""}${navigation}</div>${stashActions}${body}`;
 }
 
 async function loadSelection(): Promise<void> {
@@ -403,6 +410,7 @@ async function loadSelection(): Promise<void> {
   const selection = state.selection;
   const repo = state.repo;
   state.diff = null;
+  state.patch = null;
   state.conflict = null;
   state.diffError = "";
   state.diffLoading = !!selection;
@@ -416,7 +424,12 @@ async function loadSelection(): Promise<void> {
       const diff = "path" in selection ? await api.diff(repo.path, selection.path, selection.staged)
         : "stash" in selection ? await api.stashDiff(repo.path, selection.stash)
         : await api.commitDiff(repo.path, selection.hash);
-      if (version === selectionVersion) state.diff = diff;
+      const patch = "path" in selection && !diff.binary && !diff.truncated
+        ? await api.patch(repo.path, selection.path, selection.staged).catch(() => null) : null;
+      if (version === selectionVersion) {
+        state.patch = patch;
+        state.diff = patch?.supported ? { ...diff, text: patch.text } : diff;
+      }
     }
   } catch (error) {
     if (version === selectionVersion) state.diffError = String(error instanceof Error ? error.message : error);
@@ -854,6 +867,26 @@ document.addEventListener("click", (event) => {
     case "unstage": {
       const method = action === "stage" ? api.stage : api.unstage;
       void mutate(action === "stage" ? "正在暂存…" : "正在取消暂存…", (path) => method(path, [target.dataset.path!]));
+      break;
+    }
+    case "apply-hunk": {
+      const selection = state.selection;
+      const patch = state.patch;
+      if (!selection || !("path" in selection) || !patch?.supported || state.diffLoading) break;
+      const id = Number(target.dataset.hunk);
+      if (!patch.hunks.some((hunk) => hunk.id === id)) break;
+      void mutate(selection.staged ? "正在取消暂存区块…" : "正在暂存区块…",
+        (path) => api.applyHunk(path, selection.path, selection.staged, patch.token, id));
+      break;
+    }
+    case "previous-hunk":
+    case "next-hunk": {
+      const hunks = [...document.querySelectorAll<HTMLElement>(".diff-line.hunk")];
+      const top = document.querySelector(".diff-scroll")?.getBoundingClientRect().top ?? 0;
+      const candidate = action === "next-hunk" ? hunks.find((hunk) => hunk.getBoundingClientRect().top > top + 5)
+        : hunks.reverse().find((hunk) => hunk.getBoundingClientRect().top < top - 5);
+      candidate?.scrollIntoView({ block: "start" });
+      candidate?.focus({ preventScroll: true });
       break;
     }
     case "stage-all":

@@ -75,7 +75,9 @@ function request(method, params = {}) {
 }
 
 async function evaluate(script) {
-  const result = await request("eval", { script });
+  const result = await request("eval", { script }).catch((error) => {
+    throw new Error(`${error.message}\n执行脚本：${script}`, { cause: error });
+  });
   return result.value;
 }
 
@@ -359,6 +361,33 @@ try {
   await execute("document.querySelector('#commit-message').value='resolve stash conflict'; document.querySelector('#commit-message').dispatchEvent(new Event('input',{bubbles:true})); document.querySelector('#commit-form').requestSubmit()");
   await waitFor("!!document.querySelector('.clean-state') && !document.querySelector('#statusbar .spinner')", "提交储藏冲突解决");
   assert.equal(gitAt(cloned, "show", "HEAD:hello.txt"), "stash conflict version");
+
+  const hunkBase = Array.from({ length: 40 }, (_, index) => `line ${index + 1}\n`).join("");
+  const hunkChanged = hunkBase.replace("line 3\n", "first hunk\n").replace("line 30\n", "last hunk\n");
+  writeFileSync(join(cloned, "hunks.txt"), hunkBase);
+  gitAt(cloned, "add", "hunks.txt");
+  gitAt(cloned, "commit", "-m", "hunk fixture");
+  writeFileSync(join(cloned, "hunks.txt"), hunkChanged);
+  await evaluate("document.querySelector('[data-action=\"refresh\"]').click()");
+  await waitFor("document.querySelectorAll('[data-action=\"apply-hunk\"]').length === 2 && !document.querySelector('#statusbar .spinner')", "两个独立差异块");
+  await evaluate("document.querySelector('[data-action=\"apply-hunk\"][data-hunk=\"0\"]').click()");
+  await waitFor("document.querySelectorAll('[data-action=\"unstage\"]').length === 1 && !document.querySelector('#statusbar .spinner')", "逐块暂存");
+  assert(gitAt(cloned, "diff", "--cached").includes("+first hunk"));
+  assert(!gitAt(cloned, "diff", "--cached").includes("+last hunk"));
+  assert.equal(readFileSync(join(cloned, "hunks.txt"), "utf8"), hunkChanged, "区块操作不可改变工作区");
+  await evaluate("document.querySelector('[data-action=\"select-file\"][data-staged=\"true\"]').click()");
+  await waitFor("document.querySelectorAll('[data-action=\"apply-hunk\"]').length === 1 && document.querySelector('[data-action=\"apply-hunk\"]')?.textContent.includes('取消')", "暂存区的区块操作");
+  await evaluate("document.querySelector('[data-action=\"apply-hunk\"]').click()");
+  await waitFor("document.querySelectorAll('[data-action=\"apply-hunk\"]').length === 2 && !document.querySelector('#statusbar .spinner')", "逐块取消暂存");
+  assert.equal(gitAt(cloned, "diff", "--cached"), "");
+  writeFileSync(join(cloned, "hunks.txt"), hunkChanged + "outside edit\n");
+  await evaluate("document.querySelector('[data-action=\"apply-hunk\"]').click()");
+  await waitFor("document.querySelector('#alerts')?.textContent.includes('已改变') && !document.querySelector('#statusbar .spinner')", "过期补丁保护");
+  assert.equal(gitAt(cloned, "diff", "--cached"), "");
+  assert.equal(readFileSync(join(cloned, "hunks.txt"), "utf8"), hunkChanged + "outside edit\n");
+  writeFileSync(join(cloned, "hunks.txt"), hunkBase);
+  await evaluate("document.querySelector('[data-action=\"refresh\"]').click()");
+  await waitFor("!!document.querySelector('.clean-state') && !document.querySelector('#statusbar .spinner')", "区块测试恢复");
   assert.deepEqual(await evaluate("window.__smokeErrors"), [], "桌面页面不应出现未处理的脚本错误");
 
   if (process.env.XSOURCETREE_SCREENSHOT) {

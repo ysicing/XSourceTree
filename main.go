@@ -8,7 +8,10 @@ import (
 	"github.com/ysicing/XSourceTree/internal/workspace"
 )
 
-var openRequested = mygo.NewEvent[bool]("repository:open")
+var addRequested = mygo.NewEvent[bool]("repository:add")
+var scanRequested = mygo.NewEvent[bool]("repository:scan")
+var groupRequested = mygo.NewEvent[bool]("repository:group")
+var libraryRequested = mygo.NewEvent[bool]("repository:library")
 var refreshRequested = mygo.NewEvent[bool]("repository:refresh")
 
 func main() {
@@ -27,9 +30,24 @@ func main() {
 		app.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
 			{Role: mygo.RoleAppMenu},
 			{Label: "文件", Submenu: []*mygo.MenuItem{
-				{Label: "打开仓库…", Accelerator: "CmdOrCtrl+O", Click: func(_ *mygo.MenuItem, win *mygo.Window) {
+				{Label: "本地仓库", Accelerator: "CmdOrCtrl+Shift+L", Click: func(_ *mygo.MenuItem, win *mygo.Window) {
 					if win != nil {
-						_ = openRequested.Emit(win, true)
+						_ = libraryRequested.Emit(win, true)
+					}
+				}},
+				{Label: "添加已有的本地仓库…", Accelerator: "CmdOrCtrl+O", Click: func(_ *mygo.MenuItem, win *mygo.Window) {
+					if win != nil {
+						_ = addRequested.Emit(win, true)
+					}
+				}},
+				{Label: "扫描文件夹…", Accelerator: "CmdOrCtrl+Shift+O", Click: func(_ *mygo.MenuItem, win *mygo.Window) {
+					if win != nil {
+						_ = scanRequested.Emit(win, true)
+					}
+				}},
+				{Label: "新建仓库组…", Click: func(_ *mygo.MenuItem, win *mygo.Window) {
+					if win != nil {
+						_ = groupRequested.Emit(win, true)
 					}
 				}},
 				mygo.Separator(),

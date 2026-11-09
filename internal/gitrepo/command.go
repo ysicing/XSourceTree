@@ -59,7 +59,8 @@ func gitEnvironment() []string {
 			environment = append(environment, entry)
 		}
 	}
-	return append(environment, "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never", "GIT_PAGER=cat", "LC_ALL=C")
+	return append(environment, "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never", "GIT_PAGER=cat",
+		"GIT_EDITOR=true", "GIT_SEQUENCE_EDITOR=true", "GIT_MERGE_AUTOEDIT=no", "LC_ALL=C")
 }
 
 func run(ctx context.Context, root, input string, timeout time.Duration, args ...string) (string, error) {
@@ -83,6 +84,9 @@ func run(ctx context.Context, root, input string, timeout time.Duration, args ..
 			code = failure.ExitCode()
 		}
 		message := strings.TrimSpace(stderr.String())
+		if details := strings.TrimSpace(stdout.String()); details != "" {
+			message = strings.TrimSpace(details + "\n" + message)
+		}
 		if message == "" {
 			message = err.Error()
 		}

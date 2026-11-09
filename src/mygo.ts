@@ -21,6 +21,24 @@ export interface Commit {
   refs: string;
 }
 
+export interface Conflict {
+  path: string;
+  token: string;
+  base: ConflictSide;
+  ours: ConflictSide;
+  theirs: ConflictSide;
+  result: string;
+  editable: boolean;
+}
+
+export interface ConflictSide {
+  present: boolean;
+  text: string;
+  binary: boolean;
+  mode: string;
+  hash: string;
+}
+
 export interface Diff {
   text: string;
   binary: boolean;
@@ -35,12 +53,43 @@ export interface File {
   conflict: boolean;
 }
 
+export interface Group {
+  id: string;
+  name: string;
+}
+
+export interface Library {
+  repositories: LocalRepository[];
+  groups: Group[];
+}
+
+export interface LocalRepository {
+  name: string;
+  path: string;
+  groupID: string;
+  branch: string;
+  changes: number;
+  problem: string;
+}
+
+export interface Operation {
+  kind: string;
+  token: string;
+}
+
 export interface Recent {
   name: string;
   path: string;
 }
 
+export interface ScanResult {
+  repositories: LocalRepository[];
+  warnings: string[];
+  truncated: boolean;
+}
+
 export interface Snapshot {
+  operation: Operation;
   name: string;
   path: string;
   branch: string;
@@ -54,14 +103,35 @@ export interface Snapshot {
   remotes: string[];
 }
 
+export interface Stash {
+  hash: string;
+  message: string;
+  date: string;
+}
+
 // ---- Services ----
 
 export const RepositoryService = {
+  addRepositories(paths: string[], groupID: string): Promise<Library> {
+    return call("RepositoryService.AddRepositories", paths, groupID);
+  },
+  applyStash(path: string, hash: string, pop: boolean): Promise<void> {
+    return call("RepositoryService.ApplyStash", path, hash, pop);
+  },
   branches(path: string): Promise<Branch[]> {
     return call("RepositoryService.Branches", path);
   },
+  cancelScan(): Promise<void> {
+    return call("RepositoryService.CancelScan");
+  },
   choose(): Promise<Snapshot | null> {
     return call("RepositoryService.Choose");
+  },
+  chooseLocal(groupID: string): Promise<Library> {
+    return call("RepositoryService.ChooseLocal", groupID);
+  },
+  chooseScanRoot(): Promise<string> {
+    return call("RepositoryService.ChooseScanRoot");
   },
   commit(path: string, message: string): Promise<void> {
     return call("RepositoryService.Commit", path, message);
@@ -69,29 +139,77 @@ export const RepositoryService = {
   commitDiff(path: string, hash: string): Promise<Diff> {
     return call("RepositoryService.CommitDiff", path, hash);
   },
+  conflict(path: string, file: string): Promise<Conflict> {
+    return call("RepositoryService.Conflict", path, file);
+  },
   createBranch(path: string, name: string): Promise<void> {
     return call("RepositoryService.CreateBranch", path, name);
+  },
+  createGroup(name: string): Promise<Library> {
+    return call("RepositoryService.CreateGroup", name);
+  },
+  createStash(path: string, message: string, includeUntracked: boolean): Promise<void> {
+    return call("RepositoryService.CreateStash", path, message, includeUntracked);
   },
   diff(path: string, file: string, staged: boolean): Promise<Diff> {
     return call("RepositoryService.Diff", path, file, staged);
   },
+  dropStash(path: string, hash: string): Promise<void> {
+    return call("RepositoryService.DropStash", path, hash);
+  },
   history(path: string, skip: number): Promise<Commit[]> {
     return call("RepositoryService.History", path, skip);
+  },
+  library(): Promise<Library> {
+    return call("RepositoryService.Library");
+  },
+  merge(path: string, branch: string): Promise<void> {
+    return call("RepositoryService.Merge", path, branch);
+  },
+  moveRepository(path: string, groupID: string): Promise<Library> {
+    return call("RepositoryService.MoveRepository", path, groupID);
   },
   open(path: string): Promise<Snapshot> {
     return call("RepositoryService.Open", path);
   },
+  operationAction(path: string, kind: string, token: string, action: string): Promise<void> {
+    return call("RepositoryService.OperationAction", path, kind, token, action);
+  },
   recent(): Promise<Recent[]> {
     return call("RepositoryService.Recent");
   },
+  refreshLibrary(): Promise<Library> {
+    return call("RepositoryService.RefreshLibrary");
+  },
   remote(path: string, action: string): Promise<void> {
     return call("RepositoryService.Remote", path, action);
+  },
+  removeGroup(id: string): Promise<Library> {
+    return call("RepositoryService.RemoveGroup", id);
+  },
+  removeRepository(path: string): Promise<Library> {
+    return call("RepositoryService.RemoveRepository", path);
+  },
+  renameGroup(id: string, name: string): Promise<Library> {
+    return call("RepositoryService.RenameGroup", id, name);
+  },
+  resolveConflict(path: string, file: string, token: string, choice: string, content: string): Promise<void> {
+    return call("RepositoryService.ResolveConflict", path, file, token, choice, content);
+  },
+  scan(root: string): Promise<ScanResult> {
+    return call("RepositoryService.Scan", root);
   },
   snapshot(path: string): Promise<Snapshot> {
     return call("RepositoryService.Snapshot", path);
   },
   stage(path: string, files: string[]): Promise<void> {
     return call("RepositoryService.Stage", path, files);
+  },
+  stashDiff(path: string, hash: string): Promise<Diff> {
+    return call("RepositoryService.StashDiff", path, hash);
+  },
+  stashes(path: string): Promise<Stash[]> {
+    return call("RepositoryService.Stashes", path);
   },
   switchBranch(path: string, name: string): Promise<void> {
     return call("RepositoryService.SwitchBranch", path, name);
@@ -105,6 +223,9 @@ export const RepositoryService = {
 
 /** Events sent by the Go side. Subscribe with `events.name.on(listener)`. */
 export const events = {
-  repositoryOpen: event<boolean>("repository:open"),
+  repositoryAdd: event<boolean>("repository:add"),
+  repositoryScan: event<boolean>("repository:scan"),
+  repositoryGroup: event<boolean>("repository:group"),
+  repositoryLibrary: event<boolean>("repository:library"),
   repositoryRefresh: event<boolean>("repository:refresh"),
 } as const;

@@ -26,17 +26,18 @@ type File struct {
 }
 
 type Snapshot struct {
-	Name     string   `json:"name"`
-	Path     string   `json:"path"`
-	Branch   string   `json:"branch"`
-	Head     string   `json:"head"`
-	Upstream string   `json:"upstream"`
-	Ahead    int      `json:"ahead"`
-	Behind   int      `json:"behind"`
-	Detached bool     `json:"detached"`
-	Unborn   bool     `json:"unborn"`
-	Files    []File   `json:"files"`
-	Remotes  []string `json:"remotes"`
+	Operation Operation `json:"operation"`
+	Name      string    `json:"name"`
+	Path      string    `json:"path"`
+	Branch    string    `json:"branch"`
+	Head      string    `json:"head"`
+	Upstream  string    `json:"upstream"`
+	Ahead     int       `json:"ahead"`
+	Behind    int       `json:"behind"`
+	Detached  bool      `json:"detached"`
+	Unborn    bool      `json:"unborn"`
+	Files     []File    `json:"files"`
+	Remotes   []string  `json:"remotes"`
 }
 
 type Branch struct {
@@ -142,6 +143,9 @@ func (repo *Repository) Snapshot(ctx context.Context) (Snapshot, error) {
 	if state.Files, err = repo.files(ctx); err != nil {
 		return state, err
 	}
+	if state.Operation, err = repo.operation(ctx); err != nil {
+		return state, err
+	}
 	remotes, err := repo.git(ctx, "remote")
 	if err != nil {
 		return state, err
@@ -206,6 +210,9 @@ func (repo *Repository) changedPaths(ctx context.Context, paths []string, forUns
 		file, exists := known[path]
 		if !exists {
 			return nil, fmt.Errorf("文件状态已改变，请刷新：%s", path)
+		}
+		if file.Conflict {
+			return nil, errors.New("请在冲突编辑器中解决文件后再暂存")
 		}
 		names := []string{file.Path}
 		if forUnstage && file.Index == "R" || !forUnstage && file.Working == "R" {

@@ -1,17 +1,27 @@
 import assert from "node:assert/strict";
 import net from "node:net";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const socketPath = process.env.MYGO_AUTOMATION;
 assert(socketPath, "请设置 MYGO_AUTOMATION，指向启用 e2e 的应用 socket");
 const fixture = mkdtempSync(join(tmpdir(), "xsourcetree-smoke-"));
-const git = (...args) => execFileSync("git", ["-C", fixture, ...args], {
+const gitAt = (directory, ...args) => execFileSync("git", ["-C", directory, ...args], {
   encoding: "utf8",
   env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" },
 }).trim();
+const git = (...args) => gitAt(fixture, ...args);
+const cloneParent = mkdtempSync(join(tmpdir(), "xsourcetree-clone-smoke-"));
+const cloned = join(cloneParent, "cloned");
+const scanRoot = mkdtempSync(join(tmpdir(), "xsourcetree-library-smoke-"));
+const scanFirst = join(scanRoot, "应用", "GenWorld");
+const scanSecond = join(scanRoot, "工具", "XSourceTree");
+execFileSync("git", ["init", "-b", "main", scanFirst]);
+execFileSync("git", ["init", "-b", "develop", scanSecond]);
+execFileSync("git", ["init", "-b", "main", join(scanRoot, "node_modules", "ignored")]);
+const scanPaths = [realpathSync(scanFirst), realpathSync(scanSecond)];
 git("init", "-b", "main");
 git("config", "user.name", "XSourceTree Smoke");
 git("config", "user.email", "smoke@example.test");
@@ -83,9 +93,7 @@ async function waitFor(script, label) {
   throw new Error(`${label}：等待超时；界面错误：${error}`);
 }
 
-try {
-  await execute("window.__smokeReloading = true; setTimeout(() => location.reload(), 0);");
-  await waitFor("!window.__smokeReloading && !!document.querySelector('[data-action=\"open-path\"]')", "欢迎页");
+async function observeErrors() {
   await execute(`window.__smokeErrors = [];
     window.addEventListener("error", event => {
       window.__smokeErrors.push({ message: event.message, source: event.filename, line: event.lineno, stack: event.error?.stack });
@@ -93,8 +101,94 @@ try {
     window.addEventListener("unhandledrejection", event => {
       window.__smokeErrors.push({ message: String(event.reason), stack: event.reason?.stack });
     });`);
+}
+
+async function addLocal(path, group = "") {
+  await evaluate("document.querySelector('.add-menu summary').click()");
   await evaluate("document.querySelector('[data-action=\"open-path\"]').click()");
-  await execute(`document.querySelector('#dialog-input').value = ${JSON.stringify(fixture)}; document.querySelector('#input-form').requestSubmit();`);
+  await execute(`document.querySelector('#dialog-input').value=${JSON.stringify(path)}; document.querySelector('#destination-group').value=${JSON.stringify(group)}; document.querySelector('#library-add-form').requestSubmit();`);
+  await waitFor("!document.querySelector('#statusbar .spinner') && !document.querySelector('dialog[open]')", "添加本地仓库");
+}
+
+async function clickRepository(path, action = "open") {
+  const canonical = realpathSync(path);
+  if (action !== "open") {
+    await evaluate(`[...document.querySelectorAll('.library-row')].find(row => row.dataset.repository === ${JSON.stringify(canonical)}).querySelector('summary').click()`);
+  }
+  await evaluate(`[...document.querySelectorAll('[data-action="${action}"]')].find(button => button.dataset.path === ${JSON.stringify(canonical)}).click()`);
+}
+
+try {
+  await execute("window.__smokeReloading = true; setTimeout(() => location.reload(), 0);");
+  await waitFor("!window.__smokeReloading && !!document.querySelector('#repo-search')", "本地仓库页");
+  await observeErrors();
+  assert.equal(await evaluate("document.querySelectorAll('[data-action=\"clone\"]').length"), 0);
+  const groupName = `macOS-${fixture.split("-").pop()}`;
+  await evaluate("document.querySelector('[data-action=\"new-group\"]').click()");
+  await execute(`document.querySelector('#group-name').value=${JSON.stringify(groupName)}; document.querySelector('#group-form').requestSubmit();`);
+  await waitFor(`document.querySelector('.library-heading h1')?.textContent.includes(${JSON.stringify(groupName)}) && !document.querySelector('#statusbar .spinner')`, "创建仓库组");
+  const groupID = await evaluate("document.querySelector('.group-navigation .selected').dataset.group");
+  await addLocal(fixture, groupID);
+  await waitFor("document.querySelectorAll('.library-row').length === 1", "添加已有仓库");
+  assert.equal(await evaluate("document.querySelectorAll('.file-row').length"), 0, "添加不应自动打开");
+  await addLocal(fixture, "");
+  assert.equal(await evaluate("document.querySelectorAll('.library-row').length"), 1, "重复添加不能创建副本或改变分组");
+  for (const query of [fixture.split("/").pop().toUpperCase(), "main", groupName]) {
+    await execute(`document.querySelector('#repo-search').value=${JSON.stringify(query)}; document.querySelector('#repo-search').dispatchEvent(new Event('input',{bubbles:true}));`);
+    assert.equal(await evaluate("document.querySelectorAll('.library-row').length"), 1, `搜索 ${query}`);
+  }
+  await execute("document.querySelector('#repo-search').value='no-such-repository'; document.querySelector('#repo-search').dispatchEvent(new Event('input',{bubbles:true}));");
+  assert.equal(await evaluate("document.querySelectorAll('.library-row').length"), 0);
+  await evaluate("document.querySelector('[data-action=\"clear-repo-search\"]').click()");
+  await evaluate("document.querySelector('.add-menu summary').click()");
+  await evaluate("document.querySelector('[data-action=\"scan\"]').click()");
+  await execute(`document.querySelector('#scan-root').value=${JSON.stringify(scanRoot)}; document.querySelector('#scan-form').requestSubmit();`);
+  await waitFor("document.querySelectorAll('.scan-result').length === 2", "扫描嵌套本地仓库");
+  assert.equal(await evaluate("document.querySelectorAll('.library-row').length"), 1, "扫描不能自动加入列表");
+  await execute(`const checkboxes=[...document.querySelectorAll('input[name="repository"]')]; checkboxes.find(input=>input.value === ${JSON.stringify(scanPaths[1])}).click();`);
+  assert.equal(await evaluate("document.querySelector('#scan-selected-count').textContent"), "已选 1 个");
+  await evaluate("document.querySelector('#scan-import-form').requestSubmit()");
+  await waitFor("document.querySelectorAll('.library-row').length === 2 && !document.querySelector('#statusbar .spinner')", "勾选后导入指定组");
+  await evaluate("document.querySelector('.add-menu summary').click()");
+  await evaluate("document.querySelector('[data-action=\"scan\"]').click()");
+  await execute(`document.querySelector('#scan-root').value=${JSON.stringify(scanRoot)}; document.querySelector('#scan-form').requestSubmit();`);
+  await waitFor("document.querySelectorAll('.scan-result').length === 2", "重新扫描");
+  assert.equal(await evaluate("document.querySelectorAll('.scan-result input:disabled').length"), 1, "已经添加的仓库应禁选");
+  await evaluate("document.querySelector('#scan-select-all').click()");
+  assert.equal(await evaluate("document.querySelector('#scan-import-form button[type=\"submit\"]').disabled"), true, "未勾选不能导入");
+  await evaluate("document.querySelector('#scan-select-all').click()");
+  await evaluate("document.querySelector('#scan-import-form').requestSubmit()");
+  await waitFor("document.querySelectorAll('.library-row').length === 3 && !document.querySelector('#statusbar .spinner')", "导入剩余仓库");
+
+  await evaluate("document.querySelector('[data-action=\"rename-group\"]').click()");
+  const renamedGroup = `工作-${fixture.split("-").pop()}`;
+  await execute(`document.querySelector('#group-name').value=${JSON.stringify(renamedGroup)}; document.querySelector('#group-form').requestSubmit();`);
+  await waitFor(`document.querySelector('.library-heading h1')?.textContent.includes(${JSON.stringify(renamedGroup)}) && !document.querySelector('#statusbar .spinner')`, "重命名仓库组");
+  assert.deepEqual(await evaluate("window.__smokeErrors"), []);
+  await execute("window.__smokeReloading=true; setTimeout(()=>location.reload(),0);");
+  await waitFor(`!window.__smokeReloading && [...document.querySelectorAll('.group-navigation button')].some(button=>button.textContent.includes(${JSON.stringify(renamedGroup)})) && document.querySelectorAll('.library-row').length >= 3`, "重载保留仓库与组");
+  await observeErrors();
+  await execute(`document.querySelector('#repo-search').value=${JSON.stringify(renamedGroup)}; document.querySelector('#repo-search').dispatchEvent(new Event('input',{bubbles:true}));`);
+  assert.equal(await evaluate("document.querySelectorAll('.library-row').length"), 3, "可按组名搜索");
+  if (process.env.XSOURCETREE_LIBRARY_SCREENSHOT) {
+    const capture = await request("capture");
+    writeFileSync(process.env.XSOURCETREE_LIBRARY_SCREENSHOT, Buffer.from(capture.png, "base64"));
+  }
+  await clickRepository(scanFirst, "move-repository");
+  await execute("document.querySelector('#destination-group').value=''; document.querySelector('#move-form').requestSubmit();");
+  await waitFor("document.querySelectorAll('.library-row').length === 2 && !document.querySelector('#statusbar .spinner')", "移出仓库组");
+  await execute("document.querySelector('#repo-search').value=''; document.querySelector('#repo-search').dispatchEvent(new Event('input',{bubbles:true}));");
+  await evaluate(`[...document.querySelectorAll('[data-action="library-group"]')].find(button=>button.dataset.group === ${JSON.stringify(groupID)}).click()`);
+  await evaluate("document.querySelector('[data-action=\"remove-group\"]').click()");
+  assert.equal(await evaluate("document.querySelectorAll('.library-row').length"), 2, "确认前保留组");
+  await evaluate("document.querySelector('#confirm-form').requestSubmit()");
+  await waitFor("!document.querySelector('[data-action=\"remove-group\"]') && !document.querySelector('#statusbar .spinner')", "移除仓库组");
+  assert.equal(existsSync(join(scanSecond, ".git")), true);
+  await clickRepository(scanSecond, "remove-repository");
+  await evaluate("document.querySelector('#confirm-form').requestSubmit()");
+  await waitFor(`![...document.querySelectorAll('.library-row')].some(row=>row.dataset.repository === ${JSON.stringify(scanPaths[1])}) && !document.querySelector('#statusbar .spinner')`, "从列表移除仓库");
+  assert.equal(existsSync(join(scanSecond, ".git")), true, "移除列表项不能删除仓库");
+  await clickRepository(fixture);
   await waitFor("document.querySelectorAll('.file-row').length === 2 && !document.querySelector('#statusbar .spinner')", "打开仓库");
   await waitFor("document.querySelector('.diff-code')?.textContent.includes('+changed')", "真实文件 Diff");
   assert.equal(await evaluate("document.querySelectorAll('.diff-code img').length"), 0, "Diff 内容必须转义");
@@ -150,14 +244,113 @@ try {
   }
   await evaluate("document.querySelector('[data-action=\"refresh\"]').click()");
   await waitFor("!document.querySelector('[data-action=\"stage-all\"]').disabled && !document.querySelector('#statusbar .spinner')", "刷新恢复写操作");
+
+  gitAt(cloneParent, "clone", "--", fixture, cloned);
+  await evaluate("document.querySelector('[data-action=\"library\"]').click()");
+  await addLocal(cloned);
+  await clickRepository(cloned);
+  await waitFor("document.querySelector('.toolbar-context > strong')?.textContent === 'cloned' && !!document.querySelector('.clean-state') && !document.querySelector('#statusbar .spinner')", "打开新增本地仓库");
+  assert.equal(gitAt(cloned, "remote", "get-url", "origin"), fixture);
+  gitAt(cloned, "config", "user.name", "XSourceTree Smoke");
+  gitAt(cloned, "config", "user.email", "smoke@example.test");
+  gitAt(cloned, "config", "commit.gpgsign", "false");
+
+  writeFileSync(join(cloned, "hello.txt"), "stash tracked\n");
+  writeFileSync(join(cloned, "stash new.txt"), "stash untracked\n");
+  await evaluate("document.querySelector('[data-action=\"refresh\"]').click()");
+  await waitFor("document.querySelectorAll('.file-row').length === 2 && !document.querySelector('#statusbar .spinner')", "储藏前刷新");
+  await evaluate("document.querySelector('[data-action=\"new-stash\"]').click()");
+  await execute("document.querySelector('#stash-message').value='smoke stash'; document.querySelector('#stash-form').requestSubmit()");
+  await waitFor("!!document.querySelector('.clean-state') && document.querySelector('[data-action=\"stash\"] .count')?.textContent === '1' && !document.querySelector('#statusbar .spinner')", "创建含未跟踪文件的储藏");
+  assert(!existsSync(join(cloned, "stash new.txt")));
+  await evaluate("document.querySelector('[data-action=\"stash\"]').click()");
+  await waitFor("document.querySelector('.diff-code')?.textContent.includes('+stash untracked') && !!document.querySelector('[data-action=\"apply-stash\"]')", "储藏详情");
+  await evaluate("document.querySelector('[data-action=\"apply-stash\"]').click()");
+  await waitFor("document.querySelector('[data-action=\"changes\"] .count')?.textContent === '2' && !document.querySelector('#statusbar .spinner')", "应用储藏");
+  assert.equal(readFileSync(join(cloned, "stash new.txt"), "utf8"), "stash untracked\n");
+  assert(gitAt(cloned, "stash", "list").includes("smoke stash"), "apply 应保留储藏");
+  gitAt(cloned, "restore", "--worktree", ".");
+  rmSync(join(cloned, "stash new.txt"));
+  await evaluate("document.querySelector('[data-action=\"refresh\"]').click()");
+  await waitFor("document.querySelector('[data-action=\"changes\"] .count')?.textContent === '0' && !document.querySelector('#statusbar .spinner')", "恢复干净工作区");
+  await evaluate("document.querySelector('[data-action=\"pop-stash\"]').click()");
+  await waitFor("document.querySelector('[data-action=\"stash\"] .count')?.textContent === '0' && !document.querySelector('#statusbar .spinner')", "应用并删除储藏");
+  assert.equal(gitAt(cloned, "stash", "list"), "");
+  assert.equal(readFileSync(join(cloned, "hello.txt"), "utf8"), "stash tracked\n");
+  await evaluate("document.querySelector('[data-action=\"new-stash\"]').click()");
+  await execute("document.querySelector('#stash-message').value='drop me'; document.querySelector('#stash-form').requestSubmit()");
+  await waitFor("document.querySelectorAll('.stash-row').length === 1 && !document.querySelector('#statusbar .spinner')", "创建待删除储藏");
+  await evaluate("document.querySelector('[data-action=\"drop-stash\"]').click()");
+  assert(gitAt(cloned, "stash", "list").includes("drop me"), "确认前不能删除");
+  await evaluate("document.querySelector('#confirm-form').requestSubmit()");
+  await waitFor("document.querySelectorAll('.stash-row').length === 0 && !document.querySelector('#statusbar .spinner')", "确认删除储藏");
+  assert.equal(gitAt(cloned, "stash", "list"), "");
+
+  const baseBranch = gitAt(cloned, "branch", "--show-current");
+  gitAt(cloned, "switch", "-c", "conflict/topic");
+  writeFileSync(join(cloned, "hello.txt"), "incoming version\n");
+  gitAt(cloned, "commit", "-am", "incoming change");
+  gitAt(cloned, "switch", baseBranch);
+  writeFileSync(join(cloned, "hello.txt"), "current version\n");
+  gitAt(cloned, "commit", "-am", "current change");
+  await execute("document.querySelector('[data-action=\"changes\"]').click(); document.querySelector('[data-action=\"refresh\"]').click()");
+  await waitFor("!!document.querySelector('[data-action=\"switch\"][data-name=\"conflict/topic\"]') && !document.querySelector('#statusbar .spinner')", "准备合并分支");
+  await evaluate("document.querySelector('[data-action=\"merge\"]').click()");
+  await execute("document.querySelector('#merge-branch').value='refs/heads/conflict/topic'; document.querySelector('#merge-form').requestSubmit()");
+  await waitFor("!!document.querySelector('#conflict-result') && !!document.querySelector('.operation-bar') && !document.querySelector('#statusbar .spinner')", "合并冲突编辑器");
+  if (process.env.XSOURCETREE_CONFLICT_SCREENSHOT) {
+    const capture = await request("capture");
+    writeFileSync(process.env.XSOURCETREE_CONFLICT_SCREENSHOT, Buffer.from(capture.png, "base64"));
+  }
+  assert.equal(await evaluate("document.querySelector('[data-action=\"operation-continue\"]').disabled"), true, "冲突时不能继续");
+  assert.equal(await evaluate("document.querySelectorAll('.file-action[data-action=\"stage\"]').length"), 0, "冲突不能普通暂存");
+  await execute("document.querySelector('#conflict-result').value='keep my draft\\n'; document.querySelector('#conflict-result').dispatchEvent(new Event('input',{bubbles:true}))");
+  writeFileSync(join(cloned, "hello.txt"), "changed outside editor\n");
+  await evaluate("document.querySelector('[data-action=\"resolve-result\"]').click()");
+  await waitFor("document.querySelector('[data-action=\"resolve-result\"]')?.disabled && document.querySelector('#alerts')?.textContent.includes('外部改变') && !document.querySelector('#statusbar .spinner')", "过期结果禁止覆盖");
+  assert.equal(readFileSync(join(cloned, "hello.txt"), "utf8"), "changed outside editor\n");
+  assert.equal(await evaluate("document.querySelector('#conflict-result').value"), "keep my draft\n", "过期保护应保留编辑草稿");
+  await evaluate("document.querySelector('[data-action=\"reload-conflict\"]').click()");
+  await evaluate("document.querySelector('#confirm-form').requestSubmit()");
+  await waitFor("document.querySelector('#conflict-result')?.value === 'changed outside editor\\n' && !document.querySelector('[data-action=\"resolve-result\"]')?.disabled", "重新载入冲突");
+  await execute("document.querySelector('#conflict-result').value='resolved in desktop\\n'; document.querySelector('#conflict-result').dispatchEvent(new Event('input',{bubbles:true})); document.querySelector('[data-action=\"resolve-result\"]').click()");
+  await waitFor("!document.querySelector('[data-action=\"operation-continue\"]')?.disabled && !document.querySelector('#statusbar .spinner')", "保存并标记解决");
+  assert.equal(gitAt(cloned, "show", ":hello.txt"), "resolved in desktop");
+  await evaluate("document.querySelector('[data-action=\"operation-continue\"]').click()");
+  await waitFor("!document.querySelector('.operation-bar') && !!document.querySelector('.clean-state') && !document.querySelector('#statusbar .spinner')", "完成合并");
+  assert.equal(gitAt(cloned, "log", "-1", "--format=%P").split(" ").length, 2);
+
+  writeFileSync(join(cloned, "hello.txt"), "stash conflict version\n");
+  await evaluate("document.querySelector('[data-action=\"refresh\"]').click()");
+  await waitFor("document.querySelectorAll('.file-row').length === 1 && !document.querySelector('#statusbar .spinner')", "储藏冲突准备");
+  await evaluate("document.querySelector('[data-action=\"new-stash\"]').click()");
+  await execute("document.querySelector('#stash-message').value='conflicting stash'; document.querySelector('#stash-form').requestSubmit()");
+  await waitFor("!!document.querySelector('.clean-state') && !document.querySelector('#statusbar .spinner')", "创建冲突用储藏");
+  writeFileSync(join(cloned, "hello.txt"), "new committed version\n");
+  gitAt(cloned, "commit", "-am", "diverge from stash");
+  await evaluate("document.querySelector('[data-action=\"refresh\"]').click()");
+  await waitFor("!document.querySelector('#statusbar .spinner')", "刷新新提交");
+  await evaluate("document.querySelector('[data-action=\"stash\"]').click()");
+  await waitFor("!!document.querySelector('[data-action=\"pop-stash\"]')", "选中冲突储藏");
+  await evaluate("document.querySelector('[data-action=\"pop-stash\"]').click()");
+  await waitFor("document.querySelector('#alerts')?.textContent.includes('CONFLICT') && !document.querySelector('#statusbar .spinner')", "储藏冲突保留");
+  assert(gitAt(cloned, "stash", "list").includes("conflicting stash"));
+  await evaluate("document.querySelector('[data-action=\"changes\"]').click()");
+  await waitFor("!!document.querySelector('[data-action=\"resolve-theirs\"]') && !document.querySelector('#statusbar .spinner')", "储藏冲突编辑器");
+  await evaluate("document.querySelector('[data-action=\"resolve-theirs\"]').click()");
+  await waitFor("document.querySelectorAll('[data-action=\"unstage\"]').length === 1 && !document.querySelector('#statusbar .spinner')", "选择储藏版本解决");
+  await execute("document.querySelector('#commit-message').value='resolve stash conflict'; document.querySelector('#commit-message').dispatchEvent(new Event('input',{bubbles:true})); document.querySelector('#commit-form').requestSubmit()");
+  await waitFor("!!document.querySelector('.clean-state') && !document.querySelector('#statusbar .spinner')", "提交储藏冲突解决");
+  assert.equal(gitAt(cloned, "show", "HEAD:hello.txt"), "stash conflict version");
   assert.deepEqual(await evaluate("window.__smokeErrors"), [], "桌面页面不应出现未处理的脚本错误");
 
   if (process.env.XSOURCETREE_SCREENSHOT) {
     const capture = await request("capture");
     writeFileSync(process.env.XSOURCETREE_SCREENSHOT, Buffer.from(capture.png, "base64"));
   }
-  console.log("PASS：真实 MyGo 桌面打开、Diff 转义、暂存/取消、草稿、提交、历史、分支、hook 失败同步、失效保护与刷新恢复");
+  console.log("PASS：真实 MyGo 本地仓库添加/去重、扫描勾选、分组/移动/搜索/重载持久化、移除不删文件，以及暂存/提交/分支/储藏/冲突处理");
   console.log(`测试仓库：${fixture}`);
+  console.log(`克隆仓库：${cloned}`);
 } finally {
   socket.end();
 }

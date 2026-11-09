@@ -16,6 +16,9 @@ const paths: Record<string, string> = {
   commit: '<circle cx="12" cy="12" r="4"/><path d="M2 12h6m8 0h6"/>',
   file: '<path d="M6 3h8l4 4v14H6zM14 3v5h4"/>',
   warning: '<path d="m12 3 10 18H2zM12 9v5m0 3v1"/>',
+  stash: '<path d="M3 4h18v5H3zM5 9v11h14V9M9 13h6"/>',
+  merge: '<circle cx="6" cy="4" r="2"/><circle cx="6" cy="20" r="2"/><circle cx="18" cy="4" r="2"/><path d="M6 6v12M18 6v3c0 5-12 3-12 8"/>',
+  more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
 };
 
 export function icon(name: string, size = 18): string {

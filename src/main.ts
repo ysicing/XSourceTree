@@ -4,6 +4,7 @@ import { escapeHTML as escape, fileGroups, graphRows, parseDiff, type GraphRow }
 import { icon } from "./icons";
 import { settleMutation } from "./mutations";
 import { filterRepositories } from "./library";
+import { checkedPaths, visibleFiles, reconcileChecked, type FileSort } from "./files";
 
 type Selection = { path: string; staged: boolean } | { hash: string } | { stash: string };
 type View = "changes" | "history" | "stash";
@@ -28,6 +29,8 @@ const state = {
   error: "",
   notice: "",
   query: "",
+  fileSort: "path" as FileSort,
+  checked: { staged: new Set<string>(), working: new Set<string>() },
   drafts: new Map<string, string>(),
   hasMore: false,
   stale: false,
@@ -37,6 +40,15 @@ let pendingRefresh: Promise<void> | null = null;
 let noticeTimer: ReturnType<typeof setTimeout> | undefined;
 let pendingConfirm: (() => void) | null = null;
 const app = document.querySelector<HTMLDivElement>("#app")!;
+const layout = { width: readSize("files-width", 380, 260, 700), split: readSize("files-split", 45, 15, 85) };
+
+function readSize(key: string, fallback: number, min: number, max: number): number {
+  try {
+    const raw = localStorage.getItem(key);
+    const value = raw === null ? fallback : Number(raw);
+    return Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
+  } catch { return fallback; }
+}
 
 app.innerHTML = `
   <header class="titlebar"><div class="titlebar-brand">${icon("branch", 17)}<span>XSourceTree</span></div><div id="titlebar-context"></div><span class="version">0.1.0</span></header>
@@ -187,7 +199,13 @@ function renderContent(): void {
   }
   content.className = `content ${state.view}-content`;
   if (state.view === "changes") {
-    content.innerHTML = `<section class="files-panel" aria-label="文件变更">${renderFilePanel()}</section><section class="diff-panel" aria-label="差异预览">${renderDiffPanel()}</section>`;
+    content.style.setProperty("--files-width", `${layout.width}px`);
+    content.style.setProperty("--files-split", `${layout.split}fr`);
+    content.style.setProperty("--working-split", `${100 - layout.split}fr`);
+    content.innerHTML = `<section class="files-panel" aria-label="文件变更">${renderFilePanel()}</section>
+      <div class="panel-divider" role="separator" aria-label="调整文件面板宽度" aria-orientation="vertical" tabindex="0" data-resize="width"></div>
+      <section class="diff-panel" aria-label="差异预览">${renderDiffPanel()}</section>${renderCommitForm()}`;
+    updateFileChecks();
   } else if (state.view === "history") {
     content.innerHTML = `<section class="history-panel" aria-label="提交历史">${renderHistoryPanel()}</section><section class="diff-panel history-detail" aria-label="提交详情">${renderDiffPanel()}</section>`;
   } else {
@@ -225,35 +243,44 @@ function renderLocalRepository(entry: LocalRepository): string {
 }
 function renderFilePanel(): string {
   const { staged, working } = fileGroups(state.repo!.files);
-  const query = state.query.toLocaleLowerCase();
   return `
-    <div class="panel-title"><h2>文件状态</h2><span class="subtle">${state.repo!.files.length} 个变更</span></div>
+    <div class="panel-title"><h2>文件状态</h2><select id="file-sort" aria-label="文件排序"><option value="path" ${state.fileSort === "path" ? "selected" : ""}>按路径排序</option><option value="name" ${state.fileSort === "name" ? "selected" : ""}>按名称排序</option></select></div>
     <div class="search-wrap">${icon("search", 15)}<input id="filter" type="search" placeholder="筛选文件…" aria-label="筛选文件" value="${escape(state.query)}" /></div>
     <div class="file-groups">
-      ${renderFileGroup("未暂存", working, false, query)}
-      ${renderFileGroup("已暂存", staged, true, query)}
-      ${!state.repo!.files.length ? `<div class="clean-state">${icon("check", 25)}<strong>工作区干净</strong><span>所有变更均已提交</span></div>` : ""}
-    </div>
+      ${renderFileGroup("已暂存", staged, true)}
+      <div class="panel-divider horizontal" role="separator" aria-label="调整暂存区高度" aria-orientation="horizontal" tabindex="0" data-resize="split"></div>
+      ${renderFileGroup("未暂存", working, false)}
+    </div>`;
+}
+
+function renderCommitForm(): string {
+  const { staged } = fileGroups(state.repo!.files);
+  return `
     <form id="commit-form" class="commit-form">
       <div class="commit-label"><label for="commit-message">提交说明</label><span>${staged.length} 个文件</span></div>
-      <textarea id="commit-message" rows="4" placeholder="这次做了什么改动？" aria-label="提交说明" ${state.busy ? "readonly" : ""}>${escape(draft())}</textarea>
+      <textarea id="commit-message" rows="2" placeholder="提交说明（⌘ ↵ 提交）" aria-label="提交说明" ${state.busy ? "readonly" : ""}>${escape(draft())}</textarea>
       ${state.repo!.files.some((file) => file.conflict) ? '<div class="conflict-hint">选择冲突文件以解决冲突</div>' : ""}
       <button class="primary commit-button" type="submit" ${canCommit() ? "" : "disabled"}>${icon("commit", 17)}<span>提交到 ${escape(state.repo!.branch)}</span><kbd>⌘ ↵</kbd></button>
     </form>`;
 }
 
-function renderFileGroup(label: string, files: File[], staged: boolean, query: string): string {
-  const filtered = files.filter((file) => file.path.toLocaleLowerCase().includes(query));
-  return `<div class="file-group">
-    <div class="group-heading"><span>${label}<span class="count">${files.length}</span></span>
-      ${files.some((file) => !file.conflict) ? `<button class="small-button" data-action="${staged ? "unstage-all" : "stage-all"}" data-mutates ${disabled()}>${staged ? "全部取消" : "全部暂存"}</button>` : ""}
+function renderFileGroup(label: string, files: File[], staged: boolean): string {
+  const filtered = visibleFiles(files, state.query, state.fileSort);
+  const actionable = filtered.filter((file) => !file.conflict);
+  const checked = staged ? state.checked.staged : state.checked.working;
+  const count = checkedPaths(filtered, checked).length;
+  return `<div class="file-group" data-group="${staged ? "staged" : "working"}">
+    <div class="group-heading"><label><input class="group-check" type="checkbox" data-staged="${staged}" aria-label="全选${label}的匹配文件" ${count > 0 && count === actionable.length ? "checked" : ""} ${!actionable.length || state.busy || state.stale ? "disabled" : ""} />${label}<span class="count">${filtered.length}</span></label>
+      ${actionable.length ? `<button class="small-button" data-action="${staged ? "unstage-all" : "stage-all"}" data-mutates ${disabled()}>${count ? `${staged ? "取消暂存" : "暂存"}所选 (${count})` : staged ? "取消匹配文件暂存" : "暂存匹配文件"}</button>` : ""}
     </div>
+    <div class="group-files">
     ${filtered.map((file) => {
       const selected = state.selection && "path" in state.selection && state.selection.path === file.path && state.selection.staged === staged;
       const code = file.conflict ? "!" : (staged ? file.index : file.working);
       const pathParts = file.path.split("/");
       const name = pathParts.pop()!;
       return `<div class="file-row ${selected ? "selected" : ""}">
+        <input class="file-check" type="checkbox" data-path="${escape(file.path)}" data-staged="${staged}" aria-label="选择${staged ? "已暂存" : "未暂存"}文件 ${escape(file.path)}" ${checked.has(file.path) ? "checked" : ""} ${file.conflict || state.busy || state.stale ? "disabled" : ""} />
         <button class="file-select" data-action="select-file" data-path="${escape(file.path)}" data-staged="${staged}" title="${escape(file.originalPath ? `${file.originalPath} → ${file.path}` : file.path)}" aria-pressed="${!!selected}">
           <span class="file-status status-${code === "?" || code === "A" ? "added" : code === "D" ? "removed" : file.conflict ? "conflict" : "modified"}">${escape(code === "?" ? "A" : code)}</span>
           <span class="file-name">${escape(name)}${pathParts.length ? `<small>${escape(pathParts.join("/"))}</small>` : ""}</span>
@@ -261,8 +288,30 @@ function renderFileGroup(label: string, files: File[], staged: boolean, query: s
         ${file.conflict ? '<span class="conflict-label">冲突</span>' : `<button class="file-action icon-button" data-action="${staged ? "unstage" : "stage"}" data-mutates data-path="${escape(file.path)}" title="${staged ? "取消暂存" : "暂存"}" aria-label="${staged ? "取消暂存" : "暂存"} ${escape(file.path)}" ${disabled()}>${icon(staged ? "minus" : "plus", 15)}</button>`}
       </div>`;
     }).join("")}
-    ${!filtered.length ? `<div class="group-empty">${files.length ? "没有匹配的文件" : staged ? "暂存文件后即可提交" : "没有未暂存的变更"}</div>` : ""}
-  </div>`;
+    ${!filtered.length ? !staged && !state.repo!.files.length
+      ? `<div class="clean-state">${icon("check", 25)}<strong>工作区干净</strong></div>`
+      : `<div class="group-empty">${files.length ? "没有匹配的文件" : staged ? "暂存文件后即可提交" : "没有未暂存的变更"}</div>` : ""}
+  </div></div>`;
+}
+
+function updateFileChecks(): void {
+  if (!state.repo) return;
+  const groups = fileGroups(state.repo.files);
+  document.querySelectorAll<HTMLInputElement>(".group-check").forEach((input) => {
+    const staged = input.dataset.staged === "true";
+    const files = visibleFiles(staged ? groups.staged : groups.working, state.query, state.fileSort);
+    const checked = staged ? state.checked.staged : state.checked.working;
+    const count = checkedPaths(files, checked).length;
+    const total = files.filter((file) => !file.conflict).length;
+    input.checked = count > 0 && count === total;
+    input.indeterminate = count > 0 && count < total;
+    const group = input.closest(".file-group")!;
+    group.querySelectorAll<HTMLInputElement>(".file-check").forEach((checkbox) => {
+      checkbox.checked = checked.has(checkbox.dataset.path!);
+    });
+    const action = group.querySelector<HTMLButtonElement>("[data-action$='stage-all']");
+    if (action) action.textContent = count ? `${staged ? "取消暂存" : "暂存"}所选 (${count})` : staged ? "取消匹配文件暂存" : "暂存匹配文件";
+  });
 }
 
 const graphColors = ["#3975d5", "#a16ad7", "#37a58d", "#d49b3c", "#da7184"];
@@ -406,6 +455,8 @@ function reconcileSelection(): void {
     return;
   }
   const groups = fileGroups(state.repo.files);
+  state.checked.staged = reconcileChecked(state.checked.staged, groups.staged);
+  state.checked.working = reconcileChecked(state.checked.working, groups.working);
   const selection = state.selection;
   if (selection && "path" in selection && (selection.staged ? groups.staged : groups.working).some((file) => file.path === selection.path)) return;
   const first = groups.working[0] ?? groups.staged[0];
@@ -473,6 +524,7 @@ async function adoptRepository(repo: Snapshot): Promise<void> {
   state.diff = null;
   state.conflict = null;
   state.query = "";
+  state.checked = { staged: new Set(), working: new Set() };
   state.view = "changes";
   await refresh();
 }
@@ -808,7 +860,9 @@ document.addEventListener("click", (event) => {
     case "unstage-all": {
       if (!state.repo) break;
       const groups = fileGroups(state.repo.files);
-      const paths = (action === "stage-all" ? groups.working : groups.staged).filter((file) => !file.conflict).map((file) => file.path);
+      const files = visibleFiles(action === "stage-all" ? groups.working : groups.staged, state.query, state.fileSort);
+      const checked = checkedPaths(files, action === "stage-all" ? state.checked.working : state.checked.staged);
+      const paths = checked.length ? checked : files.filter((file) => !file.conflict).map((file) => file.path);
       const method = action === "stage-all" ? api.stage : api.unstage;
       void mutate("正在更新暂存区…", (path) => method(path, paths));
       break;
@@ -853,12 +907,73 @@ document.addEventListener("input", (event) => {
 
 document.addEventListener("change", (event) => {
   const target = event.target as HTMLInputElement;
-  if (target.id === "scan-select-all") {
+  if (target.id === "file-sort") {
+    state.fileSort = target.value === "name" ? "name" : "path";
+    render();
+  } else if (target.matches(".group-check, .file-check") && state.repo && !state.busy && !state.stale) {
+    const staged = target.dataset.staged === "true";
+    const checked = staged ? state.checked.staged : state.checked.working;
+    const files = visibleFiles(staged ? fileGroups(state.repo.files).staged : fileGroups(state.repo.files).working, state.query, state.fileSort);
+    for (const file of files) {
+      if (file.conflict || (target.matches(".file-check") && file.path !== target.dataset.path)) continue;
+      if (target.checked) checked.add(file.path);
+      else checked.delete(file.path);
+    }
+    updateFileChecks();
+  } else if (target.id === "scan-select-all") {
     document.querySelectorAll<HTMLInputElement>('#scan-import-form input[name="repository"]:not(:disabled)').forEach((input) => { input.checked = target.checked; });
     updateScanSelection();
   } else if (target.name === "repository" && target.closest("#scan-import-form")) {
     updateScanSelection();
   }
+});
+
+function resizePanel(kind: string, value: number): void {
+  const content = document.querySelector<HTMLElement>(".changes-content");
+  if (!content) return;
+  if (kind === "width") {
+    layout.width = Math.max(260, Math.min(Math.max(260, content.clientWidth - 305), value, 700));
+    content.style.setProperty("--files-width", `${layout.width}px`);
+  } else {
+    layout.split = Math.max(15, Math.min(85, value));
+    content.style.setProperty("--files-split", `${layout.split}fr`);
+    content.style.setProperty("--working-split", `${100 - layout.split}fr`);
+  }
+}
+
+function saveLayout(): void {
+  try {
+    localStorage.setItem("files-width", String(layout.width));
+    localStorage.setItem("files-split", String(layout.split));
+  } catch {}
+}
+
+document.addEventListener("pointerdown", (event) => {
+  const divider = (event.target as HTMLElement).closest<HTMLElement>("[data-resize]");
+  if (!divider || event.button !== 0) return;
+  event.preventDefault();
+  const kind = divider.dataset.resize!;
+  const bounds = document.querySelector(kind === "width" ? ".changes-content" : ".file-groups")!.getBoundingClientRect();
+  divider.setPointerCapture(event.pointerId);
+  const move = (pointer: PointerEvent) => resizePanel(kind, kind === "width" ? pointer.clientX - bounds.left : (pointer.clientY - bounds.top) / bounds.height * 100);
+  const stop = () => {
+    divider.removeEventListener("pointermove", move);
+    divider.removeEventListener("lostpointercapture", stop);
+    saveLayout();
+  };
+  divider.addEventListener("pointermove", move);
+  divider.addEventListener("lostpointercapture", stop);
+});
+
+document.addEventListener("keydown", (event) => {
+  const divider = (event.target as HTMLElement).closest<HTMLElement>("[data-resize]");
+  if (!divider || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+  event.preventDefault();
+  const kind = divider.dataset.resize!;
+  const direction = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
+  const width = document.querySelector(".files-panel")!.getBoundingClientRect().width;
+  resizePanel(kind, kind === "width" ? width + direction * 20 : layout.split + direction * 5);
+  saveLayout();
 });
 
 document.addEventListener("submit", (event) => {

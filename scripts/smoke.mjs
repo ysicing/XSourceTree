@@ -193,6 +193,23 @@ try {
   await waitFor("document.querySelector('.diff-code')?.textContent.includes('+changed')", "真实文件 Diff");
   assert.equal(await evaluate("document.querySelectorAll('.diff-code img').length"), 0, "Diff 内容必须转义");
   assert.equal(await evaluate("window.__xss === undefined"), true);
+  assert.equal(await evaluate("document.querySelector('.file-group').dataset.group"), "staged");
+  assert.equal(await evaluate("document.querySelector('#commit-form').parentElement.id"), "content");
+  await execute("document.querySelector('#filter').value='hello'; document.querySelector('#filter').dispatchEvent(new Event('input', {bubbles:true}));");
+  await evaluate("document.querySelector('.file-check:not(:disabled)').click()");
+  await evaluate("document.querySelector('[data-action=\"stage-all\"]').click()");
+  await waitFor("document.querySelectorAll('[data-action=\"unstage\"]').length === 1 && !document.querySelector('#statusbar .spinner')", "筛选并批量暂存");
+  assert.equal(git("diff", "--cached", "--name-only"), "hello.txt", "批量操作只能影响匹配文件");
+  await evaluate("document.querySelector('[data-action=\"unstage-all\"]').click()");
+  await waitFor("!document.querySelector('[data-action=\"unstage\"]') && !document.querySelector('#statusbar .spinner')", "批量取消暂存");
+  await execute("document.querySelector('#filter').value=''; document.querySelector('#filter').dispatchEvent(new Event('input', {bubbles:true}));");
+  await evaluate("document.querySelector('.group-check[data-staged=\"false\"]').click()");
+  assert.equal(await evaluate("document.querySelectorAll('.file-check:checked').length"), 2);
+  await evaluate("document.querySelector('.file-check[data-path=\"hello.txt\"]').click()");
+  assert.equal(await evaluate("document.querySelector('.group-check[data-staged=\"false\"]').indeterminate"), true);
+  await evaluate("document.querySelector('.file-check[data-path=\"new file.txt\"]').click()");
+  await execute("document.querySelector('[data-resize=\"width\"]').dispatchEvent(new KeyboardEvent('keydown', {key:'ArrowRight',bubbles:true}));");
+  assert.ok(Number(await evaluate("localStorage.getItem('files-width')")) >= 260);
 
   await execute("document.querySelector('#commit-message').value='桌面端集成测试'; document.querySelector('#commit-message').dispatchEvent(new Event('input', {bubbles:true}));");
   await evaluate("document.querySelector('[data-action=\"stage\"]').click()");

@@ -114,6 +114,6 @@ func (repo *Repository) CommitDiff(ctx context.Context, hash string) (Diff, erro
 	}
 	repo.mu.Lock()
 	defer repo.mu.Unlock()
-	output, err := repo.git(ctx, "show", "--format=fuller", "--stat", "--patch", "--no-ext-diff", "--no-textconv", "--find-renames", hash, "--")
+	output, err := repo.git(ctx, "show", "--no-show-signature", "--format=fuller", "--root", "--diff-merges=first-parent", "--stat", "--patch", "--no-ext-diff", "--no-textconv", "--find-renames", hash, "--")
 	return Diff{Text: output, Binary: strings.Contains(output, "Binary files ")}, err
 }

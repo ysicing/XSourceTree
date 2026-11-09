@@ -1,12 +1,12 @@
 import "./style.css";
-import { RepositoryService as api, events, type Branch, type Commit, type Conflict, type ConflictSide, type Diff, type File, type Library, type LocalRepository, type Patch, type ScanResult, type Snapshot, type Stash } from "./mygo";
+import { RepositoryService as api, events, type Branch, type Commit, type CommitFile, type Conflict, type ConflictSide, type Diff, type File, type Library, type LocalRepository, type Patch, type ScanResult, type Snapshot, type Stash, type Tag } from "./mygo";
 import { escapeHTML as escape, fileGroups, graphRows, parseDiff, type GraphRow } from "./presentation";
 import { icon } from "./icons";
 import { settleMutation } from "./mutations";
 import { filterRepositories } from "./library";
 import { checkedPaths, visibleFiles, reconcileChecked, type FileSort } from "./files";
 
-type Selection = { path: string; staged: boolean } | { hash: string } | { stash: string };
+type Selection = { path: string; staged: boolean } | { hash: string; file?: string } | { stash: string };
 type View = "changes" | "history" | "stash";
 
 const state = {
@@ -17,6 +17,12 @@ const state = {
   libraryQuery: "",
   branches: [] as Branch[],
   commits: [] as Commit[],
+  commitFiles: [] as CommitFile[],
+  commitFilesError: "",
+  tags: [] as Tag[],
+  historyQuery: "",
+  historyPath: "",
+  historyFilter: { query: "", path: "" },
   stashes: [] as Stash[],
   conflict: null as Conflict | null,
   conflictDrafts: new Map<string, { token: string; content: string }>(),
@@ -131,9 +137,15 @@ function renderSidebar(): void {
       </nav>
       <div class="sidebar-heading branch-heading"><span>本地分支</span><button class="icon-button" data-action="new-branch" data-mutates aria-label="新建分支" title="新建分支" ${disabled()}>${icon("plus", 15)}</button></div>
       <div class="branch-list">${state.branches.filter((branch) => !branch.remote).map((branch) => `
-        <button data-action="switch" data-mutates data-name="${escape(branch.name)}" class="branch-item ${branch.current ? "current" : ""}" title="${escape(branch.name)}" ${disabled()}>
+        <div class="ref-row"><button data-action="switch" data-mutates data-name="${escape(branch.name)}" class="branch-item ${branch.current ? "current" : ""}" title="${escape(branch.name)}" ${disabled()}>
           ${icon("branch", 15)}<span>${escape(branch.name)}</span>${branch.current ? icon("check", 14) : ""}
-        </button>`).join("") || `<div class="branch-item current">${icon("branch", 15)}<span>${escape(repo.branch)}</span><span class="muted">未提交</span></div>`}</div>
+        </button><details class="popup-menu"><summary class="icon-button" aria-label="管理分支 ${escape(branch.name)}">${icon("more", 14)}</summary><div class="popup-items">
+          <button data-action="rename-branch" data-mutates data-name="${escape(branch.name)}" ${disabled()}>重命名…</button>
+          <button data-action="delete-branch" data-mutates data-name="${escape(branch.name)}" ${state.busy || branch.current ? "disabled" : ""}>删除已合并分支…</button>
+          <button data-action="force-delete-branch" data-mutates data-name="${escape(branch.name)}" ${state.busy || branch.current ? "disabled" : ""}>强制删除…</button>
+        </div></details></div>`).join("") || `<div class="branch-item current">${icon("branch", 15)}<span>${escape(repo.branch)}</span><span class="muted">未提交</span></div>`}</div>
+      <div class="sidebar-heading branch-heading"><span>标签</span><button class="icon-button" data-action="new-tag" data-mutates aria-label="新建标签" title="在选中提交或 HEAD 上新建标签" ${repo.unborn ? "disabled" : disabled()}>${icon("plus", 15)}</button></div>
+      <div class="tag-list">${state.tags.map((tag) => `<div class="ref-row"><span class="tag-name" title="${escape(tag.name)} · ${tag.hash}">${escape(tag.name)}</span><button class="icon-button" data-action="delete-tag" data-mutates data-name="${escape(tag.name)}" aria-label="删除标签 ${escape(tag.name)}" ${disabled()}>${icon("minus", 14)}</button></div>`).join("")}</div>
       <div class="sidebar-bottom">${groups.staged.length ? `<span class="staged-dot"></span>${groups.staged.length} 个文件已暂存` : ""}</div>
     ` : ""}
   `;
@@ -176,6 +188,7 @@ function renderToolbar(): void {
       ${button("new-stash", "储藏", "stash", repo.files.length && !repo.operation.kind && !repo.files.some((file) => file.conflict) ? "" : "disabled")}
       ${button("merge", "合并", "merge", !repo.unborn && !repo.operation.kind && !repo.files.length ? "" : 'disabled title="请先提交或储藏变更"')}
       <span class="toolbar-separator"></span>
+      <button class="small-button" data-action="reveal-repository" ${disabled()}>在 Finder 中显示</button>
       <button class="icon-button" data-action="refresh" title="刷新（⌘R）" aria-label="刷新仓库" ${disabled()}>${icon("refresh")}</button>
     </div>` : `<div class="toolbar-context"><strong>开始使用</strong></div><span class="muted">XSourceTree</span>`;
 }
@@ -286,6 +299,7 @@ function renderFileGroup(label: string, files: File[], staged: boolean): string 
           <span class="file-status status-${code === "?" || code === "A" ? "added" : code === "D" ? "removed" : file.conflict ? "conflict" : "modified"}">${escape(code === "?" ? "A" : code)}</span>
           <span class="file-name">${escape(name)}${pathParts.length ? `<small>${escape(pathParts.join("/"))}</small>` : ""}</span>
         </button>
+        <button class="file-action icon-button" data-action="file-history" data-path="${escape(file.path)}" title="文件历史" aria-label="查看 ${escape(file.path)} 的历史" ${disabled()}>${icon("history", 14)}</button>
         ${file.conflict ? '<span class="conflict-label">冲突</span>' : `<button class="file-action icon-button" data-action="${staged ? "unstage" : "stage"}" data-mutates data-path="${escape(file.path)}" title="${staged ? "取消暂存" : "暂存"}" aria-label="${staged ? "取消暂存" : "暂存"} ${escape(file.path)}" ${disabled()}>${icon(staged ? "minus" : "plus", 15)}</button>`}
       </div>`;
     }).join("")}
@@ -329,14 +343,17 @@ function graphSVG(row: GraphRow): string {
 
 function renderHistoryPanel(): string {
   const rows = graphRows(state.commits);
-  const query = state.query.toLocaleLowerCase();
+  const filtered = !!(state.historyFilter.query || state.historyFilter.path);
   return `<div class="panel-title"><h2>提交历史</h2><span class="subtle">所有分支 · ${state.commits.length} 条</span></div>
-    <div class="search-wrap">${icon("search", 15)}<input id="filter" type="search" placeholder="搜索已加载的提交…" aria-label="搜索已加载的提交" value="${escape(state.query)}" /></div>
+    <form id="history-search-form" class="history-search-form">
+      <input id="history-query" name="query" type="search" placeholder="说明、作者或提交 ID" aria-label="搜索全部历史" value="${escape(state.historyQuery)}" ${state.busy ? "readonly" : ""} />
+      <input id="history-path" name="path" placeholder="文件路径（可选）" aria-label="按文件路径筛选历史" value="${escape(state.historyPath)}" ${state.busy ? "readonly" : ""} />
+      <button type="submit" ${disabled()}>搜索</button>${state.busy === "正在搜索历史…" ? '<button type="button" data-action="cancel-history">取消</button>' : `<button type="button" data-action="clear-history-search" ${disabled()}>重置</button>`}
+    </form>
     <div class="commit-list">${state.commits.map((commit, index) => {
-      if (query && !`${commit.subject} ${commit.author} ${commit.hash}`.toLocaleLowerCase().includes(query)) return "";
       const selected = state.selection && "hash" in state.selection && state.selection.hash === commit.hash;
       return `<button class="commit-row ${selected ? "selected" : ""}" data-action="select-commit" data-hash="${commit.hash}">
-        ${query ? `<span class="search-commit-icon">${icon("commit", 17)}</span>` : graphSVG(rows[index]!)}
+        ${filtered ? `<span class="search-commit-icon">${icon("commit", 17)}</span>` : graphSVG(rows[index]!)}
         <span class="commit-info"><span class="commit-subject">${escape(commit.subject || "（无提交说明）")}</span>
           <span class="commit-meta"><span>${escape(commit.author)}</span><time>${escape(formatDate(commit.date))}</time>${commit.refs ? `<span class="ref-label" title="${escape(commit.refs)}">${escape(commit.refs)}</span>` : ""}</span></span>
         <code>${commit.hash.slice(0, 7)}</code></button>`;
@@ -380,7 +397,7 @@ function renderDiffPanel(): string {
   const selection = state.selection;
   if (!selection) return `<div class="empty-state">${icon(state.view === "changes" ? "changes" : "commit", 36)}<strong>${state.view === "changes" ? "选择文件查看变更" : "选择提交查看详情"}</strong></div>`;
   if (state.conflict && "path" in selection && state.conflict.path === selection.path && !state.diffLoading) return renderConflictPanel(state.conflict);
-  const title = "path" in selection ? selection.path : "stash" in selection ? state.stashes.find((stash) => stash.hash === selection.stash)?.message ?? "储藏" : selection.hash.slice(0, 12);
+  const title = "path" in selection ? selection.path : "stash" in selection ? state.stashes.find((stash) => stash.hash === selection.stash)?.message ?? "储藏" : `${selection.hash.slice(0, 12)}${selection.file ? ` · ${selection.file}` : ""}`;
   const subtitle = "path" in selection ? selection.staged ? "HEAD → 暂存区" : "工作区变更" : "stash" in selection ? "储藏详情" : "提交详情";
   const stashActions = "stash" in selection ? `<div class="stash-actions">
     <button data-action="apply-stash" data-mutates ${disabled()}>应用</button>
@@ -402,7 +419,10 @@ function renderDiffPanel(): string {
       ${state.diff.truncated || rows.length > 4000 ? '<div class="diff-limit">预览已截断，请使用命令行查看完整差异。</div>' : ""}</div>`;
   }
   const navigation = state.diff?.text ? '<button class="small-button" data-action="previous-hunk" title="上一差异块">↑</button><button class="small-button" data-action="next-hunk" title="下一差异块">↓</button>' : "";
-  return `<div class="diff-heading">${icon("file", 16)}<strong title="${escape(title)}">${escape(title)}</strong><span>${subtitle}</span>${state.diff?.binary ? '<span class="badge">二进制</span>' : ""}${navigation}</div>${stashActions}${body}`;
+  const files = "hash" in selection && state.commitFiles.length ? `<div class="commit-files" aria-label="提交变更文件">
+    <button data-action="select-commit-file" class="${!selection.file ? "selected" : ""}">全部变更</button>
+    ${state.commitFiles.map((file) => `<button data-action="select-commit-file" data-path="${escape(file.path)}" class="${selection.file === file.path ? "selected" : ""}" title="${escape(file.originalPath ? `${file.originalPath} → ${file.path}` : file.path)}"><span class="file-status">${file.status}</span>${escape(file.path)}</button>`).join("")}</div>` : "";
+  return `<div class="diff-heading">${icon("file", 16)}<strong title="${escape(title)}">${escape(title)}</strong><span>${subtitle}</span>${state.diff?.binary ? '<span class="badge">二进制</span>' : ""}${navigation}</div>${files}${state.commitFilesError ? `<div role="alert" class="diff-limit">${escape(state.commitFilesError)}</div>` : ""}${stashActions}${body}`;
 }
 
 async function loadSelection(): Promise<void> {
@@ -411,11 +431,24 @@ async function loadSelection(): Promise<void> {
   const repo = state.repo;
   state.diff = null;
   state.patch = null;
+  state.commitFiles = [];
+  state.commitFilesError = "";
   state.conflict = null;
   state.diffError = "";
   state.diffLoading = !!selection;
   renderDiffOnly();
   if (!selection || !repo) return;
+  if ("hash" in selection) {
+    void api.commitFiles(repo.path, selection.hash).then((files) => {
+      if (version !== selectionVersion) return;
+      state.commitFiles = files;
+      renderDiffOnly();
+    }).catch((error) => {
+      if (version !== selectionVersion) return;
+      state.commitFilesError = `无法读取文件列表：${error instanceof Error ? error.message : String(error)}`;
+      renderDiffOnly();
+    });
+  }
   try {
     if ("path" in selection && repo.files.some((file) => file.path === selection.path && file.conflict)) {
       const conflict = await api.conflict(repo.path, selection.path);
@@ -423,7 +456,7 @@ async function loadSelection(): Promise<void> {
     } else {
       const diff = "path" in selection ? await api.diff(repo.path, selection.path, selection.staged)
         : "stash" in selection ? await api.stashDiff(repo.path, selection.stash)
-        : await api.commitDiff(repo.path, selection.hash);
+        : selection.file ? await api.commitFileDiff(repo.path, selection.hash, selection.file) : await api.commitDiff(repo.path, selection.hash);
       const patch = "path" in selection && !diff.binary && !diff.truncated
         ? await api.patch(repo.path, selection.path, selection.staged).catch(() => null) : null;
       if (version === selectionVersion) {
@@ -488,12 +521,15 @@ function refresh(): Promise<void> {
 async function refreshRepository(): Promise<void> {
   const path = state.repo?.path;
   if (!path) return;
-  const [repo, branches, commits, stashes] = await Promise.all([api.snapshot(path), api.branches(path), api.history(path, 0), api.stashes(path)]);
+  const [repo, branches, commits, stashes, tags] = await Promise.all([api.snapshot(path), api.branches(path),
+    state.historyFilter.query || state.historyFilter.path ? api.searchHistory(path, state.historyFilter.query, state.historyFilter.path, 0) : api.history(path, 0),
+    api.stashes(path), api.tags(path)]);
   if (state.repo?.path !== path) return;
   state.repo = repo;
   state.branches = branches;
   state.commits = commits;
   state.stashes = stashes;
+  state.tags = tags;
   state.hasMore = commits.length === 100;
   state.stale = false;
   state.library = await api.library();
@@ -537,6 +573,9 @@ async function adoptRepository(repo: Snapshot): Promise<void> {
   state.diff = null;
   state.conflict = null;
   state.query = "";
+  state.historyQuery = "";
+  state.historyPath = "";
+  state.historyFilter = { query: "", path: "" };
   state.checked = { staged: new Set(), working: new Set() };
   state.view = "changes";
   await refresh();
@@ -566,6 +605,31 @@ async function updateLibrary(label: string, operation: () => Promise<Library>, s
 async function refreshCurrentScreen(): Promise<void> {
   if (state.screen === "library") state.library = await api.refreshLibrary();
   else await refresh();
+}
+
+async function searchHistory(more = false): Promise<void> {
+  if (!state.repo || state.busy) return;
+  const path = state.repo.path;
+  const filter = more ? state.historyFilter : { query: state.historyQuery.trim(), path: state.historyPath };
+  await perform("正在搜索历史…", async () => {
+    const commits = await api.searchHistory(path, filter.query, filter.path, more ? state.commits.length : 0);
+    state.historyFilter = filter;
+    state.commits = more ? [...state.commits, ...commits] : commits;
+    state.hasMore = commits.length === 100;
+    reconcileSelection();
+    void loadSelection();
+  });
+}
+
+function showRefDialog(kind: "tag" | "rename", name = ""): void {
+  const selection = state.selection;
+  const hash = selection && "hash" in selection ? selection.hash : "";
+  showDialog(`<h2 id="dialog-title">${kind === "tag" ? "新建本地标签" : "重命名本地分支"}</h2>
+    <label for="ref-name">名称</label><input id="ref-name" name="value" required value="${escape(kind === "rename" ? name : "")}" autocomplete="off" spellcheck="false">
+    <input type="hidden" name="ref-kind" value="${kind}"><input type="hidden" name="old-name" value="${escape(name)}">
+    <input type="hidden" name="hash" value="${hash}">
+    ${kind === "tag" ? `<p>目标：${hash ? hash.slice(0, 12) : "当前 HEAD"}</p>` : ""}
+    ${dialogButtons(kind === "tag" ? "创建标签" : "重命名")}`, "ref-form");
 }
 
 const destinationGroup = () => state.libraryGroup === "ALL" ? "" : state.libraryGroup;
@@ -749,6 +813,11 @@ document.addEventListener("click", (event) => {
     void api.cancelScan().catch((error) => { state.error = String(error); renderAlerts(); });
     return;
   }
+  if (action === "cancel-history") {
+    target.disabled = true;
+    void api.cancelHistory().catch((error) => { state.error = String(error); renderAlerts(); });
+    return;
+  }
   if (action === "dismiss-error") {
     state.error = "";
     renderAlerts();
@@ -756,6 +825,45 @@ document.addEventListener("click", (event) => {
   }
   if (state.busy) return;
   switch (action) {
+    case "reveal-repository":
+      void perform("正在打开 Finder…", async () => { await api.revealRepository(state.repo!.path); });
+      break;
+    case "new-tag": showRefDialog("tag"); break;
+    case "rename-branch": showRefDialog("rename", target.dataset.name!); break;
+    case "delete-tag": {
+      const name = target.dataset.name!;
+      confirmAction(`删除本地标签“${name}”？`, "仅删除本仓库的标签引用，远程标签保持不变。", "删除标签", () => {
+        void mutate("正在删除标签…", (path) => api.deleteTag(path, name));
+      });
+      break;
+    }
+    case "delete-branch":
+    case "force-delete-branch": {
+      const name = target.dataset.name!;
+      const force = action === "force-delete-branch";
+      confirmAction(`删除本地分支“${name}”？`, force ? "强制删除分支引用，尚未合并的提交可能失去分支入口。" : "Git 会拒绝删除尚未合并到其上游（无上游时为 HEAD）的分支。", force ? "强制删除分支" : "删除分支", () => {
+        void mutate("正在删除分支…", (path) => api.deleteBranch(path, name, force));
+      });
+      break;
+    }
+    case "clear-history-search":
+      state.historyQuery = "";
+      state.historyPath = "";
+      void searchHistory();
+      break;
+    case "file-history":
+      state.view = "history";
+      state.historyPath = target.dataset.path!;
+      state.historyQuery = "";
+      void searchHistory();
+      break;
+    case "select-commit-file":
+      if (state.selection && "hash" in state.selection) {
+        state.selection = { hash: state.selection.hash, file: target.dataset.path };
+        render();
+        void loadSelection();
+      }
+      break;
     case "library": showLibrary(); break;
     case "library-group": showLibrary(target.dataset.group!); break;
     case "choose-local":
@@ -909,11 +1017,7 @@ document.addEventListener("click", (event) => {
       void mutate(`${action === "fetch" ? "正在获取" : action === "pull" ? "正在拉取" : "正在推送"}…`, (path) => api.remote(path, action), "远程操作完成");
       break;
     case "more":
-      void perform("正在加载提交…", async () => {
-        const commits = await api.history(state.repo!.path, state.commits.length);
-        state.commits.push(...commits);
-        state.hasMore = commits.length === 100;
-      });
+      void searchHistory(true);
       break;
   }
 });
@@ -936,6 +1040,8 @@ document.addEventListener("input", (event) => {
     state.query = target.value;
     render();
   }
+  if (target.id === "history-query") state.historyQuery = target.value;
+  if (target.id === "history-path") state.historyPath = target.value;
 });
 
 document.addEventListener("change", (event) => {
@@ -1014,6 +1120,18 @@ document.addEventListener("submit", (event) => {
   event.preventDefault();
   if (form.id === "commit-form") void commit();
   const data = new FormData(form);
+  if (form.id === "history-search-form") {
+    state.historyQuery = String(data.get("query") ?? "");
+    state.historyPath = String(data.get("path") ?? "");
+    void searchHistory();
+  }
+  if (form.id === "ref-form" && !state.busy) {
+    const value = String(data.get("value") ?? "").trim();
+    if (!value) return;
+    document.querySelector<HTMLDialogElement>("dialog")!.close();
+    if (data.get("ref-kind") === "tag") void mutate("正在创建标签…", (path) => api.createTag(path, value, String(data.get("hash") ?? "")));
+    else void mutate("正在重命名分支…", (path) => api.renameBranch(path, String(data.get("old-name") ?? ""), value));
+  }
   if (form.id === "library-add-form") {
     const path = String(data.get("path") ?? "").trim();
     const group = String(data.get("group") ?? "");

@@ -43,6 +43,15 @@ h2 { font-size: 13px; font-weight: 600; }
 .branch-list, .remote-list { font-size: 12px; }
 .branch-item { width: 100%; border: none; background: transparent; display: flex; align-items: center; justify-content: start; gap: 9px; padding: 8px 10px; min-height: 31px; }
 .branch-item span { overflow: hidden; text-overflow: ellipsis; }
+.ref-row { display: flex; align-items: center; min-width: 0; }
+.ref-row .branch-item { flex: 1; min-width: 0; }
+.tag-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 11px; padding: 6px 10px; }
+.history-search-form { display: flex; gap: 6px; padding: 0 14px 10px; flex: none; }
+.history-search-form input { min-width: 0; flex: 1; font-size: 11px; padding: 6px 8px; }
+.history-search-form button { font-size: 11px; padding: 5px 9px; }
+.commit-files { flex: none; max-height: 110px; overflow: auto; padding: 6px 12px; border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 4px; }
+.commit-files button { max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: 11px; padding: 4px 7px; }
+.commit-files button.selected { background: var(--selection); color: var(--accent); }
 .branch-item > svg:last-child:not(:first-child) { margin-left: auto; }
 .branch-item.current { color: var(--accent); font-weight: 550; }
 .remote-item { display: flex; align-items: center; gap: 9px; padding: 7px 10px; color: var(--muted); }

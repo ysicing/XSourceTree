@@ -21,6 +21,12 @@ export interface Commit {
   refs: string;
 }
 
+export interface CommitFile {
+  path: string;
+  status: string;
+  originalPath: string;
+}
+
 export interface Conflict {
   path: string;
   token: string;
@@ -123,6 +129,11 @@ export interface Stash {
   date: string;
 }
 
+export interface Tag {
+  name: string;
+  hash: string;
+}
+
 // ---- Services ----
 
 export const RepositoryService = {
@@ -137,6 +148,9 @@ export const RepositoryService = {
   },
   branches(path: string): Promise<Branch[]> {
     return call("RepositoryService.Branches", path);
+  },
+  cancelHistory(): Promise<void> {
+    return call("RepositoryService.CancelHistory");
   },
   cancelScan(): Promise<void> {
     return call("RepositoryService.CancelScan");
@@ -156,6 +170,12 @@ export const RepositoryService = {
   commitDiff(path: string, hash: string): Promise<Diff> {
     return call("RepositoryService.CommitDiff", path, hash);
   },
+  commitFileDiff(path: string, hash: string, file: string): Promise<Diff> {
+    return call("RepositoryService.CommitFileDiff", path, hash, file);
+  },
+  commitFiles(path: string, hash: string): Promise<CommitFile[]> {
+    return call("RepositoryService.CommitFiles", path, hash);
+  },
   conflict(path: string, file: string): Promise<Conflict> {
     return call("RepositoryService.Conflict", path, file);
   },
@@ -167,6 +187,15 @@ export const RepositoryService = {
   },
   createStash(path: string, message: string, includeUntracked: boolean): Promise<void> {
     return call("RepositoryService.CreateStash", path, message, includeUntracked);
+  },
+  createTag(path: string, name: string, hash: string): Promise<void> {
+    return call("RepositoryService.CreateTag", path, name, hash);
+  },
+  deleteBranch(path: string, name: string, force: boolean): Promise<void> {
+    return call("RepositoryService.DeleteBranch", path, name, force);
+  },
+  deleteTag(path: string, name: string): Promise<void> {
+    return call("RepositoryService.DeleteTag", path, name);
   },
   diff(path: string, file: string, staged: boolean): Promise<Diff> {
     return call("RepositoryService.Diff", path, file, staged);
@@ -210,14 +239,23 @@ export const RepositoryService = {
   removeRepository(path: string): Promise<Library> {
     return call("RepositoryService.RemoveRepository", path);
   },
+  renameBranch(path: string, oldName: string, newName: string): Promise<void> {
+    return call("RepositoryService.RenameBranch", path, oldName, newName);
+  },
   renameGroup(id: string, name: string): Promise<Library> {
     return call("RepositoryService.RenameGroup", id, name);
   },
   resolveConflict(path: string, file: string, token: string, choice: string, content: string): Promise<void> {
     return call("RepositoryService.ResolveConflict", path, file, token, choice, content);
   },
+  revealRepository(path: string): Promise<void> {
+    return call("RepositoryService.RevealRepository", path);
+  },
   scan(root: string): Promise<ScanResult> {
     return call("RepositoryService.Scan", root);
+  },
+  searchHistory(path: string, query: string, file: string, skip: number): Promise<Commit[]> {
+    return call("RepositoryService.SearchHistory", path, query, file, skip);
   },
   snapshot(path: string): Promise<Snapshot> {
     return call("RepositoryService.Snapshot", path);
@@ -233,6 +271,9 @@ export const RepositoryService = {
   },
   switchBranch(path: string, name: string): Promise<void> {
     return call("RepositoryService.SwitchBranch", path, name);
+  },
+  tags(path: string): Promise<Tag[]> {
+    return call("RepositoryService.Tags", path);
   },
   unstage(path: string, files: string[]): Promise<void> {
     return call("RepositoryService.Unstage", path, files);

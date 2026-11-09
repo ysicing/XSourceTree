@@ -388,13 +388,95 @@ try {
   writeFileSync(join(cloned, "hunks.txt"), hunkBase);
   await evaluate("document.querySelector('[data-action=\"refresh\"]').click()");
   await waitFor("!!document.querySelector('.clean-state') && !document.querySelector('#statusbar .spinner')", "区块测试恢复");
+
+  writeFileSync(join(cloned, "history-one.txt"), "first history file\n");
+  writeFileSync(join(cloned, "history-two.txt"), "second history file\n");
+  gitAt(cloned, "add", "history-one.txt", "history-two.txt");
+  gitAt(cloned, "commit", "-m", "历史搜索目标", "-m", "literal [search] body");
+  const historyTarget = gitAt(cloned, "rev-parse", "HEAD");
+  const tree = gitAt(cloned, "rev-parse", "HEAD^{tree}");
+  let historyHead = historyTarget;
+  for (let index = 0; index < 105; index++) {
+    historyHead = gitAt(cloned, "commit-tree", tree, "-p", historyHead, "-m", `pagination filler ${index}`);
+  }
+  gitAt(cloned, "update-ref", "HEAD", historyHead);
+  gitAt(cloned, "branch", "smoke/merged");
+  const divergent = gitAt(cloned, "commit-tree", tree, "-p", historyHead, "-m", "unmerged branch tip");
+  gitAt(cloned, "branch", "smoke/unmerged", divergent);
+  await evaluate("document.querySelector('[data-action=\"refresh\"]').click()");
+  await waitFor("!!document.querySelector('[data-action=\"switch\"][data-name=\"smoke/merged\"]') && !document.querySelector('#statusbar .spinner')", "刷新本地引用");
+  await evaluate("document.querySelector('[data-action=\"history\"]').click()");
+  await waitFor("document.querySelectorAll('.commit-row').length === 100 && !document.querySelector('#statusbar .spinner')", "历史首页");
+  await evaluate("document.querySelector('[data-action=\"more\"]').click()");
+  await waitFor("document.querySelectorAll('.commit-row').length > 100 && !document.querySelector('#statusbar .spinner')", "历史翻页");
+  const searchHistory = async (query, path = "") => {
+    await execute(`document.querySelector('#history-query').value=${JSON.stringify(query)}; document.querySelector('#history-path').value=${JSON.stringify(path)}; document.querySelector('#history-search-form').requestSubmit();`);
+    await waitFor("!document.querySelector('#statusbar .spinner')", "搜索全部历史");
+  };
+  await searchHistory("[search]");
+  assert.equal(await evaluate("document.querySelectorAll('.commit-row').length"), 1, "搜索正文并按字面处理正则符号");
+  assert.equal(await evaluate("document.querySelector('.commit-row').dataset.hash"), historyTarget, "搜索应覆盖首页之外的提交");
+  await waitFor("document.querySelectorAll('.commit-files [data-path]').length === 2", "提交文件列表");
+  await evaluate("document.querySelector('[data-action=\"select-commit-file\"][data-path=\"history-one.txt\"]').click()");
+  await waitFor("document.querySelector('.diff-code')?.textContent.includes('+first history file')", "提交单文件差异");
+  assert.equal(await evaluate("document.querySelector('.diff-code').textContent.includes('second history file')"), false);
+  await searchHistory(historyTarget.slice(0, 12));
+  assert.equal(await evaluate("document.querySelectorAll('.commit-row').length"), 1, "按提交 ID 搜索");
+  await searchHistory("", "history-one.txt");
+  assert.equal(await evaluate("document.querySelectorAll('.commit-row').length"), 1, "按文件路径搜索");
+  await searchHistory("Smoke");
+  assert.equal(await evaluate("document.querySelectorAll('.commit-row').length"), 100, "按作者搜索");
+  await searchHistory(historyTarget);
+
+  await evaluate("document.querySelector('[data-action=\"new-tag\"]').click()");
+  await execute("document.querySelector('#ref-name').value='smoke/v1'; document.querySelector('#ref-form').requestSubmit()");
+  await waitFor("!!document.querySelector('[data-action=\"delete-tag\"][data-name=\"smoke/v1\"]') && !document.querySelector('#statusbar .spinner')", "创建本地标签");
+  assert.equal(gitAt(cloned, "rev-parse", "smoke/v1^{commit}"), historyTarget, "标签指向选中提交");
+  await evaluate("document.querySelector('[data-action=\"delete-tag\"][data-name=\"smoke/v1\"]').click()");
+  assert.equal(gitAt(cloned, "tag", "--list", "smoke/v1"), "smoke/v1", "删除标签需要确认");
+  await evaluate("document.querySelector('#confirm-form').requestSubmit()");
+  await waitFor("!document.querySelector('[data-action=\"delete-tag\"][data-name=\"smoke/v1\"]') && !document.querySelector('#statusbar .spinner')", "删除本地标签");
+  assert.equal(gitAt(cloned, "tag", "--list", "smoke/v1"), "");
+
+  const branchAction = async (action, name) => {
+    await evaluate(`[...document.querySelectorAll('.ref-row')].find(row=>row.querySelector('[data-action="switch"]')?.dataset.name === ${JSON.stringify(name)}).querySelector('summary').click()`);
+    await evaluate(`document.querySelector('[data-action="${action}"][data-name="${name}"]').click()`);
+  };
+  await branchAction("rename-branch", "smoke/merged");
+  await execute("document.querySelector('#ref-name').value='smoke/renamed'; document.querySelector('#ref-form').requestSubmit()");
+  await waitFor("!!document.querySelector('[data-action=\"switch\"][data-name=\"smoke/renamed\"]') && !document.querySelector('#statusbar .spinner')", "重命名本地分支");
+  assert.equal(gitAt(cloned, "branch", "--list", "smoke/merged"), "");
+  await branchAction("delete-branch", "smoke/renamed");
+  await evaluate("document.querySelector('#confirm-form').requestSubmit()");
+  await waitFor("!document.querySelector('[data-action=\"switch\"][data-name=\"smoke/renamed\"]') && !document.querySelector('#statusbar .spinner')", "删除已合并分支");
+  assert.equal(gitAt(cloned, "branch", "--list", "smoke/renamed"), "");
+  await branchAction("delete-branch", "smoke/unmerged");
+  await evaluate("document.querySelector('#confirm-form').requestSubmit()");
+  await waitFor("document.querySelector('#alerts')?.textContent.includes('not fully merged') && !document.querySelector('#statusbar .spinner')", "保护未合并分支");
+  assert.equal(gitAt(cloned, "rev-parse", "smoke/unmerged"), divergent);
+  await branchAction("force-delete-branch", "smoke/unmerged");
+  await evaluate("document.querySelector('#confirm-form').requestSubmit()");
+  await waitFor("!document.querySelector('[data-action=\"switch\"][data-name=\"smoke/unmerged\"]') && !document.querySelector('#statusbar .spinner')", "确认强制删除分支");
+  assert.equal(gitAt(cloned, "branch", "--list", "smoke/unmerged"), "");
+  await evaluate("document.querySelector('[data-action=\"clear-history-search\"]').click()");
+  await waitFor("document.querySelectorAll('.commit-row').length === 100 && !document.querySelector('#statusbar .spinner')", "重置历史搜索");
+  writeFileSync(join(cloned, "large-history.txt"), "x".repeat(4 * 1024 * 1024) + "\n");
+  writeFileSync(join(cloned, "small-history.txt"), "small independent diff\n");
+  gitAt(cloned, "add", "large-history.txt", "small-history.txt");
+  gitAt(cloned, "commit", "-m", "large diff fallback");
+  await evaluate("document.querySelector('[data-action=\"refresh\"]').click()");
+  await waitFor("!document.querySelector('#statusbar .spinner')", "刷新大提交");
+  await evaluate("document.querySelector('.commit-row').click()");
+  await waitFor("document.querySelector('.diff-error')?.textContent.includes('4 MiB') && document.querySelectorAll('.commit-files [data-path]').length === 2", "完整差异失败后保留文件列表");
+  await evaluate("document.querySelector('[data-action=\"select-commit-file\"][data-path=\"small-history.txt\"]').click()");
+  await waitFor("document.querySelector('.diff-code')?.textContent.includes('+small independent diff')", "大提交仍可查看单个小文件");
   assert.deepEqual(await evaluate("window.__smokeErrors"), [], "桌面页面不应出现未处理的脚本错误");
 
   if (process.env.XSOURCETREE_SCREENSHOT) {
     const capture = await request("capture");
     writeFileSync(process.env.XSOURCETREE_SCREENSHOT, Buffer.from(capture.png, "base64"));
   }
-  console.log("PASS：真实 MyGo 本地仓库添加/去重、扫描勾选、分组/移动/搜索/重载持久化、移除不删文件，以及暂存/提交/分支/储藏/冲突处理");
+  console.log("PASS：真实 MyGo 本地仓库管理、暂存/提交/区块操作、储藏/冲突处理、历史搜索/翻页/单文件差异、分支和标签管理");
   console.log(`测试仓库：${fixture}`);
   console.log(`克隆仓库：${cloned}`);
 } finally {

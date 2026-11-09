@@ -11,9 +11,11 @@ import (
 )
 
 type RepositoryService struct {
-	manager    *workspace.Manager
-	scanMu     sync.Mutex
-	cancelScan context.CancelFunc
+	manager       *workspace.Manager
+	scanMu        sync.Mutex
+	cancelScan    context.CancelFunc
+	historyMu     sync.Mutex
+	cancelHistory context.CancelFunc
 }
 
 func (service *RepositoryService) ChooseScanRoot(ctx context.Context) (string, error) {

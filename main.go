@@ -53,7 +53,13 @@ func main() {
 	app.WhenReady(func() {
 		app.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
 			{Label: "XSourceTree", Submenu: []*mygo.MenuItem{
-				{Role: mygo.RoleAbout},
+				{Label: "关于 XSourceTree", Click: func(_ *mygo.MenuItem, _ *mygo.Window) {
+					app.ShowAboutPanel(mygo.AboutPanelOptions{
+						ApplicationVersion: app.Version(),
+						Version:            buildNumber,
+						Credits:            buildDetails(),
+					})
+				}},
 				updater.MenuItem(),
 				mygo.Separator(),
 				{Role: mygo.RoleServices},

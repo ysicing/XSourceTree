@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/updater"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
@@ -74,11 +73,11 @@ func (app *nativeApp) view(c *ui.Context) {
 			ui.Text(c, title).Bold().FontSize(14)
 			ui.Spacer(c)
 			ui.Toolbar(c, func() {
-				label := "检查更新"
-				if version := mygo.App.Version(); version != "" {
-					label = "v" + version
+				tooltip := buildDetails()
+				if tooltip != "" {
+					tooltip += "\n"
 				}
-				if ui.Button(c, label).Label("检查更新").Tooltip("检查更新").FontSize(12).Clicked() {
+				if ui.Button(c, buildVersionLabel()).Label("检查更新").Tooltip(tooltip + "检查更新").FontSize(12).Clicked() {
 					updater.CheckForUpdates()
 				}
 			}).Label("应用操作").Padding(0)
@@ -523,15 +522,43 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 	graph := commitGraph(app.history)
 	ui.List(c, &app.historyList, len(app.history), func(index int) {
 		commit := app.history[index]
-		listRow(c, commit.Subject, app.commitHash == commit.Hash).Key(commit.Hash).Padding(10, 12).Children(func() {
+		theme := c.Theme()
+		graphColors := []ui.Color{theme.Accent, theme.Success, theme.Warning, theme.Danger, theme.AccentHover}
+		graphSpans := make([]ui.Span, 0, len(strings.Fields(graph[index]))*2)
+		for lane, token := range strings.Fields(graph[index]) {
+			color := graphColors[lane%len(graphColors)]
+			if lane > 0 {
+				graphSpans = append(graphSpans, ui.Span{Text: " ", Color: color})
+			}
+			graphSpans = append(graphSpans, ui.Span{Text: token, Color: color})
+		}
+		refs := strings.Split(commit.Refs, ", ")
+		spans := []ui.Span{{Text: commit.Subject}}
+		for _, ref := range refs {
+			if ref == "" {
+				continue
+			}
+			label := ref
+			color := theme.Accent
+			switch {
+			case strings.HasPrefix(ref, "tag: "):
+				label = strings.TrimPrefix(ref, "tag: ")
+				color = theme.Warning
+			case strings.HasPrefix(ref, "origin/"):
+				color = theme.TextMuted
+			}
+			spans = append(spans, ui.Span{
+				Text: label, Size: 10, Weight: 600, Color: color,
+				Background: color.Alpha(0.12), Radius: 4, PaddingX: 4, PaddingY: 2,
+			})
+		}
+		tooltip := strings.Join([]string{commit.Subject, commit.Author, commit.Hash, commit.Refs}, "\n")
+		listRow(c, commit.Subject, app.commitHash == commit.Hash).Key(commit.Hash).Tooltip(tooltip).Padding(6, 12).Children(func() {
 			ui.Row(c).Gap(8).FillWidth().Children(func() {
-				ui.Text(c, graph[index]).Font("monospace").FontSize(12).TextColor(c.Theme().Accent).MaxWidth(72)
-				ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
-					ui.Text(c, commit.Subject).MaxLines(1)
-					ui.Text(c, shortHash(commit.Hash)+" · "+commit.Author).FontSize(11).TextColor(c.Theme().TextMuted).MaxLines(1)
-					if commit.Refs != "" {
-						ui.Text(c, commit.Refs).FontSize(11).TextColor(c.Theme().Accent).MaxLines(1)
-					}
+				ui.RichText(c, graphSpans...).Font("monospace").FontSize(12).MaxWidth(72).SingleLine()
+				ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
+					ui.RichText(c, spans...).SingleLine()
+					ui.Text(c, shortHash(commit.Hash)+" · "+commit.Author).FontSize(11).TextColor(theme.TextMuted).MaxLines(1)
 				})
 			})
 		}).OnClick(func() { app.selectCommit(commit.Hash) })

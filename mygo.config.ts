@@ -10,6 +10,13 @@ export default defineConfig({
   out: "build",
   macos: {
     minimumSystemVersion: "12.0",
+    ...(process.env.XSOURCETREE_BUILD_NUMBER ? {
+      infoPlist: {
+        CFBundleVersion: process.env.XSOURCETREE_BUILD_NUMBER,
+        XSourceTreeCommit: process.env.XSOURCETREE_BUILD_COMMIT,
+        XSourceTreeBuildTime: process.env.XSOURCETREE_BUILD_TIME,
+      },
+    } : {}),
     ...(process.env.XSOURCETREE_RELEASE === "1" ? {
       signingIdentity: release.macos.signingIdentity,
       notarize: { keychainProfile: release.macos.notaryProfile },

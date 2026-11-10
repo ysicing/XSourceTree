@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/ysicing/XSourceTree/internal/workspace"
@@ -56,8 +57,9 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 		return
 	}
 	open := true
+	width, _ := c.Size()
 	ui.Modal(c, &open, func() {
-		ui.Column(c).Key(dialog).Width(580).MaxWidthPercent(90).Gap(12).Children(func() {
+		ui.Column(c).Key(dialog).Width(580).MaxWidth(max(0, width-c.Theme().Space(20))).Gap(12).Children(func() {
 			ui.Text(c, dialog.title).FontSize(20).Bold()
 			if dialog.detail != "" {
 				ui.Text(c, dialog.detail).MaxLines(5).Selectable()
@@ -293,15 +295,13 @@ func (app *nativeApp) scanDialog() {
 			choice = label
 		}
 	}
-	detail := fmt.Sprintf("找到 %d 个仓库", len(result.Repositories))
+	var notices []string
 	if result.Truncated {
-		detail += "，扫描已达到上限"
+		notices = append(notices, "扫描已达到上限")
 	}
-	if len(result.Warnings) > 0 {
-		detail += "\n" + strings.Join(result.Warnings, "\n")
-	}
+	notices = append(notices, result.Warnings...)
 	app.dialog = &nativeDialog{
-		title: "选择要添加的仓库", detail: detail, options: options, choice: choice, action: "添加所选仓库",
+		title: "选择要添加的仓库", detail: strings.Join(notices, "\n"), choice: choice, action: "添加所选仓库",
 		canSubmit: func() bool {
 			for _, entry := range result.Repositories {
 				if app.scanSelected[entry.Path] {
@@ -311,25 +311,61 @@ func (app *nativeApp) scanDialog() {
 			return false
 		},
 		body: func(c *ui.Context) {
-			ui.Row(c).Gap(8).Children(func() {
-				if ui.Button(c, "全选").Clicked() {
-					for _, entry := range result.Repositories {
-						app.scanSelected[entry.Path] = true
+			selected := 0
+			for _, entry := range result.Repositories {
+				if app.scanSelected[entry.Path] {
+					selected++
+				}
+			}
+			ui.Column(c).FillWidth().Gap(12).Children(func() {
+				ui.Row(c).FillWidth().Gap(12).AlignItems(ui.Center).Children(func() {
+					ui.Text(c, "添加到").FontSize(13).TextColor(c.Theme().TextMuted)
+					ui.Select(c, &app.dialog.choice, options).Label("仓库组").Grow(1).MinWidth(0)
+				})
+				ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
+					ui.Text(c, fmt.Sprintf("已选 %d / %d 个仓库", selected, len(result.Repositories))).FontSize(12).TextColor(c.Theme().TextMuted).Grow(1)
+					if ui.Button(c, "全选").FontSize(12).Disabled(selected == len(result.Repositories)).Clicked() {
+						for _, entry := range result.Repositories {
+							app.scanSelected[entry.Path] = true
+						}
 					}
-				}
-				if ui.Button(c, "清空选择").Clicked() {
-					app.scanSelected = map[string]bool{}
-				}
-			})
-			ui.Scroll(c).Height(300).FillWidth().Children(func() {
-				for _, entry := range result.Repositories {
-					value := app.scanSelected[entry.Path]
-					ui.Column(c).Key(entry.Path).FillWidth().Children(func() {
-						if ui.Checkbox(c, &value, entry.Path).FillWidth().Changed() {
-							app.scanSelected[entry.Path] = value
+					if ui.Button(c, "清空选择").FontSize(12).Disabled(selected == 0).Clicked() {
+						app.scanSelected = map[string]bool{}
+					}
+				})
+				ui.Scroll(c).Height(320).FillWidth().Border(1, c.Theme().Border).Radius(c.Theme().Radius).Children(func() {
+					ui.Column(c).FillWidth().Padding(4).Gap(2).Children(func() {
+						if len(result.Repositories) == 0 {
+							ui.Text(c, "未找到可添加的仓库").FillWidth().Padding(24).TextColor(c.Theme().TextMuted)
+						}
+						for _, entry := range result.Repositories {
+							ui.Column(c).Key(entry.Path).FillWidth().Children(func() {
+								value := app.scanSelected[entry.Path]
+								row := ui.Checkbox(c, &value, "").Label(entry.Path).Tooltip(entry.Path).FillWidth().Padding(10, 12).Gap(12).Radius(c.Theme().Radius)
+								if value {
+									row.Background(c.Theme().Accent.Alpha(0.12))
+								} else if row.Hovered() {
+									row.Background(c.Theme().SurfaceHover)
+								}
+								row.Children(func() {
+									ui.Icon(c, nativeIcons["folder"]).FontSize(22).TextColor(c.Theme().TextMuted)
+									ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
+										name := entry.Name
+										if name == "" {
+											name = filepath.Base(entry.Path)
+										}
+										ui.Text(c, name).FontSize(14).Bold().MaxLines(1)
+										ui.Text(c, filepath.Dir(entry.Path)).FontSize(12).TextColor(c.Theme().TextMuted).MaxLines(1)
+									})
+								})
+								if row.Changed() {
+									app.scanSelected[entry.Path] = value
+								}
+							})
 						}
 					})
-				}
+				})
+				ui.Divider(c)
 			})
 		},
 		submit: func(dialog *nativeDialog) {

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -69,6 +70,116 @@ func TestNativeSelectionDialogsRender(t *testing.T) {
 	}
 	if !app.lineChoices[0].Checked || app.lineChoices[1].Checked {
 		t.Fatal("逐行选择状态串行")
+	}
+}
+
+func TestNativeScanRepositorySelection(t *testing.T) {
+	app, _, finish := nativeFixture(t)
+	path, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	nativeGit(t, path, "init", "-b", "main")
+	library, err := app.service.CreateGroup("日常开发")
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.library, app.group = library, library.Groups[0].ID
+	otherPath := "/Users/developer/Projects/archive/XSourceTree"
+	app.scanResult = &workspace.ScanResult{Repositories: []workspace.LocalRepository{
+		{Name: "XSourceTree", Path: path},
+		{Name: "XSourceTree", Path: otherPath},
+	}}
+	app.scanSelected = map[string]bool{}
+	app.scanDialog()
+	tester := ui.NewTester(app.view, 1024, 680)
+	if _, found := tester.Find("已选 0 / 2 个仓库"); !found {
+		t.Fatal("扫描结果缺少已选数量")
+	}
+	row, found := tester.Find(path)
+	if !found || row.H < 48 {
+		t.Fatalf("扫描结果缺少可点击的完整仓库行: %+v", row)
+	}
+	tester.Press(row.X+row.W-20, row.Y+row.H/2)
+	tester.Release(row.X+row.W-20, row.Y+row.H/2)
+	if !app.scanSelected[path] || app.scanSelected[otherPath] {
+		t.Fatal("点击整行没有只选中对应路径")
+	}
+	tester.Key(0, ui.KeySpace)
+	if app.scanSelected[path] {
+		t.Fatal("仓库行不支持空格取消选择")
+	}
+	if err := tester.Click("全选"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Frame()
+	if _, found := tester.Find("已选 2 / 2 个仓库"); !found {
+		t.Fatal("全选后数量未更新")
+	}
+	if err := tester.Click(otherPath); err != nil {
+		t.Fatal(err)
+	}
+	if !app.scanSelected[path] || app.scanSelected[otherPath] {
+		t.Fatal("同名仓库的选择状态相互影响")
+	}
+	if err := tester.Click("添加所选仓库"); err != nil {
+		t.Fatal(err)
+	}
+	finish()
+	if app.problem != "" {
+		t.Fatal(app.problem)
+	}
+	if !slices.ContainsFunc(app.library.Repositories, func(entry workspace.LocalRepository) bool {
+		return entry.Path == path && entry.GroupID == library.Groups[0].ID
+	}) {
+		t.Fatalf("所选仓库未添加到目标分组: %+v", app.library.Repositories)
+	}
+}
+
+func TestNativeScanDialogLayout(t *testing.T) {
+	app, _, _ := nativeFixture(t)
+	app.showLibrary()
+	app.scanResult = &workspace.ScanResult{}
+	for _, name := range []string{"DeepAudit", "codereview", "drone-runner-kube", "gaea-v5", "gaea-v5-old", "gitness", "harness", "syncimage", "zeus", "zeus/sig/errors", "zeus/sig/exgin", "zeus/sig/glog", "zeus/sig/jwt", "zeus/sig/ldap", "zeus/sig/util", "zeus/sig/workwx", "zeus/sig/zlog"} {
+		app.scanResult.Repositories = append(app.scanResult.Repositories, workspace.LocalRepository{
+			Name: filepath.Base(name), Path: filepath.Join("/Users/developer/Projects/yunop-com", name),
+		})
+	}
+	app.scanSelected = map[string]bool{
+		app.scanResult.Repositories[3].Path: true,
+		app.scanResult.Repositories[5].Path: true,
+	}
+	app.scanDialog()
+	tester := ui.NewTester(app.view, 1024, 680)
+	for _, label := range []string{"仓库组", "已选 2 / 17 个仓库", "全选", "清空选择", "取消", "添加所选仓库"} {
+		bounds, found := tester.Find(label)
+		if !found || bounds.X < 0 || bounds.Y < 0 || bounds.X+bounds.W > 1024 || bounds.Y+bounds.H > 680 {
+			t.Fatalf("扫描弹窗操作不可见: %s %+v", label, bounds)
+		}
+	}
+	for _, width := range []int{1024, 480} {
+		layout := ui.NewTester(app.view, width, 680)
+		title, titleFound := layout.Find("选择要添加的仓库")
+		action, actionFound := layout.Find("添加所选仓库")
+		viewport := float32(width)
+		if !titleFound || !actionFound || title.X < 0 || action.X+action.W > viewport ||
+			title.X-(viewport-title.X-title.W) > 2 || (viewport-title.X-title.W)-title.X > 2 {
+			t.Fatalf("扫描弹窗布局未居中: width=%v title=%+v action=%+v", width, title, action)
+		}
+	}
+	if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+		saveNativeScreenshot(t, tester, directory, "native-scan-light.png")
+		tester.SetDark(true)
+		saveNativeScreenshot(t, tester, directory, "native-scan-dark.png")
+	}
+	app.scanResult = &workspace.ScanResult{}
+	app.scanDialog()
+	tester.Frame()
+	if _, found := tester.Find("未找到可添加的仓库"); !found {
+		t.Fatal("空扫描结果缺少提示")
+	}
+	if info, found := tester.AccessByRole(ui.RoleButton, "添加所选仓库"); !found || !info.Disabled {
+		t.Fatal("空扫描结果仍可添加")
 	}
 }
 

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="resources/icon.png" width="128" height="128" alt="XSourceTree 应用图标">
+</p>
+
 # XSourceTree
 
 基于 [MyGo](https://github.com/egoist/mygo) 的开源 Git 桌面客户端。优先支持 macOS，Git 核心使用跨平台 Go 实现。
@@ -58,6 +62,8 @@ GOMAXPROCS=2 GOFLAGS=-p=1 bun run build
 ```
 
 产物位于 `build/darwin-arm64/`（Intel 机器为 `darwin-amd64`）。默认使用本地 ad-hoc 签名，正式发布所需的 Developer ID 签名、公证与发布流程尚未配置。
+
+应用图标源文件为 `resources/icon.png`，MyGo 构建时自动使用。透明底 Logo 位于 `assets/brand/logo.png`，macOS 图标文件位于 `assets/brand/XSourceTree.icns`。
 
 ## 验证
 

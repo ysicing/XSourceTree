@@ -1,0 +1,208 @@
+import assert from "node:assert/strict";
+import net from "node:net";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
+
+const socketPath = process.env.MYGO_AUTOMATION;
+assert(socketPath, "请设置 MYGO_AUTOMATION，指向 e2e 应用 socket");
+const root = mkdtempSync(join(tmpdir(), "xsourcetree-native-smoke-"));
+const fixture = join(root, "中文仓库-" + basename(root).slice(-6));
+const remote = join(root, "remote.git");
+mkdirSync(fixture);
+const gitEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")));
+Object.assign(gitEnv, { GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1", GIT_TERMINAL_PROMPT: "0" });
+const gitAt = (path, ...args) => execFileSync("git", ["-C", path, ...args], {
+  encoding: "utf8", env: gitEnv, timeout: 15000, stdio: ["ignore", "pipe", "pipe"],
+}).trim();
+const git = (...args) => gitAt(fixture, ...args);
+git("init", "-b", "main");
+git("config", "user.name", "Native Smoke");
+git("config", "user.email", "native@example.test");
+git("config", "commit.gpgsign", "false");
+writeFileSync(join(fixture, "hello.txt"), "原始内容\n");
+git("add", ".");
+git("commit", "-m", "初始提交");
+writeFileSync(join(fixture, "hello.txt"), "原生界面变更\n");
+gitAt(root, "init", "--bare", remote);
+
+const socket = net.createConnection(socketPath);
+await new Promise((resolve, reject) => {
+  socket.once("connect", resolve);
+  socket.once("error", reject);
+});
+let serial = 0;
+let buffer = "";
+const pending = new Map();
+socket.on("data", (data) => {
+  buffer += data.toString();
+  let boundary;
+  while ((boundary = buffer.indexOf("\n")) >= 0) {
+    const reply = JSON.parse(buffer.slice(0, boundary));
+    buffer = buffer.slice(boundary + 1);
+    const entry = pending.get(reply.id);
+    if (!entry) continue;
+    pending.delete(reply.id);
+    clearTimeout(entry.timeout);
+    if (reply.error) entry.reject(new Error(JSON.stringify(reply.error)));
+    else entry.resolve(reply.result);
+  }
+});
+socket.on("error", (error) => {
+  for (const entry of pending.values()) {
+    clearTimeout(entry.timeout);
+    entry.reject(error);
+  }
+  pending.clear();
+});
+function request(method, params = {}) {
+  return new Promise((resolve, reject) => {
+    const id = ++serial;
+    const timeout = setTimeout(() => {
+      pending.delete(id);
+      reject(new Error(`automation timeout: ${method}`));
+    }, 15000);
+    pending.set(id, { resolve, reject, timeout });
+    socket.write(JSON.stringify({ id, method, params }) + "\n");
+  });
+}
+const tree = async () => {
+  // 被其他窗口遮挡时，Native UI 可能保留待绘制帧；capture 使快照跟上当前状态。
+  await request("capture");
+  return (await request("tree")).nodes;
+};
+const delay = () => new Promise((resolve) => setTimeout(resolve, 100));
+async function frame() {
+  await request("idle", { timeout: 500 }).catch((error) => {
+    if (!error.message.includes('"code":"timeout"')) throw error;
+  });
+}
+async function waitFor(predicate, label) {
+  const deadline = Date.now() + 20000;
+  let nodes;
+  while (Date.now() < deadline) {
+    nodes = await tree();
+    if (predicate(nodes)) return nodes;
+    await delay();
+  }
+  throw new Error(`${label}超时\n${nodes.map((node) => node.label || node.placeholder || node.value).filter(Boolean).join("\n")}`);
+}
+async function ready() {
+  await frame();
+  await waitFor((nodes) => !nodes.some((node) => node.role === "text" && node.label?.startsWith("正在") && !node.label.startsWith("正在进行")), "后台任务");
+}
+async function act(label, action, text) {
+  const nodes = await waitFor((entries) => entries.some((entry) =>
+    (entry.label === label || entry.placeholder === label) && entry.actions?.includes(action)), label);
+  const node = nodes.find((entry) =>
+    (entry.label === label || entry.placeholder === label) && entry.actions?.includes(action));
+  assert(node, `找不到可操作元素 ${label} / ${action}`);
+  assert(!node.states?.includes("disabled"), `${label} 被禁用`);
+  await request("act", { id: node.id, action, ...(text === undefined ? {} : { text }) });
+  await frame();
+}
+async function press(label) {
+  await act(label, "press");
+  await ready();
+}
+const fill = (label, text) => act(label, "setValue", text);
+const shown = (label) => waitFor((nodes) => nodes.some((node) => node.label === label), label);
+async function capture(name) {
+  if (!process.env.XSOURCETREE_TEST_SCREENSHOTS) return;
+  const directory = process.env.XSOURCETREE_TEST_SCREENSHOTS;
+  mkdirSync(directory, { recursive: true });
+  const result = await request("capture");
+  writeFileSync(join(directory, name), Buffer.from(result.png, "base64"));
+}
+
+try {
+  const windows = (await request("windows")).windows;
+  assert.equal(windows[0].kind, "content", "应用仍在使用 WebView");
+  await request("menu", { path: ["文件", "本地仓库"] });
+  await ready();
+  await press("输入路径");
+  await fill("仓库完整路径", fixture);
+  await press("添加");
+  await press(basename(fixture));
+  await shown("文件变更");
+  await press("hello.txt");
+  await press("并排");
+  await capture("native-desktop-diff.png");
+  await press("暂存文件");
+  await fill("提交说明", "使用原生 UI 提交");
+  await request("menu", { path: ["仓库", "提交"] });
+  await shown("提交 0 个文件");
+  await ready();
+  assert.equal(git("log", "-1", "--format=%s"), "使用原生 UI 提交");
+  assert.equal(git("status", "--porcelain"), "");
+  console.log("✓ 原生窗口、中文输入、并排 Diff、暂存和菜单提交");
+
+  await press("分支");
+  await fill("分支名称", "native-topic");
+  await press("创建并切换");
+  assert.equal(git("branch", "--show-current"), "native-topic");
+  await press("main");
+  assert.equal(git("branch", "--show-current"), "main");
+  await press("更多");
+  await press("新建标签");
+  await fill("标签名称", "native-smoke");
+  await press("创建");
+  assert.equal(git("tag", "--list"), "native-smoke");
+  await press("提交历史");
+  await fill("搜索提交、作者或 ID", "使用原生 UI");
+  await press("搜索");
+  await waitFor((nodes) => nodes.some((node) => node.label?.includes("使用原生 UI 提交")), "历史结果");
+  await capture("native-desktop-history.png");
+  console.log("✓ 分支创建与切换、标签创建、历史搜索");
+
+  await press("文件变更");
+  await press("远程设置");
+  await press("添加远程");
+  await fill("名称", "origin");
+  await fill("获取地址", remote);
+  await press("保存");
+  assert.equal(git("remote", "get-url", "origin"), remote);
+  await press("推送");
+  await shown("发布当前分支");
+  await press("发布");
+  assert.equal(git("rev-parse", "--abbrev-ref", "@{upstream}"), "origin/main");
+  assert.equal(gitAt(remote, "rev-parse", "refs/heads/main"), git("rev-parse", "HEAD"));
+  console.log("✓ 远程配置、首次发布和上游跟踪（临时本地 bare 仓库）");
+
+  writeFileSync(join(fixture, "hello.txt"), "储藏修改\n");
+  await press("刷新");
+  await press("储藏");
+  await press("新建储藏");
+  await fill("说明（可选）", "原生储藏");
+  await press("储藏");
+  assert.equal(git("status", "--porcelain"), "");
+  await press("储藏");
+  const stashNode = (await tree()).find((node) => node.role === "button" && node.label?.includes("原生储藏"));
+  assert(stashNode, "未显示储藏记录");
+  await press(stashNode.label);
+  await press("应用并删除");
+  await press("应用");
+  assert.equal(readFileSync(join(fixture, "hello.txt"), "utf8"), "储藏修改\n");
+  assert.equal(git("stash", "list"), "");
+  await press("文件变更");
+  await press("hello.txt");
+  await press("丢弃修改…");
+  await press("丢弃修改");
+  assert.equal(git("status", "--porcelain"), "");
+  console.log("✓ 创建、预览、应用储藏，以及备份后丢弃修改");
+
+  await request("menu", { path: ["文件", "本地仓库"] });
+  await ready();
+  await shown("输入路径");
+  await capture("native-desktop-library.png");
+  await press("新建仓库组");
+  await fill("组名", "日常开发");
+  await press("保存");
+  await shown("日常开发");
+  console.log("✓ 原生菜单、仓库列表和分组");
+  console.log("Native UI 桌面 smoke 通过");
+} finally {
+  socket.end();
+  rmSync(root, { recursive: true, force: true });
+}

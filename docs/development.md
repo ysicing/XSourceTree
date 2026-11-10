@@ -11,11 +11,7 @@ task setup
 task dev
 ```
 
-修改 Go 服务签名后生成类型：
-
-```sh
-task generate
-```
+界面直接使用 MyGo 的 `ui` 和 `ui/editor` Go 组件，不需要 TypeScript 绑定、Vite 服务或前端资源构建。Bun 仅用于 MyGo 打包工具与发布脚本。Git 请求在后台执行，通过 `Window.Update` 将结果交回界面线程。
 
 构建 macOS 应用与 DMG：
 
@@ -29,13 +25,15 @@ task build
 
 ## 验证
 
-`task check` 串行执行全部测试、类型检查与前端构建。所有 Git 集成测试只操作测试创建的临时仓库，包括本地 bare 远程仓库，不连接真实远程服务。
+`task check` 串行执行 Go 测试（包含原生界面）、发布脚本测试和 `go vet`。所有 Git 集成测试只操作测试创建的临时仓库，包括本地 bare 远程仓库，不连接真实远程服务。
 
 ```sh
 task check
 ```
 
-可用 `task test:go`、`task test:web`、`task test:release`、`task typecheck` 或 `task build:web` 单独执行检查，`task test` 依次执行三组测试。Go 测试使用 `GOMAXPROCS=2`、`-p=1` 和 `-parallel=2`；开发、生成绑定与构建任务同样限制 Go 构建并发。
+可用 `task test:go`、`task test:ui`、`task test:release` 或 `task vet` 单独执行检查，`task test` 依次执行 Go 和发布脚本测试。Go 测试使用 `GOMAXPROCS=2`、`-p=1` 和 `-parallel=2`；开发与构建任务同样限制 Go 构建并发。
+
+原生界面测试使用 MyGo `ui.Tester`，覆盖侧栏切换与键盘导航、文件排序菜单、中文文本输入、统一/并排 Diff、提交草稿、失败 hook 后刷新、逐行暂存、冲突版本保护及刷新失败后的写入保护。设置 `XSOURCETREE_TEST_SCREENSHOTS=/tmp/xsourcetree-native-preview` 可导出浅色、深色和窄窗口截图；该测试不验证系统输入法候选窗。
 
 真实桌面端集成测试通过 MyGo 的 automation 插件操作应用。插件仅编译进 `e2e` 构建，并且仅在设置 socket 路径时启用。先启动测试用应用，再在另一个终端执行测试：
 
@@ -45,16 +43,12 @@ GOMAXPROCS=2 GOFLAGS="-p=1 -tags=e2e" \
 ```
 
 ```sh
-MYGO_AUTOMATION=/tmp/xsourcetree-e2e.sock node scripts/smoke.mjs
+MYGO_AUTOMATION=/tmp/xsourcetree-e2e.sock node scripts/native-smoke.mjs
 ```
 
-测试会在临时目录创建仓库，验证本地添加、扫描勾选、搜索、分组和持久化，以及暂存、提交、逐块/逐行操作、丢弃确认与外部编辑保护、并排布局及持久化、储藏和冲突解决；覆盖超过 100 条历史的搜索与翻页、提交单文件差异、大提交差异失败后的文件切换、分支重命名与删除保护、标签创建与删除，并验证 hook 失败后的状态同步和刷新失败后的写操作保护。启用自动化时，测试应用使用独立的临时数据目录，退出时清理，不影响普通开发版或正式版的本地仓库列表及恢复副本。
+测试先确认窗口类型为原生内容，再验证中文路径添加、中文提交说明、暂存与菜单提交、并排 Diff、分支创建与切换、标签、历史搜索、远程配置及首次发布、储藏、备份后丢弃、原生菜单与分组。推送目标全部为临时本地 bare 仓库。启用自动化时，测试应用使用独立的临时数据目录，退出时清理，不影响普通开发版或正式版的本地仓库列表及恢复副本。自动化输入通过框架内容事件发送，菜单快捷键仍需真实键盘验证。
 
-远程流程使用独立脚本，在重新启动的测试应用中运行，验证远程配置、首次发布及上游、普通推送、远程分支检出，以及确认后目标地址或提交变化时的保护。推送目标全部为临时本地 bare 仓库：
-
-```sh
-MYGO_AUTOMATION=/tmp/xsourcetree-e2e.sock node scripts/remotes-smoke.mjs
-```
+旧的 `src/`、Vite 配置和基于 DOM 的 `scripts/smoke.mjs`、`scripts/remotes-smoke.mjs` 暂留作迁移参考，不参与当前构建和验收。
 
 ## 项目结构
 
@@ -63,10 +57,14 @@ MYGO_AUTOMATION=/tmp/xsourcetree-e2e.sock node scripts/remotes-smoke.mjs
 ```text
 internal/gitrepo/     系统 Git 调用、状态解析与仓库操作，无桌面依赖
 internal/workspace/   本地仓库库、扫描、分组与已打开仓库管理，无桌面依赖
-main.go              MyGo 窗口与原生菜单
-service.go           Go ↔ TypeScript 服务边界
-src/                 TypeScript 界面、Diff 解析与提交图
-scripts/smoke.mjs     真实桌面端集成测试
+main.go              MyGo 生命周期与原生菜单
+native_app.go        窗口状态、后台任务与草稿保存
+native_ui.go         原生仓库列表、文件、历史、储藏与 Diff 界面
+native_selection.go  差异加载、逐块/逐行暂存与历史选择
+native_dialogs.go    原生弹窗、仓库分组与扫描
+native_actions.go    分支、远程、储藏与冲突操作
+service.go           界面复用的 Go 仓库服务
+scripts/native-smoke.mjs  真实原生桌面端集成测试
 ```
 
 Git 命令使用参数数组执行，路径按字面值处理。写操作限定在已打开的仓库内，文件变更操作校验当前状态；取消暂存保留工作区内容。命令设有超时，Diff 禁用外部 diff/textconv 程序，输出和预览大小设有限制。窗口关闭会取消该窗口发起的 Git 请求。
@@ -83,7 +81,7 @@ Git 命令使用参数数组执行，路径按字面值处理。写操作限定�
 
 Apple Silicon 和 Intel 分别读取下载根地址下的 `update-darwin-arm64.json` 和 `update-darwin-amd64.json`；当前发布完整更新包，不生成增量包。发布脚本要求两个平台的清单与归档齐全，且版本为 `x.y.z` 稳定版。
 
-版本统一修改 [package.json](../package.json) 的 `version`，MyGo 构建配置、关于窗口与页面版本号均使用该版本；同时在 [CHANGELOG.md](../CHANGELOG.md) 添加对应 `## <version>` 节，构建时写入更新说明。
+版本统一修改 [package.json](../package.json) 的 `version`，MyGo 构建配置、关于窗口与界面版本号均使用该版本；同时在 [CHANGELOG.md](../CHANGELOG.md) 添加对应 `## <version>` 节，构建时写入更新说明。
 
 发布签名私钥必须与 `release.config.json` 中的公钥配对；私钥保存在仓库外并离线备份，不要重新生成替换，否则已安装应用将拒绝新签名。当前维护者本机路径为 `~/.config/xsourcetree/update-keys/mygo-update.key`；其他构建环境通过 `MYGO_UPDATER_PRIVATE_KEY` 提供同一私钥。
 

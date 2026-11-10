@@ -7,7 +7,7 @@ tasks:
       - task --list
 
   setup:
-    desc: 安装前端与 Go 依赖
+    desc: 安装打包工具与 Go 依赖
     cmds:
       - bun install
       - GOMAXPROCS=2 go mod download
@@ -17,36 +17,20 @@ tasks:
     cmds:
       - GOMAXPROCS=2 GOFLAGS=-p=1 bun run dev
 
-  dev:web:
-    desc: 启动前端开发服务
-    cmds:
-      - bun run dev:web
-
-  generate:
-    desc: 生成 Go 服务的 TypeScript 绑定
-    cmds:
-      - GOMAXPROCS=2 GOFLAGS=-p=1 bun run generate
-
   build:
     desc: 构建 macOS 应用与 DMG
     cmds:
       - GOMAXPROCS=2 GOFLAGS=-p=1 bun run build
 
-  build:web:
-    desc: 检查类型并构建前端
+  vet:
+    desc: 检查 Go 代码
     cmds:
-      - bun run build:web
-
-  typecheck:
-    desc: 检查 TypeScript 类型
-    cmds:
-      - bun run typecheck
+      - GOMAXPROCS=2 go vet -p=1 ./...
 
   test:
-    desc: 串行运行 Go、前端与发布脚本测试
+    desc: 串行运行 Go（含原生界面）与发布脚本测试
     cmds:
       - task: test:go
-      - task: test:web
       - task: test:release
 
   test:go:
@@ -54,10 +38,10 @@ tasks:
     cmds:
       - GOMAXPROCS=2 go test -p=1 -parallel=2 ./...
 
-  test:web:
-    desc: 运行前端测试
+  test:ui:
+    desc: 运行原生界面与交互测试
     cmds:
-      - bun run test:web
+      - GOMAXPROCS=2 go test -p=1 -parallel=2 .
 
   test:release:
     desc: 运行发布脚本测试
@@ -65,10 +49,10 @@ tasks:
       - bun run test:release
 
   check:
-    desc: 串行运行全部测试、类型检查与前端构建
+    desc: 串行运行全部测试与 Go 静态检查
     cmds:
       - task: test
-      - task: build:web
+      - task: vet
 
   release:
     desc: 构建并发布双架构更新包，可传入 -- --dry-run 仅构建校验

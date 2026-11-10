@@ -6,19 +6,16 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/updater"
+	"github.com/egoist/mygo/plugins/updater/native"
 	"github.com/ysicing/XSourceTree/internal/workspace"
 )
 
-var addRequested = mygo.NewEvent[bool]("repository:add")
-var scanRequested = mygo.NewEvent[bool]("repository:scan")
-var groupRequested = mygo.NewEvent[bool]("repository:group")
-var libraryRequested = mygo.NewEvent[bool]("repository:library")
-var refreshRequested = mygo.NewEvent[bool]("repository:refresh")
-
 func main() {
 	app := mygo.App
-	mygo.Use(updater.New(updater.Options{Language: "zh-Hans"}))
-	mygo.Bind(&ApplicationService{})
+	if !app.RequestSingleInstanceLock() {
+		return
+	}
+	mygo.Use(native.New(updater.Options{Language: "zh-Hans"}))
 	dir, err := app.Path(mygo.PathUserData)
 	if err != nil {
 		log.Fatal(err)
@@ -28,7 +25,31 @@ func main() {
 		log.Fatal(err)
 	}
 	service := &RepositoryService{manager: manager}
-	mygo.Bind(service)
+	var desktop *nativeApp
+	open := func() {
+		if desktop == nil {
+			desktop = newNativeApp(service, filepath.Join(dir, "native-state.json"))
+			desktop.open()
+			desktop.win.OnClosed(func() { desktop = nil })
+		} else {
+			desktop.win.Show()
+			desktop.win.Focus()
+		}
+	}
+	command := func(action func(*nativeApp)) func(*mygo.MenuItem, *mygo.Window) {
+		return func(_ *mygo.MenuItem, _ *mygo.Window) {
+			if desktop == nil {
+				open()
+			}
+			target := desktop
+			target.win.Update(func() {
+				if !target.closed && !target.busy && target.dialog == nil {
+					action(target)
+				}
+			})
+		}
+	}
+	app.OnSecondInstance(func(_ []string, _ string) { open() })
 	app.WhenReady(func() {
 		app.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
 			{Label: "XSourceTree", Submenu: []*mygo.MenuItem{
@@ -44,58 +65,30 @@ func main() {
 				{Role: mygo.RoleQuit},
 			}},
 			{Label: "文件", Submenu: []*mygo.MenuItem{
-				{Label: "本地仓库", Accelerator: "CmdOrCtrl+Shift+L", Click: func(_ *mygo.MenuItem, win *mygo.Window) {
-					if win != nil {
-						_ = libraryRequested.Emit(win, true)
-					}
-				}},
-				{Label: "添加已有的本地仓库…", Accelerator: "CmdOrCtrl+O", Click: func(_ *mygo.MenuItem, win *mygo.Window) {
-					if win != nil {
-						_ = addRequested.Emit(win, true)
-					}
-				}},
-				{Label: "扫描文件夹…", Accelerator: "CmdOrCtrl+Shift+O", Click: func(_ *mygo.MenuItem, win *mygo.Window) {
-					if win != nil {
-						_ = scanRequested.Emit(win, true)
-					}
-				}},
-				{Label: "新建仓库组…", Click: func(_ *mygo.MenuItem, win *mygo.Window) {
-					if win != nil {
-						_ = groupRequested.Emit(win, true)
-					}
-				}},
+				{Label: "本地仓库", Accelerator: "CmdOrCtrl+Shift+L", Click: command(func(desktop *nativeApp) { desktop.showLibrary() })},
+				{Label: "添加已有的本地仓库…", Accelerator: "CmdOrCtrl+O", Click: command(func(desktop *nativeApp) { desktop.chooseLocal() })},
+				{Label: "扫描文件夹…", Accelerator: "CmdOrCtrl+Shift+O", Click: command(func(desktop *nativeApp) { desktop.chooseScan() })},
+				{Label: "新建仓库组…", Click: command(func(desktop *nativeApp) { desktop.groupDialog("") })},
 				mygo.Separator(),
 				{Role: mygo.RoleClose},
 			}},
 			{Role: mygo.RoleEditMenu},
 			{Label: "仓库", Submenu: []*mygo.MenuItem{
-				{Label: "刷新", Accelerator: "CmdOrCtrl+R", Click: func(_ *mygo.MenuItem, win *mygo.Window) {
-					if win != nil {
-						_ = refreshRequested.Emit(win, true)
-					}
-				}},
+				{Label: "刷新", Accelerator: "CmdOrCtrl+R", Click: command(func(desktop *nativeApp) { desktop.refresh() })},
+				{Label: "提交", Accelerator: "CmdOrCtrl+Enter", Click: command(func(desktop *nativeApp) { desktop.commit() })},
 			}},
 			{Role: mygo.RoleViewMenu},
 			{Role: mygo.RoleWindowMenu},
 		}))
-		openWindow()
+		open()
 	})
 	app.OnWindowAllClosed(func() {})
 	app.OnActivate(func(visible bool) {
 		if !visible {
-			openWindow()
+			open()
 		}
 	})
 	if err := app.Run(); err != nil {
 		log.Fatal(err)
 	}
-}
-
-func openWindow() {
-	win := mygo.NewWindow(mygo.WindowOptions{
-		Title: "XSourceTree", Width: 1320, Height: 860, MinWidth: 960, MinHeight: 640,
-		TitleBarStyle: mygo.TitleBarHiddenInset, TitleBarHeight: 52,
-		BackgroundColor: "light-dark(#ffffff, #191b20)", StateKey: "main", URL: "/",
-	})
-	protectWindowClose(win)
 }

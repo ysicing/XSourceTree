@@ -4,7 +4,7 @@
 
 # XSourceTree
 
-轻量的开源 Git 桌面客户端，专注 SourceTree 中常用的工作流。优先支持 macOS，基于 [MyGo](https://github.com/egoist/mygo)、Go 和 TypeScript 构建，使用系统 Git。
+轻量的开源 Git 桌面客户端，专注 SourceTree 中常用的工作流。优先支持 macOS，使用 Go 和 [MyGo Native UI](https://mygo.egoist.dev/docs/ui) 构建界面，使用系统 Git。
 
 ## 功能
 
@@ -35,12 +35,12 @@ task build
 
 产物位于 `build/darwin-arm64/` 或 `build/darwin-amd64/`。目前使用 ad-hoc 签名，尚未配置 Developer ID 签名与公证。
 
-运行 `task` 查看全部任务，`task check` 串行执行测试、类型检查与前端构建。
+运行 `task` 查看全部任务，`task check` 串行执行 Go 测试、原生界面测试、发布脚本测试与静态检查。Bun 仅用于打包工具和发布脚本，界面无需 WebView 或前端构建。
 
 ## 文档
 
 - [使用说明](docs/usage.md)：快捷键、更新、恢复副本与功能边界
-- [开发与发布](docs/development.md)：类型生成、测试、项目结构与对象存储发布流程
+- [开发与发布](docs/development.md)：原生界面开发、测试、项目结构与对象存储发布流程
 - [更新日志](CHANGELOG.md)
 
 ## License

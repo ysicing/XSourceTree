@@ -90,6 +90,7 @@ type nativeApp struct {
 	historyGraphSource *gitrepo.Commit
 	commitList         *ui.ListState
 	commitSelected     int
+	refCollapsed       map[nativeRefKey]bool
 }
 
 func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
@@ -100,6 +101,7 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 		prefs:           nativePreferences{Sidebar: 226, Files: 360, History: 56, HistoryFiles: 280, Wrap: true, Drafts: map[string]string{}},
 		historySelected: -1, commitSelected: -1,
 		historyList: &ui.ListState{}, commitList: &ui.ListState{},
+		refCollapsed: make(map[nativeRefKey]bool),
 	}
 	if data, err := os.ReadFile(stateFile); err == nil {
 		if err := json.Unmarshal(data, &app.prefs); err != nil {

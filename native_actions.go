@@ -398,10 +398,7 @@ func (app *nativeApp) publishDialog() {
 }
 
 func (app *nativeApp) checkoutDialog(remote string) {
-	name := remote
-	if _, after, found := strings.Cut(remote, "/"); found {
-		name = after
-	}
+	_, name := remoteBranchParts(remote, app.repository.remotes)
 	app.dialog = &nativeDialog{
 		title: "检出远程分支", detail: remote, action: "检出",
 		fields: []nativeField{{label: "本地分支名称", value: name}},

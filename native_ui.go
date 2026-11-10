@@ -4,7 +4,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -29,6 +28,7 @@ var nativeIcons = map[string]*ui.SVG{
 	"tag":     nativeSymbol(`<path d="m20 13-7 7a2 2 0 0 1-3 0l-8-8V2h10l8 8a2 2 0 0 1 0 3Z"/><circle cx="7" cy="7" r="1"/>`),
 	"cloud":   nativeSymbol(`<path d="M6 19a5 5 0 1 1 1-10 7 7 0 0 1 13 2 4 4 0 0 1-1 8Z"/>`),
 	"check":   nativeSymbol(`<path d="m5 12 4 4L19 6"/>`),
+	"chevron": nativeSymbol(`<path d="m9 5 7 7-7 7"/>`),
 	"plus":    nativeSymbol(`<path d="M12 5v14M5 12h14"/>`),
 	"more":    nativeSymbol(`<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>`),
 	"refresh": nativeSymbol(`<path d="M20 7a9 9 0 0 0-15-2L2 8m0-6v6h6M4 17a9 9 0 0 0 15 2l3-3m0 6v-6h-6"/>`),
@@ -189,50 +189,9 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 					}
 				})
 			})
-			ui.SidebarSection(c, "本地分支", nil, func() {
-				for _, branch := range app.repository.branches {
-					if branch.Remote {
-						continue
-					}
-					branch := branch
-					ui.SidebarItem(c, "branch:"+branch.Name, nativeIcons["branch"], branch.Name).Tooltip(branch.Name).ContextMenu(func(menu *ui.Menu) {
-						if menu.Item("重命名分支…").Disabled(!app.writable).Chosen() {
-							app.renameBranchDialog(branch.Name)
-						}
-						if menu.Item("删除分支…").Disabled(branch.Current || !app.writable).Chosen() {
-							app.deleteBranch(branch.Name, false)
-						}
-						if menu.Item("强制删除分支…").Disabled(branch.Current || !app.writable).Chosen() {
-							app.deleteBranch(branch.Name, true)
-						}
-					}).Children(func() {
-						if branch.Current {
-							ui.Icon(c, nativeIcons["check"]).FontSize(13).TextColor(c.Theme().TextMuted)
-						}
-					})
-				}
-			})
-			if slices.ContainsFunc(app.repository.branches, func(branch gitrepo.Branch) bool { return branch.Remote }) {
-				ui.SidebarSection(c, "远程分支", nil, func() {
-					for _, branch := range app.repository.branches {
-						if branch.Remote {
-							ui.SidebarItem(c, "remote:"+branch.Name, nativeIcons["cloud"], branch.Name).Tooltip(branch.Name)
-						}
-					}
-				})
-			}
-			if len(app.repository.tags) > 0 {
-				ui.SidebarSection(c, "标签", nil, func() {
-					for _, tag := range app.repository.tags {
-						tag := tag
-						ui.SidebarItem(c, "tag:"+tag.Hash+":"+tag.Name, nativeIcons["tag"], tag.Name).ContextMenu(func(menu *ui.Menu) {
-							if menu.Item("删除标签…").Disabled(!app.writable).Chosen() {
-								app.deleteTag(tag.Name)
-							}
-						})
-					}
-				})
-			}
+			app.localBranchSidebar(c)
+			app.remoteSidebar(c)
+			app.tagSidebar(c)
 		}).Label("仓库导航").Grow(1).MinHeight(0).FillWidth().Changed() {
 			switch {
 			case strings.HasPrefix(selected, "screen:"):
@@ -247,22 +206,6 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 				})
 			case strings.HasPrefix(selected, "group:"):
 				app.leaveConflict(func() { app.screen, app.group = "library", strings.TrimPrefix(selected, "group:") })
-			case strings.HasPrefix(selected, "branch:"):
-				branch := strings.TrimPrefix(selected, "branch:")
-				if app.writable && branch != app.repository.snapshot.Branch {
-					app.leaveConflict(func() {
-						app.mutate("正在切换分支…", func(ctx context.Context, path string) error {
-							return app.service.SwitchBranch(ctx, path, branch)
-						})
-					})
-				}
-			case strings.HasPrefix(selected, "remote:"):
-				if app.writable {
-					app.checkoutDialog(strings.TrimPrefix(selected, "remote:"))
-				}
-			case strings.HasPrefix(selected, "tag:"):
-				hash, _, _ := strings.Cut(strings.TrimPrefix(selected, "tag:"), ":")
-				app.leaveConflict(func() { app.screen = "history"; app.selectCommit(hash) })
 			}
 		}
 		if inLibrary {

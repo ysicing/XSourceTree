@@ -5,11 +5,12 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/ysicing/XSourceTree/internal/gitrepo"
 
+	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 )
 
@@ -189,6 +190,8 @@ func (app *nativeApp) searchHistory(more bool) {
 				app.history = append(app.history, commits...)
 			} else if err == nil || len(commits) > 0 {
 				app.history = commits
+				app.historySelected, app.commitSelected = -1, -1
+				app.historyList = ui.ListState{}
 				app.commitHash, app.commitFiles, app.commitFile = "", nil, ""
 				app.clearDiff()
 			}
@@ -205,12 +208,32 @@ func (app *nativeApp) selectCommit(hash string) {
 	app.run("正在读取提交…", func(ctx context.Context) (func(), error) {
 		files, err := app.service.CommitFiles(ctx, path, hash)
 		if err != nil {
-			return nil, err
+			return func() {
+				app.historySelected = slices.IndexFunc(app.history, func(commit gitrepo.Commit) bool { return commit.Hash == app.commitHash })
+			}, err
 		}
-		diff, diffErr := app.service.CommitDiff(ctx, path, hash)
+		var diff gitrepo.Diff
+		var diffErr error
+		file := ""
+		if len(files) > 0 {
+			file = files[0].Path
+			diff, diffErr = app.service.CommitFileDiff(ctx, path, hash, file)
+		}
 		return func() {
 			app.clearDiff()
-			app.commitHash, app.commitFiles, app.commitFile = hash, files, ""
+			app.commitHash, app.commitFiles, app.commitFile = hash, files, file
+			app.historySelected = -1
+			for index, commit := range app.history {
+				if commit.Hash == hash {
+					app.historySelected = index
+					break
+				}
+			}
+			app.commitSelected = -1
+			if len(files) > 0 {
+				app.commitSelected = 0
+			}
+			app.commitList = ui.ListState{}
 			if diffErr == nil {
 				app.setDiff(diff)
 			}
@@ -225,6 +248,12 @@ func (app *nativeApp) selectCommitFile(file string) {
 		return func() {
 			app.clearDiff()
 			app.commitFile = file
+			for index, entry := range app.commitFiles {
+				if entry.Path == file {
+					app.commitSelected = index
+					break
+				}
+			}
 			if err == nil {
 				app.setDiff(diff)
 			}
@@ -275,46 +304,3 @@ func (app *nativeApp) applyLines() {
 }
 
 func shortHash(hash string) string { return hash[:min(8, len(hash))] }
-
-// 每行保留父提交所在的轨道；合并的额外父提交插入当前轨道之后。
-func commitGraph(commits []gitrepo.Commit) []string {
-	var lanes []string
-	result := make([]string, len(commits))
-	for index, commit := range commits {
-		column := -1
-		for lane, hash := range lanes {
-			if hash == commit.Hash {
-				column = lane
-				break
-			}
-		}
-		if column < 0 {
-			column = len(lanes)
-			lanes = append(lanes, commit.Hash)
-		}
-		var graph strings.Builder
-		for lane := range lanes {
-			if lane == column {
-				graph.WriteString("● ")
-			} else {
-				graph.WriteString("│ ")
-			}
-		}
-		if len(commit.Parents) > 1 {
-			fmt.Fprintf(&graph, "╲%d", len(commit.Parents)-1)
-		}
-		result[index] = graph.String()
-		next := append([]string{}, lanes[:column]...)
-		next = append(next, commit.Parents...)
-		next = append(next, lanes[column+1:]...)
-		lanes = nil
-		seen := map[string]bool{}
-		for _, hash := range next {
-			if !seen[hash] {
-				lanes = append(lanes, hash)
-				seen[hash] = true
-			}
-		}
-	}
-	return result
-}

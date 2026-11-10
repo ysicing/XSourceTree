@@ -19,6 +19,7 @@ import (
 )
 
 var nativeIcons = map[string]*ui.SVG{
+	"back":    nativeSymbol(`<path d="m12 5-7 7 7 7M5 12h14"/>`),
 	"folder":  nativeSymbol(`<path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>`),
 	"file":    nativeSymbol(`<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h5"/>`),
 	"branch":  nativeSymbol(`<circle cx="6" cy="5" r="3"/><circle cx="6" cy="19" r="3"/><circle cx="18" cy="5" r="3"/><path d="M6 8v8M18 8a10 10 0 0 1-12 8"/>`),
@@ -95,6 +96,8 @@ func (app *nativeApp) view(c *ui.Context) {
 					switch app.screen {
 					case "library":
 						app.libraryView(c)
+					case "history":
+						app.historyWorkspace(c)
 					default:
 						ui.Split(c, &app.prefs.Files, func() { app.repositoryPanel(c) }, func() { app.diffPanel(c) }).Grow(1).MinHeight(0).FillWidth()
 					}
@@ -129,32 +132,34 @@ func (app *nativeApp) view(c *ui.Context) {
 
 func (app *nativeApp) sidebar(c *ui.Context) {
 	ui.Column(c).Fill().Background(c.Theme().Surface).Children(func() {
+		inLibrary := app.repository == nil || app.screen == "library"
 		selected := "screen:" + app.screen
 		if app.screen == "library" && app.group != "" {
 			selected = "group:" + app.group
 		}
 		if ui.Sidebar(c, &selected, func() {
-			ui.SidebarItem(c, "screen:library", nativeIcons["folder"], "本地仓库")
-			if len(app.library.Groups) > 0 {
-				ui.SidebarSection(c, "仓库组", nil, func() {
-					for _, group := range app.library.Groups {
-						group := group
-						ui.SidebarItem(c, "group:"+group.ID, nativeIcons["folder"], group.Name).Label(group.Name).ContextMenu(func(menu *ui.Menu) {
-							if menu.Item("重命名").Chosen() {
-								app.groupDialog(group.ID)
-							}
-							if menu.Item("移除分组").Chosen() {
-								app.removeGroup(group)
-							}
-						}).Children(func() {
-							iconButton(c, "管理仓库组 "+group.Name, nativeIcons["more"]).OnClick(func() { app.groupActions(group) })
-						})
-					}
-				})
-			}
-			if app.repository == nil || app.screen == "library" {
+			if inLibrary {
+				ui.SidebarItem(c, "screen:library", nativeIcons["folder"], "本地仓库")
+				if len(app.library.Groups) > 0 {
+					ui.SidebarSection(c, "仓库组", nil, func() {
+						for _, group := range app.library.Groups {
+							group := group
+							ui.SidebarItem(c, "group:"+group.ID, nativeIcons["folder"], group.Name).Label(group.Name).ContextMenu(func(menu *ui.Menu) {
+								if menu.Item("重命名").Chosen() {
+									app.groupDialog(group.ID)
+								}
+								if menu.Item("移除分组").Chosen() {
+									app.removeGroup(group)
+								}
+							}).Children(func() {
+								iconButton(c, "管理仓库组 "+group.Name, nativeIcons["more"]).OnClick(func() { app.groupActions(group) })
+							})
+						}
+					})
+				}
 				return
 			}
+			ui.SidebarItem(c, "screen:library", nativeIcons["back"], "返回仓库")
 			ui.SidebarSection(c, app.repository.snapshot.Name, nil, func() {
 				ui.SidebarItem(c, "screen:changes", nativeIcons["file"], "文件变更").Label("文件变更").Children(func() {
 					if count := len(app.repository.snapshot.Files); count > 0 {
@@ -244,11 +249,13 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 				app.leaveConflict(func() { app.screen = "history"; app.selectCommit(hash) })
 			}
 		}
-		ui.Toolbar(c, func() {
-			if toolButton(c, "新建仓库组", nativeIcons["plus"]).Clicked() {
-				app.groupDialog("")
-			}
-		}).FillWidth().Padding(8, 10).Label("仓库组操作")
+		if inLibrary {
+			ui.Toolbar(c, func() {
+				if toolButton(c, "新建仓库组", nativeIcons["plus"]).Clicked() {
+					app.groupDialog("")
+				}
+			}).FillWidth().Padding(8, 10).Label("仓库组操作")
+		}
 	})
 }
 
@@ -364,8 +371,6 @@ func (app *nativeApp) repositoryPanel(c *ui.Context) {
 		}
 		app.operationBar(c)
 		switch app.screen {
-		case "history":
-			app.historyPanel(c)
 		case "stash":
 			app.stashPanel(c)
 		default:
@@ -508,85 +513,6 @@ func (app *nativeApp) changesPanel(c *ui.Context) {
 			app.commit()
 		}
 	})
-}
-
-func (app *nativeApp) historyPanel(c *ui.Context) {
-	ui.Column(c).Padding(12).Gap(8).FillWidth().Children(func() {
-		submitted := ui.TextInput(c, &app.historyQuery).Search().Placeholder("搜索提交、作者或 ID").FillWidth().Submitted()
-		submitted = ui.TextInput(c, &app.historyFile).Placeholder("文件路径（可选）").FillWidth().Submitted() || submitted
-		ui.Row(c).Gap(6).Children(func() {
-			if ui.Button(c, "搜索").Clicked() || submitted {
-				app.searchHistory(false)
-			}
-			if ui.Button(c, "新建标签").Disabled(!app.writable).Clicked() {
-				app.tagDialog()
-			}
-		})
-	})
-	graph := commitGraph(app.history)
-	ui.List(c, &app.historyList, len(app.history), func(index int) {
-		commit := app.history[index]
-		theme := c.Theme()
-		graphColors := []ui.Color{theme.Accent, theme.Success, theme.Warning, theme.Danger, theme.AccentHover}
-		graphSpans := make([]ui.Span, 0, len(strings.Fields(graph[index]))*2)
-		for lane, token := range strings.Fields(graph[index]) {
-			color := graphColors[lane%len(graphColors)]
-			if lane > 0 {
-				graphSpans = append(graphSpans, ui.Span{Text: " ", Color: color})
-			}
-			graphSpans = append(graphSpans, ui.Span{Text: token, Color: color})
-		}
-		refs := strings.Split(commit.Refs, ", ")
-		spans := []ui.Span{{Text: commit.Subject}}
-		for _, ref := range refs {
-			if ref == "" {
-				continue
-			}
-			label := ref
-			color := theme.Accent
-			switch {
-			case strings.HasPrefix(ref, "tag: "):
-				label = strings.TrimPrefix(ref, "tag: ")
-				color = theme.Warning
-			case strings.HasPrefix(ref, "origin/"):
-				color = theme.TextMuted
-			}
-			spans = append(spans, ui.Span{
-				Text: label, Size: 10, Weight: 600, Color: color,
-				Background: color.Alpha(0.12), Radius: 4, PaddingX: 4, PaddingY: 2,
-			})
-		}
-		tooltip := strings.Join([]string{commit.Subject, commit.Author, commit.Hash, commit.Refs}, "\n")
-		listRow(c, commit.Subject, app.commitHash == commit.Hash).Key(commit.Hash).Tooltip(tooltip).Padding(6, 12).Children(func() {
-			ui.Row(c).Gap(8).FillWidth().Children(func() {
-				ui.RichText(c, graphSpans...).Font("monospace").FontSize(12).MaxWidth(72).SingleLine()
-				ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
-					ui.RichText(c, spans...).SingleLine()
-					ui.Text(c, shortHash(commit.Hash)+" · "+commit.Author).FontSize(11).TextColor(theme.TextMuted).MaxLines(1)
-				})
-			})
-		}).OnClick(func() { app.selectCommit(commit.Hash) })
-	}).FillWidth().Grow(1).MinHeight(80)
-	if app.historyMore {
-		if ui.Button(c, "加载更多").FillWidth().Clicked() {
-			app.searchHistory(true)
-		}
-	}
-	if len(app.commitFiles) > 0 {
-		ui.Divider(c)
-		ui.Scroll(c).Height(180).FillWidth().Padding(8, 12).Children(func() {
-			for _, file := range app.commitFiles {
-				file := file
-				if listRow(c, file.Path, app.commitFile == file.Path).Tooltip(file.Path).Children(func() {
-					ui.Icon(c, nativeIcons["file"]).TextColor(c.Theme().TextMuted)
-					ui.Text(c, file.Path).Grow(1).MinWidth(0).MaxLines(1)
-					ui.Text(c, file.Status).FontSize(11).TextColor(c.Theme().TextMuted)
-				}).Clicked() {
-					app.selectCommitFile(file.Path)
-				}
-			}
-		})
-	}
 }
 
 func (app *nativeApp) stashPanel(c *ui.Context) {

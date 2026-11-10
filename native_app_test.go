@@ -334,6 +334,9 @@ func TestNativeOfficialSidebarAndFileMenu(t *testing.T) {
 	if !app.prefs.ByName {
 		t.Fatal("文件选项没有保存排序偏好")
 	}
+	if err := tester.Click("返回仓库"); err != nil {
+		t.Fatal(err)
+	}
 	if err := tester.Click("日常开发"); err != nil {
 		t.Fatal(err)
 	}
@@ -343,6 +346,55 @@ func TestNativeOfficialSidebarAndFileMenu(t *testing.T) {
 	tester.Key(0, ui.KeyHome)
 	if app.group != "" {
 		t.Fatal("侧栏键盘导航没有返回全部仓库")
+	}
+}
+
+func TestNativeSidebarScopesLibraryNavigation(t *testing.T) {
+	app, _, _ := nativeFixture(t)
+	app.library.Groups = []workspace.Group{{ID: "daily", Name: "日常开发"}}
+	tester := ui.NewTester(app.view, 1320, 860)
+	for _, screen := range []string{"changes", "history", "stash"} {
+		app.screen = screen
+		tester.Frame()
+		for _, label := range []string{"本地仓库", "仓库组", "日常开发", "管理仓库组 日常开发", "新建仓库组"} {
+			if _, found := tester.Find(label); found {
+				t.Errorf("%s 页面不应显示全局导航 %q", screen, label)
+			}
+		}
+		for _, label := range []string{"返回仓库", "文件变更", "提交历史", "储藏", "本地分支", "main"} {
+			if _, found := tester.Find(label); !found {
+				t.Errorf("%s 页面缺少仓库导航 %q", screen, label)
+			}
+		}
+	}
+	if err := tester.Click("返回仓库"); err != nil {
+		t.Fatal(err)
+	}
+	if app.screen != "library" {
+		t.Fatal("返回入口未切换到仓库首页")
+	}
+	tester.Frame()
+	for _, label := range []string{"本地仓库", "仓库组", "日常开发", "新建仓库组"} {
+		if _, found := tester.Find(label); !found {
+			t.Errorf("仓库首页缺少全局导航 %q", label)
+		}
+	}
+	if _, found := tester.Find("返回仓库"); found {
+		t.Fatal("仓库首页不应显示返回入口")
+	}
+	if err := tester.Click("日常开发"); err != nil {
+		t.Fatal(err)
+	}
+	if app.group != "daily" {
+		t.Fatal("返回后未能按仓库组筛选")
+	}
+	if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+		app.screen = "changes"
+		tester.Frame()
+		saveNativeScreenshot(t, tester, directory, "native-repository-sidebar.png")
+		app.showLibrary()
+		tester.Frame()
+		saveNativeScreenshot(t, tester, directory, "native-library-sidebar.png")
 	}
 }
 
@@ -400,8 +452,11 @@ func TestNativeGraphKeepsMergeTracks(t *testing.T) {
 		{Hash: "main", Parents: []string{"base"}},
 		{Hash: "base"},
 	})
-	if graph[0] != "● ╲1" || graph[1] != "│ ● " || graph[2] != "● │ " || graph[3] != "● " {
-		t.Fatal(graph)
+	if len(graph[0].Edges) != 2 || graph[1].Column != 1 || graph[2].Column != 0 || graph[3].Column != 0 {
+		t.Fatalf("合并与分叉轨道错误: %+v", graph)
+	}
+	if graph[1].Color != graph[2].Incoming[1] || graph[0].Color != graph[3].Color {
+		t.Fatalf("轨道压缩后颜色不稳定: %+v", graph)
 	}
 }
 

@@ -21,12 +21,14 @@ import (
 )
 
 type nativePreferences struct {
-	Sidebar float32           `json:"sidebar"`
-	Files   float32           `json:"files"`
-	Split   bool              `json:"split"`
-	Wrap    bool              `json:"wrap"`
-	ByName  bool              `json:"byName"`
-	Drafts  map[string]string `json:"drafts"`
+	Sidebar      float32           `json:"sidebar"`
+	Files        float32           `json:"files"`
+	History      float32           `json:"history"`
+	HistoryFiles float32           `json:"historyFiles"`
+	Split        bool              `json:"split"`
+	Wrap         bool              `json:"wrap"`
+	ByName       bool              `json:"byName"`
+	Drafts       map[string]string `json:"drafts"`
 }
 
 type repositoryView struct {
@@ -82,6 +84,12 @@ type nativeApp struct {
 	prefs         nativePreferences
 	stateFile     string
 	historyList   ui.ListState
+
+	historySelected    int
+	historyGraph       []historyGraphRow
+	historyGraphSource *gitrepo.Commit
+	commitList         ui.ListState
+	commitSelected     int
 }
 
 func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
@@ -89,7 +97,8 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 	app := &nativeApp{
 		service: service, ctx: ctx, cancel: cancel, stateFile: stateFile,
 		screen: "library", library: service.Library(), selectedFiles: map[string]bool{},
-		prefs: nativePreferences{Sidebar: 226, Files: 360, Wrap: true, Drafts: map[string]string{}},
+		prefs:           nativePreferences{Sidebar: 226, Files: 360, History: 56, HistoryFiles: 280, Wrap: true, Drafts: map[string]string{}},
+		historySelected: -1, commitSelected: -1,
 	}
 	if data, err := os.ReadFile(stateFile); err == nil {
 		if err := json.Unmarshal(data, &app.prefs); err != nil {
@@ -98,6 +107,8 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 	}
 	app.prefs.Sidebar = clampSize(app.prefs.Sidebar, 226, 180, 400)
 	app.prefs.Files = clampSize(app.prefs.Files, 360, 260, 640)
+	app.prefs.History = clampSize(app.prefs.History, 56, 30, 70)
+	app.prefs.HistoryFiles = clampSize(app.prefs.HistoryFiles, 280, 180, 440)
 	if app.prefs.Drafts == nil {
 		app.prefs.Drafts = map[string]string{}
 	}
@@ -224,6 +235,8 @@ func (app *nativeApp) openRepository(path string) {
 				app.adopt(result)
 				app.screen, app.selectedFile = "changes", ""
 				app.history, app.commitHash, app.commitFiles, app.stashHash = nil, "", nil, ""
+				app.historyGraph, app.historyGraphSource = nil, nil
+				app.historySelected, app.commitSelected = -1, -1
 			}, nil
 		})
 	})
@@ -274,6 +287,8 @@ func (app *nativeApp) mutate(label string, operation func(context.Context, strin
 			if screen == "history" && refreshErr == nil {
 				app.history, app.historyMore = history, len(history) == 100
 				app.commitHash, app.commitFile, app.commitFiles = "", "", nil
+				app.historySelected, app.commitSelected = -1, -1
+				app.historyList, app.commitList = ui.ListState{}, ui.ListState{}
 			}
 			if selection != nil {
 				app.setSelection(selection)

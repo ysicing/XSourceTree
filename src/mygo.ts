@@ -158,6 +158,15 @@ export interface Tag {
 
 // ---- Services ----
 
+export const ApplicationService = {
+  checkForUpdates(): Promise<void> {
+    return call("ApplicationService.CheckForUpdates");
+  },
+  version(): Promise<string> {
+    return call("ApplicationService.Version");
+  },
+} as const;
+
 export const RepositoryService = {
   addRepositories(paths: string[], groupID: string): Promise<Library> {
     return call("RepositoryService.AddRepositories", paths, groupID);

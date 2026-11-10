@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/updater"
 	"github.com/ysicing/XSourceTree/internal/workspace"
 )
 
@@ -16,6 +17,8 @@ var refreshRequested = mygo.NewEvent[bool]("repository:refresh")
 
 func main() {
 	app := mygo.App
+	mygo.Use(updater.New(updater.Options{Language: "zh-Hans"}))
+	mygo.Bind(&ApplicationService{})
 	dir, err := app.Path(mygo.PathUserData)
 	if err != nil {
 		log.Fatal(err)
@@ -28,7 +31,18 @@ func main() {
 	mygo.Bind(service)
 	app.WhenReady(func() {
 		app.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
-			{Role: mygo.RoleAppMenu},
+			{Label: "XSourceTree", Submenu: []*mygo.MenuItem{
+				{Role: mygo.RoleAbout},
+				updater.MenuItem(),
+				mygo.Separator(),
+				{Role: mygo.RoleServices},
+				mygo.Separator(),
+				{Role: mygo.RoleHide},
+				{Role: mygo.RoleHideOthers},
+				{Role: mygo.RoleUnhide},
+				mygo.Separator(),
+				{Role: mygo.RoleQuit},
+			}},
 			{Label: "文件", Submenu: []*mygo.MenuItem{
 				{Label: "本地仓库", Accelerator: "CmdOrCtrl+Shift+L", Click: func(_ *mygo.MenuItem, win *mygo.Window) {
 					if win != nil {
@@ -78,9 +92,10 @@ func main() {
 }
 
 func openWindow() {
-	mygo.NewWindow(mygo.WindowOptions{
+	win := mygo.NewWindow(mygo.WindowOptions{
 		Title: "XSourceTree", Width: 1320, Height: 860, MinWidth: 960, MinHeight: 640,
 		TitleBarStyle: mygo.TitleBarHiddenInset, TitleBarHeight: 52,
 		BackgroundColor: "light-dark(#ffffff, #191b20)", StateKey: "main", URL: "/",
 	})
+	protectWindowClose(win)
 }

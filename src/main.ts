@@ -1,11 +1,12 @@
 import "./style.css";
-import { RepositoryService as api, events, type Branch, type Commit, type CommitFile, type Conflict, type ConflictSide, type Diff, type DiscardPreview, type File, type Library, type LocalRepository, type Patch, type RemoteConfig, type ScanResult, type Snapshot, type Stash, type Tag } from "./mygo";
+import { ApplicationService, RepositoryService as api, events, type Branch, type Commit, type CommitFile, type Conflict, type ConflictSide, type Diff, type DiscardPreview, type File, type Library, type LocalRepository, type Patch, type RemoteConfig, type ScanResult, type Snapshot, type Stash, type Tag } from "./mygo";
 import { escapeHTML as escape, fileGroups, graphRows, parseDiff, type DiffRow, type GraphRow } from "./presentation";
 import { sideBySideRows, type DiffCell } from "./diff-layout";
 import { icon } from "./icons";
 import { settleMutation } from "./mutations";
 import { filterRepositories } from "./library";
 import { checkedPaths, visibleFiles, reconcileChecked, type FileSort } from "./files";
+import { createCloseGuard } from "./close-guard";
 
 type Selection = { path: string; staged: boolean } | { hash: string; file?: string } | { stash: string };
 type View = "changes" | "history" | "stash";
@@ -69,11 +70,34 @@ function readDiffLayout(): "unified" | "split" {
 }
 
 app.innerHTML = `
-  <header class="titlebar"><div class="titlebar-brand">${icon("branch", 17)}<span>XSourceTree</span></div><div id="titlebar-context"></div><span class="version">0.1.0</span></header>
+  <header class="titlebar"><div class="titlebar-brand">${icon("branch", 17)}<span>XSourceTree</span></div><div id="titlebar-context"></div><button class="version" id="check-updates" title="检查更新" aria-label="检查更新">检查更新</button></header>
   <div class="workspace"><aside class="sidebar" aria-label="仓库与导航"></aside><main><div id="toolbar" class="toolbar"></div><div id="alerts" aria-live="polite"></div><div id="content" class="content"></div></main></div>
   <footer class="statusbar" id="statusbar" aria-live="polite"></footer>
   <div id="dialog-host"></div>
 `;
+
+const closeGuard = createCloseGuard({
+  busy: () => !!state.busy,
+  hasDrafts: () => [...state.drafts.values()].some((value) => !!value.trim()) || state.conflictDrafts.size > 0,
+  freeze: (frozen) => {
+    state.busy = frozen ? "正在退出…" : "";
+    app.inert = frozen;
+  },
+});
+Object.assign(window, {
+  xsourcetreePrepareClose: () => closeGuard.prepare(),
+  xsourcetreeCancelClose: () => closeGuard.cancel(),
+});
+
+document.querySelector("#check-updates")!.addEventListener("click", () => {
+  void ApplicationService.checkForUpdates().catch((error) => {
+    state.error = error instanceof Error ? error.message : String(error);
+    renderAlerts();
+  });
+});
+void ApplicationService.version().then((version) => {
+  document.querySelector("#check-updates")!.textContent = version;
+}).catch(() => {});
 
 const disabled = () => state.busy ? "disabled" : "";
 const draft = () => state.drafts.get(state.repo?.path ?? "") ?? "";

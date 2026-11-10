@@ -22,7 +22,7 @@ h2 { font-size: 13px; font-weight: 600; }
 .titlebar-brand { display: flex; align-items: center; gap: 7px; font-weight: 650; font-size: 12px; letter-spacing: -.15px; }
 .titlebar-brand svg { color: var(--accent); }
 #titlebar-context { color: var(--muted); font-size: 12px; }
-.version { margin-left: auto; color: var(--subtle); font-size: 11px; }
+.version { margin-left: auto; color: var(--subtle); font-size: 11px; background: transparent; border-color: transparent; -webkit-app-region: no-drag; }
 .workspace { display: flex; min-height: 0; }
 .sidebar { flex: 0 0 224px; width: 224px; background: var(--sidebar); border-right: 1px solid var(--border); padding: 18px 10px 12px; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; user-select: none; }
 .sidebar-heading { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 8px; color: var(--muted); font-size: 11px; font-weight: 600; }

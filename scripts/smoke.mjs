@@ -124,6 +124,12 @@ try {
   await execute("localStorage.removeItem('diff-layout'); window.__smokeReloading = true; setTimeout(() => location.reload(), 0);");
   await waitFor("!window.__smokeReloading && !!document.querySelector('#repo-search')", "本地仓库页");
   await observeErrors();
+  await waitFor("document.querySelector('#check-updates')?.textContent !== '检查更新'", "读取应用版本");
+  assert.equal(await evaluate("document.querySelector('#check-updates').textContent"), JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version);
+  assert.equal(await evaluate("window.xsourcetreePrepareClose()"), "ready");
+  assert.equal(await evaluate("document.querySelector('#app').inert"), true);
+  await evaluate("window.xsourcetreeCancelClose()");
+  assert.equal(await evaluate("document.querySelector('#app').inert"), false);
   assert.equal(await evaluate("document.querySelectorAll('[data-action=\"clone\"]').length"), 0);
   const groupName = `macOS-${fixture.split("-").pop()}`;
   await evaluate("document.querySelector('[data-action=\"new-group\"]').click()");
@@ -217,6 +223,9 @@ try {
   await evaluate("document.querySelector('[data-action=\"stage\"]').click()");
   await waitFor("document.querySelectorAll('[data-action=\"unstage\"]').length === 1 && !document.querySelector('#statusbar .spinner')", "暂存");
   assert.equal(await evaluate("document.querySelector('#commit-message').value"), "桌面端集成测试", "刷新不能丢失提交草稿");
+  assert.equal(await evaluate("window.xsourcetreePrepareClose()"), "drafts", "更新重启必须确认未保存的提交说明");
+  await evaluate("window.xsourcetreeCancelClose()");
+  assert.equal(await evaluate("document.querySelector('#commit-message').value"), "桌面端集成测试", "取消重启不能丢失草稿");
   await evaluate("document.querySelector('[data-action=\"unstage\"]').click()");
   await waitFor("document.querySelectorAll('[data-action=\"unstage\"]').length === 0 && !document.querySelector('#statusbar .spinner')", "取消暂存");
   assert.equal(git("diff", "--cached", "--name-only"), "");

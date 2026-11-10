@@ -116,7 +116,22 @@ func (app *nativeApp) view(c *ui.Context) {
 					}
 				}
 			} else if app.problem != "" {
-				ui.Text(c, app.problem).FontSize(12).TextColor(c.Theme().Danger).MaxLines(1).Grow(1).Selectable().Tooltip(app.problem)
+				summary := strings.SplitN(app.problem, "\n", 2)[0]
+				if strings.HasPrefix(summary, "git ") || strings.HasPrefix(summary, "fatal:") || strings.HasPrefix(summary, "error:") || strings.HasPrefix(summary, "ssh:") {
+					summary = "Git 操作失败，请查看详情"
+				}
+				ui.Text(c, summary).FontSize(12).TextColor(c.Theme().Danger).MaxLines(1).Grow(1).Selectable().Tooltip(app.problem)
+				if ui.Button(c, "查看详情").Clicked() {
+					problem := app.problem
+					app.dialog = &nativeDialog{
+						title: "操作失败",
+						body: func(c *ui.Context) {
+							ui.Scroll(c).Height(280).FillWidth().Children(func() {
+								ui.Text(c, problem).FontSize(12).Selectable().FillWidth()
+							})
+						},
+					}
+				}
 				if ui.Button(c, "关闭提示").Clicked() {
 					app.problem = ""
 				}
@@ -144,14 +159,15 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 					ui.SidebarSection(c, "仓库组", nil, func() {
 						for _, group := range app.library.Groups {
 							group := group
-							ui.SidebarItem(c, "group:"+group.ID, nativeIcons["folder"], group.Name).Label(group.Name).ContextMenu(func(menu *ui.Menu) {
-								if menu.Item("重命名").Chosen() {
-									app.groupDialog(group.ID)
-								}
-								if menu.Item("移除分组").Chosen() {
-									app.removeGroup(group)
-								}
-							}).Children(func() {
+							ui.Row(c).Key(group.ID).FillWidth().AlignItems(ui.Center).Children(func() {
+								ui.SidebarItem(c, "group:"+group.ID, nativeIcons["folder"], group.Name).Grow(1).MinWidth(0).Tooltip(group.Name).Label(group.Name).ContextMenu(func(menu *ui.Menu) {
+									if menu.Item("重命名").Chosen() {
+										app.groupDialog(group.ID)
+									}
+									if menu.Item("移除分组").Chosen() {
+										app.removeGroup(group)
+									}
+								})
 								iconButton(c, "管理仓库组 "+group.Name, nativeIcons["more"]).OnClick(func() { app.groupActions(group) })
 							})
 						}
@@ -179,7 +195,7 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 						continue
 					}
 					branch := branch
-					ui.SidebarItem(c, "branch:"+branch.Name, nativeIcons["branch"], branch.Name).ContextMenu(func(menu *ui.Menu) {
+					ui.SidebarItem(c, "branch:"+branch.Name, nativeIcons["branch"], branch.Name).Tooltip(branch.Name).ContextMenu(func(menu *ui.Menu) {
 						if menu.Item("重命名分支…").Disabled(!app.writable).Chosen() {
 							app.renameBranchDialog(branch.Name)
 						}
@@ -200,7 +216,7 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 				ui.SidebarSection(c, "远程分支", nil, func() {
 					for _, branch := range app.repository.branches {
 						if branch.Remote {
-							ui.SidebarItem(c, "remote:"+branch.Name, nativeIcons["cloud"], branch.Name)
+							ui.SidebarItem(c, "remote:"+branch.Name, nativeIcons["cloud"], branch.Name).Tooltip(branch.Name)
 						}
 					}
 				})
@@ -274,7 +290,7 @@ func (app *nativeApp) toolbar(c *ui.Context) {
 		} else if app.repository != nil {
 			ui.Row(c).AlignItems(ui.Center).Gap(6).Padding(0, 8, 0, 2).Children(func() {
 				ui.Icon(c, nativeIcons["branch"]).TextColor(c.Theme().TextMuted)
-				ui.Text(c, app.repository.snapshot.Branch).Bold().MaxLines(1).MaxWidth(140)
+				ui.Text(c, app.repository.snapshot.Branch).Bold().MaxLines(1).MaxWidth(140).Tooltip(app.repository.snapshot.Branch)
 				if app.repository.snapshot.Ahead > 0 || app.repository.snapshot.Behind > 0 {
 					ui.Text(c, fmt.Sprintf("↑%d ↓%d", app.repository.snapshot.Ahead, app.repository.snapshot.Behind)).TextColor(c.Theme().TextMuted).FontSize(12)
 				}
@@ -328,9 +344,17 @@ func (app *nativeApp) libraryView(c *ui.Context) {
 		}
 		if len(entries) == 0 {
 			ui.Column(c).Grow(1).FillWidth().Center().Gap(10).Children(func() {
-				ui.Text(c, "没有匹配的仓库").FontSize(17).Bold()
-				if ui.Button(c, "添加已有的本地仓库").Clicked() {
-					app.chooseLocal()
+				message := "尚未添加仓库"
+				if app.query != "" {
+					message = "没有匹配的仓库"
+				} else if app.group != "" {
+					message = "此分组暂无仓库"
+				}
+				ui.Text(c, message).FontSize(17).Bold()
+				if app.query != "" {
+					if ui.Button(c, "清除搜索").Clicked() {
+						app.query = ""
+					}
 				}
 			})
 			return
@@ -385,9 +409,10 @@ func (app *nativeApp) operationBar(c *ui.Context) {
 		return
 	}
 	ui.Column(c).FillWidth().Padding(12).Gap(8).Background(c.Theme().Surface).Children(func() {
-		ui.Text(c, "正在进行 "+operation.Kind).Bold()
+		ui.Text(c, "正在进行"+operationName(operation.Kind)).Bold()
 		ui.Row(c).Gap(6).Children(func() {
-			if ui.Button(c, "继续").Disabled(!app.writable).Clicked() {
+			conflicts := slices.ContainsFunc(app.repository.snapshot.Files, func(file gitrepo.File) bool { return file.Conflict })
+			if ui.Button(c, "继续").Disabled(!app.writable || conflicts).Clicked() {
 				app.operationAction("continue")
 			}
 			if operation.Kind != "merge" {
@@ -410,7 +435,7 @@ func (app *nativeApp) changesPanel(c *ui.Context) {
 				app.prefs.ByName = !app.prefs.ByName
 			}
 			menu.Separator()
-			if menu.Item("储藏修改…").Disabled(!app.writable).Chosen() {
+			if menu.Item("储藏修改…").Disabled(!app.writable || len(app.repository.snapshot.Files) == 0 || app.repository.snapshot.Operation.Kind != "").Chosen() {
 				app.stashDialog()
 			}
 		})
@@ -422,12 +447,7 @@ func (app *nativeApp) changesPanel(c *ui.Context) {
 			if staged {
 				label = "暂存区"
 			}
-			var files []gitrepo.File
-			for _, file := range app.repository.snapshot.Files {
-				if (staged && isStaged(file) || !staged && isWorking(file)) && strings.Contains(strings.ToLower(file.Path), strings.ToLower(app.fileQuery)) {
-					files = append(files, file)
-				}
-			}
+			files := app.visibleFiles(staged)
 			slices.SortFunc(files, func(first, second gitrepo.File) int {
 				if app.prefs.ByName {
 					if order := strings.Compare(filepath.Base(first.Path), filepath.Base(second.Path)); order != 0 {
@@ -444,7 +464,19 @@ func (app *nativeApp) changesPanel(c *ui.Context) {
 				if staged {
 					action = "全部取消"
 				}
-				if ui.Button(c, action).FontSize(12).Disabled(!app.writable || len(files) == 0).Clicked() {
+				count := 0
+				for _, file := range files {
+					if !file.Conflict {
+						count++
+					}
+				}
+				if app.fileQuery != "" {
+					action = fmt.Sprintf("暂存筛选结果 (%d)", count)
+					if staged {
+						action = fmt.Sprintf("取消筛选结果暂存 (%d)", count)
+					}
+				}
+				if ui.Button(c, action).FontSize(12).Disabled(!app.writable || count == 0).Clicked() {
 					app.stageFiles(staged, true)
 				}
 			}).Label(label+"操作").FillWidth().Padding(4, 6).Margin(4, 0, 2)
@@ -518,11 +550,14 @@ func (app *nativeApp) changesPanel(c *ui.Context) {
 func (app *nativeApp) stashPanel(c *ui.Context) {
 	ui.Column(c).Padding(12).Gap(8).FillWidth().Children(func() {
 		ui.Text(c, "储藏").FontSize(18).Bold()
-		if ui.Button(c, "新建储藏").FillWidth().Disabled(!app.writable).Clicked() {
+		if ui.Button(c, "新建储藏").FillWidth().Disabled(!app.writable || len(app.repository.snapshot.Files) == 0 || app.repository.snapshot.Operation.Kind != "").Clicked() {
 			app.stashDialog()
 		}
 	})
 	ui.Scroll(c).Grow(1).MinHeight(0).FillWidth().Padding(12).Children(func() {
+		if len(app.repository.stashes) == 0 {
+			ui.Text(c, "暂无储藏").TextColor(c.Theme().TextMuted)
+		}
 		for _, stash := range app.repository.stashes {
 			stash := stash
 			if listRow(c, stash.Message, app.stashHash == stash.Hash).Children(func() {
@@ -600,7 +635,14 @@ func (app *nativeApp) diffPanel(c *ui.Context) {
 			editor.View(c, &app.rawDiff).Grow(1).FillWidth().MinHeight(0)
 		} else {
 			ui.Column(c).Grow(1).FillWidth().Center().Gap(8).Children(func() {
-				ui.Text(c, "选择文件或提交查看差异").TextColor(c.Theme().TextMuted)
+				message := "选择文件或提交查看差异"
+				if app.screen == "stash" {
+					message = "选择储藏查看差异"
+					if len(app.repository.stashes) == 0 {
+						message = "暂无储藏差异"
+					}
+				}
+				ui.Text(c, message).TextColor(c.Theme().TextMuted)
 			})
 		}
 	})

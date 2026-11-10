@@ -15,8 +15,10 @@ import (
 )
 
 type nativeField struct {
-	label string
-	value string
+	label    string
+	value    string
+	optional bool
+	readOnly bool
 }
 
 type nativeDialog struct {
@@ -31,6 +33,21 @@ type nativeDialog struct {
 	body       func(*ui.Context)
 	submit     func(*nativeDialog)
 	danger     bool
+	problem    string
+	canSubmit  func() bool
+	blocked    bool
+}
+
+func (dialog *nativeDialog) valid() bool {
+	if dialog.blocked {
+		return false
+	}
+	for _, field := range dialog.fields {
+		if !field.optional && strings.TrimSpace(field.value) == "" {
+			return false
+		}
+	}
+	return dialog.canSubmit == nil || dialog.canSubmit()
 }
 
 func (app *nativeApp) dialogView(c *ui.Context) {
@@ -45,32 +62,43 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 			if dialog.detail != "" {
 				ui.Text(c, dialog.detail).MaxLines(5).Selectable()
 			}
+			submitted := false
+			focused := false
 			for index := range dialog.fields {
 				field := &dialog.fields[index]
 				ui.Column(c).Key(index).Gap(5).FillWidth().Children(func() {
 					ui.Text(c, field.label).FontSize(12).TextColor(c.Theme().TextMuted)
-					ui.TextInput(c, &field.value).Label(field.label).FillWidth()
+					input := ui.TextInput(c, &field.value).Label(field.label).ReadOnly(field.readOnly).Disabled(app.busy).FillWidth()
+					if !focused && !field.readOnly {
+						input.AutoFocus()
+						focused = true
+					}
+					submitted = input.Submitted() || submitted
 				})
 			}
 			if len(dialog.options) > 0 {
-				ui.Select(c, &dialog.choice, dialog.options).FillWidth()
+				ui.Select(c, &dialog.choice, dialog.options).Disabled(app.busy).FillWidth()
 			}
 			if dialog.checkLabel != "" {
-				ui.Checkbox(c, &dialog.check, dialog.checkLabel)
+				ui.Checkbox(c, &dialog.check, dialog.checkLabel).Disabled(app.busy)
 			}
 			if dialog.body != nil {
-				dialog.body(c)
+				ui.Column(c).FillWidth().Disabled(app.busy).Children(func() { dialog.body(c) })
+			}
+			if dialog.problem != "" {
+				ui.Text(c, dialog.problem).TextColor(c.Theme().Danger).MaxLines(4).Selectable().Tooltip(dialog.problem)
 			}
 			ui.Row(c).FillWidth().Gap(8).Justify(ui.End).Children(func() {
-				if ui.Button(c, "取消").Clicked() {
+				if ui.Button(c, "取消").Disabled(app.busy).Clicked() {
 					app.dialog = nil
 				}
 				if dialog.action != "" {
-					button := ui.PrimaryButton(c, dialog.action)
+					button := ui.PrimaryButton(c, dialog.action).Disabled(app.busy || !dialog.valid())
 					if dialog.danger {
 						button.Background(c.Theme().Danger)
 					}
-					if button.Clicked() && app.dialog == dialog {
+					if (button.Clicked() || submitted && !dialog.danger) && app.dialog == dialog && !app.busy && dialog.valid() {
+						dialog.problem = ""
 						dialog.submit(dialog)
 					}
 				}
@@ -93,18 +121,25 @@ func (app *nativeApp) confirm(title, detail, action string, fn func()) {
 }
 
 func (app *nativeApp) libraryChange(label string, task func(context.Context) (workspace.Library, error)) {
-	app.dialog = nil
+	dialog := app.dialog
 	app.run(label, func(ctx context.Context) (func(), error) {
 		library, err := task(ctx)
 		return func() {
 			if err == nil {
 				app.library = library
+				if app.dialog == dialog {
+					app.dialog = nil
+				}
 			}
 		}, err
 	})
 }
 
 func (app *nativeApp) chooseDirectories(title, button string, multiple bool) ([]string, error) {
+	busy := app.busy
+	app.busy = true
+	defer func() { app.busy = busy }()
+
 	return mygo.Dialog.Open(mygo.OpenDialogOptions{
 		Parent: app.win, Title: title, ButtonLabel: button, Directory: true, Multiple: multiple,
 	})
@@ -267,6 +302,14 @@ func (app *nativeApp) scanDialog() {
 	}
 	app.dialog = &nativeDialog{
 		title: "选择要添加的仓库", detail: detail, options: options, choice: choice, action: "添加所选仓库",
+		canSubmit: func() bool {
+			for _, entry := range result.Repositories {
+				if app.scanSelected[entry.Path] {
+					return true
+				}
+			}
+			return false
+		},
 		body: func(c *ui.Context) {
 			ui.Row(c).Gap(8).Children(func() {
 				if ui.Button(c, "全选").Clicked() {
@@ -281,9 +324,11 @@ func (app *nativeApp) scanDialog() {
 			ui.Scroll(c).Height(300).FillWidth().Children(func() {
 				for _, entry := range result.Repositories {
 					value := app.scanSelected[entry.Path]
-					if ui.Checkbox(c, &value, entry.Path).Key(entry.Path).FillWidth().Changed() {
-						app.scanSelected[entry.Path] = value
-					}
+					ui.Column(c).Key(entry.Path).FillWidth().Children(func() {
+						if ui.Checkbox(c, &value, entry.Path).FillWidth().Changed() {
+							app.scanSelected[entry.Path] = value
+						}
+					})
 				}
 			})
 		},
@@ -310,11 +355,21 @@ func (app *nativeApp) linesDialog() {
 	app.dialog = &nativeDialog{
 		title: "选择变更行", action: "应用所选行",
 		detail: "删除行与新增行可独立选择；仅修改暂存区。",
+		canSubmit: func() bool {
+			for _, line := range app.lineChoices {
+				if line.Checked {
+					return true
+				}
+			}
+			return false
+		},
 		body: func(c *ui.Context) {
 			ui.Scroll(c).Height(340).FillWidth().Children(func() {
 				for index := range app.lineChoices {
 					line := &app.lineChoices[index]
-					ui.Checkbox(c, &line.Checked, line.Text).Key(line.ID).Font("monospace").FillWidth()
+					ui.Column(c).Key(line.ID).FillWidth().Children(func() {
+						ui.Checkbox(c, &line.Checked, line.Text).Font("monospace").FillWidth()
+					})
 				}
 			})
 		},

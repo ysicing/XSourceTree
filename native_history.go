@@ -200,7 +200,7 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 	ui.Divider(c)
 	if len(app.history) == 0 {
 		app.historyGraph, app.historyGraphSource = nil, nil
-		ui.Column(c).Grow(1).FillWidth().Center().Children(func() {
+		ui.Column(c).Key("empty-history").Grow(1).FillWidth().Center().Children(func() {
 			ui.Text(c, "没有匹配的提交").TextColor(c.Theme().TextMuted)
 		})
 		return
@@ -215,14 +215,15 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 		graphWidth = max(graphWidth, 24+float32(row.Columns)*16)
 	}
 	app.historyList.Selected = &app.historySelected
-	app.historyList.Key = func(index int) any { return app.history[index].Hash }
-	app.historyList.Label = func(index int) string { return app.history[index].Subject }
+	history := app.history
+	app.historyList.Key = func(index int) any { return history[index].Hash }
+	app.historyList.Label = func(index int) string { return history[index].Subject }
 	theme := *c.Theme()
 	tableTheme := theme
 	tableTheme.Spacing, tableTheme.FontSize = 3.5, 14
 	tableTheme.Accent = theme.Accent.Alpha(0.16)
 	tableTheme.InactiveAccent, tableTheme.AccentText = tableTheme.Accent, theme.Text
-	ui.Themed(c, &tableTheme).FillWidth().Grow(1).MinHeight(0).Children(func() {
+	ui.Themed(c, &tableTheme).Key(app.historyList).FillWidth().Grow(1).MinHeight(0).Children(func() {
 		columns := []ui.TableColumn{
 			{Title: "图谱", Width: graphWidth, Fixed: true},
 			{Title: "提交说明", MinWidth: 200},
@@ -230,7 +231,7 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 			{Title: "时间", Width: 138, MinWidth: 138},
 			{Title: "提交 ID", Width: 88, MinWidth: 88},
 		}
-		if ui.Table(c, &app.historyList, columns, len(app.history), func(index, column int) {
+		if ui.Table(c, app.historyList, columns, len(app.history), func(index, column int) {
 			commit := app.history[index]
 			switch column {
 			case 0:
@@ -316,9 +317,10 @@ func (app *nativeApp) historyFiles(c *ui.Context) {
 			return
 		}
 		app.commitList.Selected = &app.commitSelected
-		app.commitList.Key = func(index int) any { return app.commitFiles[index].Path }
-		app.commitList.Label = func(index int) string { return app.commitFiles[index].Path }
-		if ui.List(c, &app.commitList, len(app.commitFiles), func(index int) {
+		files := app.commitFiles
+		app.commitList.Key = func(index int) any { return files[index].Path }
+		app.commitList.Label = func(index int) string { return files[index].Path }
+		if ui.List(c, app.commitList, len(app.commitFiles), func(index int) {
 			file := app.commitFiles[index]
 			ui.Row(c).FillWidth().Height(30).Padding(0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Icon(c, nativeIcons["file"]).Size(14, 14)

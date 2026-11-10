@@ -83,12 +83,12 @@ type nativeApp struct {
 	scanSelected  map[string]bool
 	prefs         nativePreferences
 	stateFile     string
-	historyList   ui.ListState
+	historyList   *ui.ListState
 
 	historySelected    int
 	historyGraph       []historyGraphRow
 	historyGraphSource *gitrepo.Commit
-	commitList         ui.ListState
+	commitList         *ui.ListState
 	commitSelected     int
 }
 
@@ -99,6 +99,7 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 		screen: "library", library: service.Library(), selectedFiles: map[string]bool{},
 		prefs:           nativePreferences{Sidebar: 226, Files: 360, History: 56, HistoryFiles: 280, Wrap: true, Drafts: map[string]string{}},
 		historySelected: -1, commitSelected: -1,
+		historyList: &ui.ListState{}, commitList: &ui.ListState{},
 	}
 	if data, err := os.ReadFile(stateFile); err == nil {
 		if err := json.Unmarshal(data, &app.prefs); err != nil {
@@ -174,6 +175,7 @@ func (app *nativeApp) run(label string, task func(context.Context) (func(), erro
 		return
 	}
 	app.busy, app.status, app.problem = true, label, ""
+	dialog := app.dialog
 	go func() {
 		apply, err := task(app.ctx)
 		app.post(func() {
@@ -186,6 +188,9 @@ func (app *nativeApp) run(label string, task func(context.Context) (func(), erro
 			}
 			if err != nil {
 				app.problem = err.Error()
+				if dialog != nil && app.dialog == dialog {
+					dialog.problem = err.Error()
+				}
 			}
 		})
 	}()
@@ -257,6 +262,10 @@ func (app *nativeApp) refresh() {
 }
 
 func (app *nativeApp) mutate(label string, operation func(context.Context, string) error) {
+	app.mutateForm(nil, label, operation)
+}
+
+func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation func(context.Context, string) error) {
 	if app.repository == nil || app.busy || (operation != nil && !app.writable) {
 		return
 	}
@@ -288,7 +297,7 @@ func (app *nativeApp) mutate(label string, operation func(context.Context, strin
 				app.history, app.historyMore = history, len(history) == 100
 				app.commitHash, app.commitFile, app.commitFiles = "", "", nil
 				app.historySelected, app.commitSelected = -1, -1
-				app.historyList, app.commitList = ui.ListState{}, ui.ListState{}
+				app.historyList, app.commitList = &ui.ListState{}, &ui.ListState{}
 			}
 			if selection != nil {
 				app.setSelection(selection)
@@ -303,6 +312,12 @@ func (app *nativeApp) mutate(label string, operation func(context.Context, strin
 			}
 			if screen == "stash" {
 				app.stashHash = ""
+			}
+			if dialog != nil && app.dialog == dialog {
+				dialog.blocked = refreshErr != nil
+				if operationErr == nil {
+					app.dialog = nil
+				}
 			}
 		}, errors.Join(operationErr, refreshErr)
 	})

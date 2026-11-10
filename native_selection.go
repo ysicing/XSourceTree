@@ -191,7 +191,8 @@ func (app *nativeApp) searchHistory(more bool) {
 			} else if err == nil || len(commits) > 0 {
 				app.history = commits
 				app.historySelected, app.commitSelected = -1, -1
-				app.historyList = ui.ListState{}
+				// 旧界面的辅助功能节点仍引用列表状态，替换指针而非原地清零。
+				app.historyList, app.commitList = &ui.ListState{}, &ui.ListState{}
 				app.commitHash, app.commitFiles, app.commitFile = "", nil, ""
 				app.clearDiff()
 			}
@@ -233,7 +234,7 @@ func (app *nativeApp) selectCommit(hash string) {
 			if len(files) > 0 {
 				app.commitSelected = 0
 			}
-			app.commitList = ui.ListState{}
+			app.commitList = &ui.ListState{}
 			if diffErr == nil {
 				app.setDiff(diff)
 			}
@@ -297,8 +298,7 @@ func (app *nativeApp) applyLines() {
 		return
 	}
 	file, staged, token := app.selectedFile, app.staged, app.patch.Token
-	app.dialog = nil
-	app.mutate("正在应用所选行…", func(ctx context.Context, path string) error {
+	app.mutateForm(app.dialog, "正在应用所选行…", func(ctx context.Context, path string) error {
 		return app.service.ApplyLines(ctx, path, file, staged, token, ids)
 	})
 }

@@ -10,7 +10,6 @@ XSourceTree 是使用 Go 和 MyGo Native UI 构建的 macOS Git 客户端，调�
 - 测试与源码相邻：Go 使用 `*_test.go`，脚本使用 `scripts/*.test.mjs`。
 - `resources/`、`assets/`：应用图标、品牌及文件图标。
 - `docs/development.md`、`docs/usage.md`：开发发布与使用说明。
-- `src/`、Vite 配置及 DOM 冒烟脚本仅作迁移参考，不参与当前构建与验收。
 
 ## 开发与验证
 

@@ -1,3 +1,6 @@
+// Copyright 2026 ysicing
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package main
 
 import (
@@ -12,10 +15,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/ui"
-	"github.com/egoist/mygo/ui/editor"
 	"github.com/ysicing/XSourceTree/internal/gitrepo"
 	"github.com/ysicing/XSourceTree/internal/workspace"
+
+	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/editor"
 )
 
 func nativeGit(t *testing.T, path string, args ...string) string {

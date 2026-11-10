@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 ysicing
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
 import type { DiffRow } from "./presentation";
 
 export type DiffCell = { row: DiffRow; note?: string };

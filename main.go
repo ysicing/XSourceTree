@@ -1,13 +1,17 @@
+// Copyright 2026 ysicing
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package main
 
 import (
 	"log"
 	"path/filepath"
 
+	"github.com/ysicing/XSourceTree/internal/workspace"
+
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/updater"
 	"github.com/egoist/mygo/plugins/updater/native"
-	"github.com/ysicing/XSourceTree/internal/workspace"
 )
 
 func main() {

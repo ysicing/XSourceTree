@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 ysicing
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
 type FileEntry = { path: string; conflict: boolean };
 export type FileSort = "path" | "name";
 

@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 ysicing
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
 import "./style.css";
 import { ApplicationService, RepositoryService as api, events, type Branch, type Commit, type CommitFile, type Conflict, type ConflictSide, type Diff, type DiscardPreview, type File, type Library, type LocalRepository, type Patch, type RemoteConfig, type ScanResult, type Snapshot, type Stash, type Tag } from "./mygo";
 import { escapeHTML as escape, fileGroups, graphRows, parseDiff, type DiffRow, type GraphRow } from "./presentation";

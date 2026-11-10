@@ -1,3 +1,6 @@
+// Copyright 2026 ysicing
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package main
 
 import (
@@ -7,11 +10,12 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/ysicing/XSourceTree/internal/gitrepo"
+	"github.com/ysicing/XSourceTree/internal/workspace"
+
 	"github.com/egoist/mygo/plugins/updater"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
-	"github.com/ysicing/XSourceTree/internal/gitrepo"
-	"github.com/ysicing/XSourceTree/internal/workspace"
 )
 
 var nativeIcons = map[string]*ui.SVG{

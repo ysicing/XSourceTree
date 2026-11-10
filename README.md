@@ -35,7 +35,7 @@ task build
 
 产物位于 `build/darwin-arm64/` 或 `build/darwin-amd64/`。本地构建使用 ad-hoc 签名；正式发布流程使用 Developer ID 签名、Apple 公证及 Gatekeeper 校验，详见[开发与发布](docs/development.md)。
 
-运行 `task` 查看全部任务，`task check` 串行执行 Go 测试、原生界面测试、发布脚本测试与静态检查。Bun 仅用于打包工具和发布脚本，界面无需 WebView 或前端构建。
+运行 `task` 查看全部任务，`task fmt` 补齐版权头并格式化 Go 代码，`task check` 串行执行文件头与格式检查、Go 测试、原生界面测试、发布脚本测试及 golangci-lint。Bun 仅用于打包工具和发布脚本，界面无需 WebView 或前端构建。
 
 ## 文档
 

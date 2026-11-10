@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 ysicing
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
 const paths: Record<string, string> = {
   branch: '<path d="M6 3v12a4 4 0 0 0 4 4h2"/><circle cx="6" cy="3" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="6" r="2"/><path d="M18 8a8 8 0 0 1-8 8H6"/>',
   folder: '<path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10H3z"/>',

@@ -1,3 +1,6 @@
+// Copyright 2026 ysicing
+// SPDX-License-Identifier: AGPL-3.0-only
+
 //go:build e2e
 
 package main
@@ -7,6 +10,7 @@ import (
 	"os"
 
 	"github.com/egoist/mygo"
+
 	_ "github.com/egoist/mygo/plugins/automation"
 )
 

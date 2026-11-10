@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 ysicing
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
 import { expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";

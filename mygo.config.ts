@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 ysicing
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
 import { defineConfig } from "mygo-cli";
 import { version } from "./package.json";
 import release from "./release.config.json";

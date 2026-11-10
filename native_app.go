@@ -1,3 +1,6 @@
+// Copyright 2026 ysicing
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package main
 
 import (
@@ -9,11 +12,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ysicing/XSourceTree/internal/gitrepo"
+	"github.com/ysicing/XSourceTree/internal/workspace"
+
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
-	"github.com/ysicing/XSourceTree/internal/gitrepo"
-	"github.com/ysicing/XSourceTree/internal/workspace"
 )
 
 type nativePreferences struct {

@@ -1,3 +1,6 @@
+// Copyright 2026 ysicing
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package main
 
 import (
@@ -5,8 +8,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/egoist/mygo/ui"
 	"github.com/ysicing/XSourceTree/internal/gitrepo"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func (app *nativeApp) checkedFiles(staged bool) []string {

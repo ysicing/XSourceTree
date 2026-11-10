@@ -1,4 +1,14 @@
+# Copyright 2026 ysicing
+# SPDX-License-Identifier: AGPL-3.0-only
+
 version: '3'
+
+vars:
+  GOLANGCI_LINT: go run -p=1 github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+  ADDLICENSE: '{{.ROOT_DIR}}/.mygo/tools/addlicense-v1.2.0/addlicense'
+  SOURCE_FILES: >-
+    find . -type d \( -name .git -o -name .mygo -o -name .agents -o -name node_modules -o -name vendor -o -name build -o -name dist -o -name graft \) -prune
+    -o -type f \( -name '*.go' -o -name '*.ts' -o -name '*.mjs' -o -name '*.css' -o -name '*.html' -o -name '*.yml' -o -name '*.yaml' \) -print0
 
 tasks:
   default:
@@ -21,6 +31,64 @@ tasks:
     desc: 构建 macOS 应用与 DMG
     cmds:
       - GOMAXPROCS=2 GOFLAGS=-p=1 bun run build
+
+  fmt:
+    desc: 补齐版权头并使用 golangci-lint 格式化 Go 代码
+    aliases: [format]
+    env:
+      GOMAXPROCS: '2'
+      GOFLAGS: -p=1
+    cmds:
+      - task: license
+      - '{{.GOLANGCI_LINT}} fmt'
+
+  tools:license:
+    internal: true
+    status:
+      - test -x "{{.ADDLICENSE}}"
+    cmds:
+      - GOBIN="{{.ROOT_DIR}}/.mygo/tools/addlicense-v1.2.0" GOMAXPROCS=2 go install -p=1 github.com/google/addlicense@v1.2.0
+
+  license:
+    desc: 为源码、脚本和配置补齐 AGPL 版权头
+    aliases: [gencopyright]
+    env:
+      GOMAXPROCS: '2'
+    cmds:
+      - task: tools:license
+      - '{{.SOURCE_FILES}} | xargs -0 -n 1 "{{.ADDLICENSE}}" -c ysicing -l AGPL-3.0-only -s=only'
+
+  license:check:
+    desc: 检查源码文件头是否缺失，包含平台专用文件
+    run: once
+    env:
+      GOMAXPROCS: '2'
+    cmds:
+      - task: tools:license
+      - '{{.SOURCE_FILES}} | xargs -0 -n 1 "{{.ADDLICENSE}}" -check'
+
+  gomod:
+    desc: 整理 Go 模块依赖
+    cmds:
+      - GOMAXPROCS=2 go mod tidy
+
+  fmt:check:
+    desc: 检查文件头是否缺失及 Go 格式，不修改源码
+    env:
+      GOMAXPROCS: '2'
+      GOFLAGS: -p=1
+    cmds:
+      - task: license:check
+      - '{{.GOLANGCI_LINT}} fmt --diff'
+
+  lint:
+    desc: 使用 golangci-lint 检查 Go 文件头、格式及 govet
+    env:
+      GOMAXPROCS: '2'
+      GOFLAGS: -p=1
+    cmds:
+      - task: license:check
+      - '{{.GOLANGCI_LINT}} run ./...'
 
   vet:
     desc: 检查 Go 代码
@@ -49,10 +117,11 @@ tasks:
       - bun run test:release
 
   check:
-    desc: 串行运行全部测试与 Go 静态检查
+    desc: 串行运行文件头与格式检查、全部测试及 golangci-lint
     cmds:
+      - task: fmt:check
       - task: test
-      - task: vet
+      - task: lint
 
   release:
     desc: 构建并发布双架构更新包，可传入 -- --dry-run 仅构建校验

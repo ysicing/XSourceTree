@@ -31,7 +31,28 @@ task build
 
 ## 验证
 
-`task check` 串行执行 Go 测试（包含原生界面）、发布脚本测试和 `go vet`。所有 Git 集成测试只操作测试创建的临时仓库，包括本地 bare 远程仓库，不连接真实远程服务。
+`task fmt`（或 `task format`）参考 Gitness，先补齐文件头，再通过 `golangci-lint fmt` 统一执行 gofmt、goimports 和 gci。规则集中在 [.golangci.yml](../.golangci.yml)，导入分组为标准库、项目包、第三方包、匿名导入、点导入。覆盖新建但尚未暂存的 Go 文件，跳过依赖、构建目录和生成文件。
+
+工具固定为 golangci-lint `v2.15.0` 和 addlicense `v1.2.0`。golangci-lint 通过 `go run` 调用，addlicense 安装到 `.mygo/tools/`；首次运行会下载并缓存工具，不覆盖全局安装。任务串行执行，Go 并发限制为 2，工具编译使用 `-p=1`，addlicense 每次只处理一个文件。`task fmt:check` 检查文件头是否缺失及格式差异，不修改源码；`task lint` 使用 goheader 校验 Go 版权头内容，并运行格式检查及 govet。
+
+```sh
+task fmt
+task fmt:check
+task lint
+```
+
+`task license`（或 `task gencopyright`）单独补齐版权头，`task license:check` 只检查是否缺失。覆盖项目的 Go、TypeScript、MJS、CSS、HTML 和 YAML 文件，包括测试和平台专用源码；生成文件、代理技能目录、依赖及构建产物跳过。JSON、锁文件、文档和图片不添加代码注释。
+
+文件头使用以下内容，新增文件采用当前年份，已有年份和版权声明不会被批量覆盖。goheader 接受年份或年份区间，避免跨年后要求重写所有文件：
+
+```go
+// Copyright 2026 ysicing
+// SPDX-License-Identifier: AGPL-3.0-only
+```
+
+addlicense 检查所有适用文件的头部是否存在；golangci-lint 的 goheader 严格检查当前平台参与构建的 Go 文件，包含测试及 `e2e` 文件。已有版权头与项目模板不一致时需人工确认来源，不覆盖第三方声明。
+
+`task gomod` 单独运行 `go mod tidy`，不随格式化修改依赖。`task check` 串行执行文件头与格式检查、Go 测试（包含原生界面）、发布脚本测试和 golangci-lint。所有 Git 集成测试只操作测试创建的临时仓库，包括本地 bare 远程仓库，不连接真实远程服务。
 
 ```sh
 task check

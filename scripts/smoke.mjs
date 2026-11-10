@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 ysicing
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
 import assert from "node:assert/strict";
 import net from "node:net";
 import { execFileSync } from "node:child_process";

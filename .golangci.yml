@@ -1,0 +1,50 @@
+# Copyright 2026 ysicing
+# SPDX-License-Identifier: AGPL-3.0-only
+
+version: "2"
+
+run:
+  concurrency: 2
+  timeout: 5m
+  modules-download-mode: readonly
+  build-tags:
+    - e2e
+
+linters:
+  default: none
+  enable:
+    - goheader
+    - govet
+  settings:
+    goheader:
+      values:
+        regexp:
+          YEAR: '20[0-9]{2}(-20[0-9]{2})?'
+      template: |-
+        Copyright {{ YEAR }} ysicing
+        SPDX-License-Identifier: AGPL-3.0-only
+  exclusions:
+    generated: strict
+    paths:
+      - '(^|/)(\.mygo|node_modules|vendor|build|dist|graft)/'
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+    - gci
+  settings:
+    gofmt:
+      simplify: true
+    gci:
+      custom-order: true
+      sections:
+        - standard
+        - prefix(github.com/ysicing/XSourceTree)
+        - default
+        - blank
+        - dot
+  exclusions:
+    generated: strict
+    paths:
+      - '(^|/)(\.mygo|node_modules|vendor|build|dist|graft)/'

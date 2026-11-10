@@ -1,11 +1,15 @@
+// Copyright 2026 ysicing
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package main
 
 import (
 	"context"
 	"errors"
 
-	"github.com/egoist/mygo"
 	"github.com/ysicing/XSourceTree/internal/gitrepo"
+
+	"github.com/egoist/mygo"
 )
 
 func (service *RepositoryService) SearchHistory(ctx context.Context, path, query, file string, skip int) ([]gitrepo.Commit, error) {

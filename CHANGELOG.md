@@ -3,6 +3,11 @@
 ## 未发布
 
 - 正式发布包使用 Developer ID 签名、Apple 公证和票据装订，上传前校验双架构更新包与 DMG 的签名团队及 Gatekeeper 状态
+- 构建成功后自动递增构建号，双架构共用同一构建号，失败不递增
+- 顶部版本按钮与“关于”窗口展示构建信息，包含 short commit、未提交修改标记和构建时间
+- 优化提交历史列表，使用彩色关系图、紧凑行距和分支、标签标记，悬停可查看完整提交信息
+- 添加 `task fmt`（别名 `task format`）与 `task fmt:check`，使用 golangci-lint 统一 Go 格式和导入分组，覆盖未暂存的新文件，并将格式检查纳入 `task check`
+- 统一源码、脚本和配置的 AGPL 版权头，提供自动补齐及缺失检查任务，通过 golangci-lint 的 goheader 校验 Go 文件头
 
 ## 0.0.1
 

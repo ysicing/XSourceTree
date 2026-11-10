@@ -1,3 +1,6 @@
+// Copyright 2026 ysicing
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package main
 
 import (
@@ -5,9 +8,10 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/egoist/mygo"
 	"github.com/ysicing/XSourceTree/internal/gitrepo"
 	"github.com/ysicing/XSourceTree/internal/workspace"
+
+	"github.com/egoist/mygo"
 )
 
 type RepositoryService struct {

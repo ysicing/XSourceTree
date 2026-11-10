@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 ysicing
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
 type CloseReason = "ready" | "busy" | "drafts";
 
 export function createCloseGuard(options: {

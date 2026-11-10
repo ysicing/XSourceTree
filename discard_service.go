@@ -1,3 +1,6 @@
+// Copyright 2026 ysicing
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package main
 
 import (
@@ -5,8 +8,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/egoist/mygo"
 	"github.com/ysicing/XSourceTree/internal/gitrepo"
+
+	"github.com/egoist/mygo"
 )
 
 func (service *RepositoryService) DiscardPreview(ctx context.Context, path, file string) (gitrepo.DiscardPreview, error) {

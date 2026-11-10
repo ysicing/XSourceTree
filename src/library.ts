@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 ysicing
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
 type Repository = { name: string; path: string; branch: string; groupID: string };
 type Group = { id: string; name: string };
 

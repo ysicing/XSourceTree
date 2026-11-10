@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 ysicing
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
 import { expect, test } from "bun:test";
 import { sideBySideRows } from "./diff-layout";
 import { parseDiff } from "./presentation";

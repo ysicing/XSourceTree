@@ -4,9 +4,14 @@ import { escapeHTML, fileGroups, graphRows, parseDiff } from "./presentation";
 test("unified diff tracks old and new line numbers independently", () => {
   const rows = parseDiff("--- a/file\n+++ b/file\n@@ -3,2 +3,2 @@\n same\n-old\n+new\n\\ No newline at end of file\n");
   expect(rows[3]).toEqual({ kind: "context", content: " same", before: 3, after: 3 });
-  expect(rows[4]).toEqual({ kind: "removed", content: "-old", before: 4, after: null });
-  expect(rows[5]).toEqual({ kind: "added", content: "+new", before: null, after: 4 });
+  expect(rows[4]).toEqual({ kind: "removed", content: "-old", before: 4, after: null, changeID: 0 });
+  expect(rows[5]).toEqual({ kind: "added", content: "+new", before: null, after: 4, changeID: 1 });
   expect(rows[6]?.before).toBeNull();
+});
+
+test("change IDs skip metadata and remain unique across hunks", () => {
+  const rows = parseDiff("--- a/f\n+++ b/f\n@@ -1 +1 @@\n-a\n+b\n@@ -9 +9 @@\n-c\n+d\n");
+  expect(rows.filter((row) => row.changeID !== undefined).map((row) => row.changeID)).toEqual([0, 1, 2, 3]);
 });
 
 test("repository content is escaped before entering HTML", () => {

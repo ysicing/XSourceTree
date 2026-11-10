@@ -143,6 +143,9 @@ export const RepositoryService = {
   applyHunk(path: string, file: string, staged: boolean, token: string, id: number): Promise<void> {
     return call("RepositoryService.ApplyHunk", path, file, staged, token, id);
   },
+  applyLines(path: string, file: string, staged: boolean, token: string, ids: number[]): Promise<void> {
+    return call("RepositoryService.ApplyLines", path, file, staged, token, ids);
+  },
   applyStash(path: string, hash: string, pop: boolean): Promise<void> {
     return call("RepositoryService.ApplyStash", path, hash, pop);
   },

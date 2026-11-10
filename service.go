@@ -234,6 +234,14 @@ func (service *RepositoryService) Stage(ctx context.Context, path string, files 
 	return repo.Stage(ctx, files)
 }
 
+func (service *RepositoryService) ApplyLines(ctx context.Context, path, file string, staged bool, token string, ids []int) error {
+	repo, err := service.manager.Get(path)
+	if err != nil {
+		return err
+	}
+	return repo.ApplyLines(ctx, file, staged, token, ids)
+}
+
 func (service *RepositoryService) Unstage(ctx context.Context, path string, files []string) error {
 	repo, err := service.manager.Get(path)
 	if err != nil {

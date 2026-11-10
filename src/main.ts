@@ -30,6 +30,7 @@ const state = {
   selection: null as Selection | null,
   diff: null as Diff | null,
   patch: null as Patch | null,
+  selectedLines: new Set<number>(),
   diffLoading: false,
   diffError: "",
   busy: "",
@@ -409,12 +410,14 @@ function renderDiffPanel(): string {
   else if (!state.diff?.text) body = '<div class="empty-state"><span>没有可显示的文本差异</span></div>';
   else {
     const rows = parseDiff(state.diff.text);
+    const selectable = rows.length <= 4000 && !state.diff.truncated && state.patch?.supported && "path" in selection;
     let hunk = -1;
     body = `<div class="diff-scroll"><div class="diff-code" role="region" aria-label="统一差异" tabindex="0">${rows.slice(0, 4000).map((row) => {
       if (row.kind === "hunk") hunk++;
       const action = row.kind === "hunk" && rows.length <= 4000 && !state.diff!.truncated && state.patch?.supported && state.patch.hunks[hunk]?.header === row.content && "path" in selection
         ? `<button class="hunk-action" data-action="apply-hunk" data-hunk="${state.patch.hunks[hunk]!.id}" data-mutates ${disabled()}>${selection.staged ? "取消暂存此块" : "暂存此块"}</button>` : "";
-      return `<div class="diff-line ${row.kind}" ${row.kind === "hunk" ? 'tabindex="-1"' : ""}><span class="line-number" aria-hidden="true">${row.before ?? ""}</span><span class="line-number" aria-hidden="true">${row.after ?? ""}</span><code>${escape(row.content) || " "}</code>${action}</div>`;
+      const check = selectable ? `<span class="line-select">${row.changeID !== undefined ? `<input type="checkbox" data-action="select-line" data-line="${row.changeID}" aria-label="选择${row.kind === "added" ? "新增" : "删除"}行 ${row.after ?? row.before}" ${state.selectedLines.has(row.changeID) ? "checked" : ""} ${disabled()}>` : ""}</span>` : "";
+      return `<div class="diff-line ${row.kind}" ${row.kind === "hunk" ? 'tabindex="-1"' : ""}>${check}<span class="line-number" aria-hidden="true">${row.before ?? ""}</span><span class="line-number" aria-hidden="true">${row.after ?? ""}</span><code>${escape(row.content) || " "}</code>${action}</div>`;
     }).join("")}</div>
       ${state.diff.truncated || rows.length > 4000 ? '<div class="diff-limit">预览已截断，请使用命令行查看完整差异。</div>' : ""}</div>`;
   }
@@ -422,7 +425,9 @@ function renderDiffPanel(): string {
   const files = "hash" in selection && state.commitFiles.length ? `<div class="commit-files" aria-label="提交变更文件">
     <button data-action="select-commit-file" class="${!selection.file ? "selected" : ""}">全部变更</button>
     ${state.commitFiles.map((file) => `<button data-action="select-commit-file" data-path="${escape(file.path)}" class="${selection.file === file.path ? "selected" : ""}" title="${escape(file.originalPath ? `${file.originalPath} → ${file.path}` : file.path)}"><span class="file-status">${file.status}</span>${escape(file.path)}</button>`).join("")}</div>` : "";
-  return `<div class="diff-heading">${icon("file", 16)}<strong title="${escape(title)}">${escape(title)}</strong><span>${subtitle}</span>${state.diff?.binary ? '<span class="badge">二进制</span>' : ""}${navigation}</div>${files}${state.commitFilesError ? `<div role="alert" class="diff-limit">${escape(state.commitFilesError)}</div>` : ""}${stashActions}${body}`;
+  const lineActions = state.patch?.supported && "path" in selection && !state.diff?.truncated && parseDiff(state.diff?.text ?? "").length <= 4000
+    ? `<div class="line-actions"><button data-action="apply-lines" data-mutates ${state.busy || !state.selectedLines.size ? "disabled" : ""}>${selection.staged ? "取消暂存所选行" : "暂存所选行"}${state.selectedLines.size ? ` (${state.selectedLines.size})` : ""}</button><button data-action="clear-lines" ${state.busy || !state.selectedLines.size ? "disabled" : ""}>清除选择</button></div>` : "";
+  return `<div class="diff-heading">${icon("file", 16)}<strong title="${escape(title)}">${escape(title)}</strong><span>${subtitle}</span>${state.diff?.binary ? '<span class="badge">二进制</span>' : ""}${navigation}</div>${files}${state.commitFilesError ? `<div role="alert" class="diff-limit">${escape(state.commitFilesError)}</div>` : ""}${stashActions}${lineActions}${body}`;
 }
 
 async function loadSelection(): Promise<void> {
@@ -431,6 +436,7 @@ async function loadSelection(): Promise<void> {
   const repo = state.repo;
   state.diff = null;
   state.patch = null;
+  state.selectedLines.clear();
   state.commitFiles = [];
   state.commitFilesError = "";
   state.conflict = null;
@@ -803,7 +809,7 @@ async function commit(): Promise<void> {
 }
 
 document.addEventListener("click", (event) => {
-  const target = (event.target as Element).closest<HTMLButtonElement>("button[data-action]");
+  const target = (event.target as Element).closest<HTMLButtonElement | HTMLInputElement>("button[data-action], input[data-action]");
   if (!target || target.disabled) return;
   const action = target.dataset.action!;
   target.closest<HTMLDetailsElement>("details.popup-menu")?.removeAttribute("open");
@@ -985,6 +991,32 @@ document.addEventListener("click", (event) => {
       if (!patch.hunks.some((hunk) => hunk.id === id)) break;
       void mutate(selection.staged ? "正在取消暂存区块…" : "正在暂存区块…",
         (path) => api.applyHunk(path, selection.path, selection.staged, patch.token, id));
+      break;
+    }
+    case "select-line": {
+      if (state.busy) break;
+      const id = Number(target.dataset.line);
+      if (state.selectedLines.has(id)) state.selectedLines.delete(id);
+      else state.selectedLines.add(id);
+      const scroll = document.querySelector(".diff-scroll");
+      const top = scroll?.scrollTop ?? 0;
+      const left = scroll?.scrollLeft ?? 0;
+      renderDiffOnly();
+      document.querySelector(".diff-scroll")?.scrollTo(left, top);
+      document.querySelector<HTMLElement>(`[data-action="select-line"][data-line="${id}"]`)?.focus({ preventScroll: true });
+      break;
+    }
+    case "clear-lines":
+      state.selectedLines.clear();
+      renderDiffOnly();
+      break;
+    case "apply-lines": {
+      const selection = state.selection;
+      const patch = state.patch;
+      if (!selection || !("path" in selection) || !patch?.supported || !state.selectedLines.size) break;
+      const ids = [...state.selectedLines];
+      void mutate(selection.staged ? "正在取消暂存所选行…" : "正在暂存所选行…",
+        (path) => api.applyLines(path, selection.path, selection.staged, patch.token, ids));
       break;
     }
     case "previous-hunk":

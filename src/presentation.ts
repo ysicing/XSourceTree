@@ -9,12 +9,14 @@ export type DiffRow = {
   content: string;
   before: number | null;
   after: number | null;
+  changeID?: number;
 };
 
 export function parseDiff(text: string): DiffRow[] {
   let before = 0;
   let after = 0;
   let inHunk = false;
+  let changeID = 0;
   return text.replace(/\n$/, "").split("\n").map((content): DiffRow => {
     const header = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(content);
     if (header) {
@@ -24,10 +26,10 @@ export function parseDiff(text: string): DiffRow[] {
       return { kind: "hunk", content, before: null, after: null };
     }
     if (inHunk && content.startsWith("+")) {
-      return { kind: "added", content, before: null, after: after++ };
+      return { kind: "added", content, before: null, after: after++, changeID: changeID++ };
     }
     if (inHunk && content.startsWith("-")) {
-      return { kind: "removed", content, before: before++, after: null };
+      return { kind: "removed", content, before: before++, after: null, changeID: changeID++ };
     }
     if (inHunk && content.startsWith(" ")) {
       return { kind: "context", content, before: before++, after: after++ };

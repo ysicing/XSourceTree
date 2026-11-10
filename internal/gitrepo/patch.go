@@ -67,6 +67,10 @@ func (repo *Repository) ApplyHunk(ctx context.Context, path string, staged bool,
 	if err != nil {
 		return err
 	}
+	return repo.applyIndexPatch(ctx, path, staged, token, input)
+}
+
+func (repo *Repository) applyIndexPatch(ctx context.Context, path string, staged bool, token, input string) error {
 	args := []string{"-c", "apply.ignoreWhitespace=no", "apply", "--cached", "--whitespace=nowarn", "-p1"}
 	if _, err := run(ctx, repo.Path, input, 30*time.Second, append(args, "--check", "-")...); err != nil {
 		return err
@@ -85,11 +89,6 @@ func (repo *Repository) ApplyHunk(ctx context.Context, path string, staged bool,
 }
 
 func (repo *Repository) prepareHunkApply(ctx context.Context, patch hunkPatch, id int, staged bool) (string, error) {
-	directory, err := os.MkdirTemp("", "xsource-hunk-")
-	if err != nil {
-		return "", err
-	}
-	defer os.RemoveAll(directory)
 	before, err := repo.git(ctx, "cat-file", "blob", patch.indexHash)
 	if err != nil {
 		return "", err
@@ -98,6 +97,15 @@ func (repo *Repository) prepareHunkApply(ctx context.Context, patch hunkPatch, i
 	if err != nil {
 		return "", err
 	}
+	return repo.prepareBlobApply(ctx, patch, before, after)
+}
+
+func (repo *Repository) prepareBlobApply(ctx context.Context, patch hunkPatch, before, after string) (string, error) {
+	directory, err := os.MkdirTemp("", "xsource-hunk-")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(directory)
 	for name, content := range map[string]string{"before": before, "after": after} {
 		if err := os.WriteFile(filepath.Join(directory, name), []byte(content), 0600); err != nil {
 			return "", err
@@ -150,6 +158,10 @@ func (repo *Repository) prepareHunkApply(ctx context.Context, patch hunkPatch, i
 }
 
 func applyHunkToBlob(before, hunk string, staged bool) (string, error) {
+	return applyHunkLinesToBlob(before, hunk, staged, nil)
+}
+
+func applyHunkLinesToBlob(before, hunk string, staged bool, selected map[int]bool) (string, error) {
 	invalid := errors.New("区块与索引原始内容不一致，请刷新后重试")
 	header, body, ok := strings.Cut(hunk, "\n")
 	if !ok || !patchHunkHeader.MatchString(header+"\n") {
@@ -173,6 +185,16 @@ func applyHunkToBlob(before, hunk string, staged bool) (string, error) {
 	}
 	var source, target strings.Builder
 	sourceLines := 0
+	change := 0
+	unterminated := false
+	appendTarget := func(content string) error {
+		if unterminated {
+			return errors.New("所选行会拼接无换行的内容，请同时选择对应的删除和新增行")
+		}
+		target.WriteString(content)
+		unterminated = !strings.HasSuffix(content, "\n")
+		return nil
+	}
 	lines := strings.SplitAfter(body, "\n")
 	for index, line := range lines {
 		if line == "" || line == "\\ No newline at end of file\n" {
@@ -185,14 +207,25 @@ func applyHunkToBlob(before, hunk string, staged bool) (string, error) {
 		switch line[0] {
 		case ' ':
 			source.WriteString(content)
-			target.WriteString(content)
+			if err := appendTarget(content); err != nil {
+				return "", err
+			}
 			sourceLines++
 		case '-', '+':
+			chosen := selected == nil || selected[change]
+			change++
 			if (line[0] == '+') == staged {
 				source.WriteString(content)
 				sourceLines++
-			} else {
-				target.WriteString(content)
+				if !chosen {
+					if err := appendTarget(content); err != nil {
+						return "", err
+					}
+				}
+			} else if chosen {
+				if err := appendTarget(content); err != nil {
+					return "", err
+				}
 			}
 		default:
 			return "", invalid
@@ -219,6 +252,9 @@ func applyHunkToBlob(before, hunk string, staged bool) (string, error) {
 	old := source.String()
 	if !strings.HasPrefix(before[position:], old) ||
 		(old != "" && !strings.HasSuffix(old, "\n") && position+len(old) != len(before)) {
+		return "", invalid
+	}
+	if unterminated && position+len(old) != len(before) {
 		return "", invalid
 	}
 	return before[:position] + target.String() + before[position+len(old):], nil

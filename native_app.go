@@ -91,6 +91,7 @@ type nativeApp struct {
 	commitList         *ui.ListState
 	commitSelected     int
 	refCollapsed       map[nativeRefKey]bool
+	refSelected        nativeRefKey
 }
 
 func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {

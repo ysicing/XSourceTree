@@ -175,29 +175,35 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 				}
 				return
 			}
-			ui.SidebarItem(c, "screen:library", nativeIcons["back"], "返回仓库")
-			ui.SidebarSection(c, app.repository.snapshot.Name, nil, func() {
-				ui.SidebarItem(c, "screen:changes", nativeIcons["file"], "文件变更").Label("文件变更").Children(func() {
+			ui.Row(c).Height(30).Padding(0, 8).Gap(8).AlignItems(ui.Center).Label("仓库工作区").Children(func() {
+				ui.Icon(c, nativeIcons["folder"]).FontSize(18).TextColor(c.Theme().TextMuted)
+				ui.Text(c, "工作区").FontSize(12).FontWeight(500).TextColor(c.Theme().TextMuted)
+			})
+			ui.Column(c).FillWidth().Children(func() {
+				ui.SidebarItem(c, "screen:changes", nil, "文件变更").Label("文件变更").
+					Height(26).Padding(0, 8, 0, 40).FontSize(12).Children(func() {
 					if count := len(app.repository.snapshot.Files); count > 0 {
 						ui.Badge(c, fmt.Sprint(count))
 					}
 				})
-				ui.SidebarItem(c, "screen:history", nativeIcons["history"], "提交历史")
-				ui.SidebarItem(c, "screen:stash", nativeIcons["stash"], "储藏").Label("储藏").Children(func() {
-					if count := len(app.repository.stashes); count > 0 {
-						ui.Badge(c, fmt.Sprint(count))
-					}
-				})
+				ui.SidebarItem(c, "screen:history", nil, "提交历史").Height(26).Padding(0, 8, 0, 40).FontSize(12)
 			})
 			app.localBranchSidebar(c)
-			app.remoteSidebar(c)
 			app.tagSidebar(c)
+			app.remoteSidebar(c)
+			ui.SidebarItem(c, "screen:stash", nativeIcons["stash"], "储藏").Label("储藏").
+				Height(30).Margin(16, 0, 0, 0).FontSize(12).Children(func() {
+				if count := len(app.repository.stashes); count > 0 {
+					ui.Badge(c, fmt.Sprint(count))
+				}
+			})
 		}).Label("仓库导航").Grow(1).MinHeight(0).FillWidth().Changed() {
 			switch {
 			case strings.HasPrefix(selected, "screen:"):
 				screen := strings.TrimPrefix(selected, "screen:")
 				app.leaveConflict(func() {
 					app.screen, app.group = screen, ""
+					app.refSelected = nativeRefKey{}
 					app.clearDiff()
 					app.selectedFile, app.commitHash, app.stashHash = "", "", ""
 					if screen == "history" {
@@ -214,6 +220,22 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 					app.groupDialog("")
 				}
 			}).FillWidth().Padding(8, 10).Label("仓库组操作")
+		} else {
+			ui.Divider(c)
+			ui.Column(c).FillWidth().Padding(6, 10).Children(func() {
+				button := ui.ButtonBase(c).Label("返回仓库").FillWidth().Height(28).
+					Padding(0, 8).Gap(8).AlignItems(ui.Center).Radius(5).TextColor(c.Theme().TextMuted)
+				if button.Hovered() || button.Pressed() {
+					button.Background(c.Theme().SurfaceHover)
+				}
+				button.Children(func() {
+					ui.Icon(c, nativeIcons["back"]).FontSize(15)
+					ui.Text(c, "返回仓库").FontSize(12)
+				})
+				if button.Clicked() {
+					app.showLibrary()
+				}
+			})
 		}
 	})
 }

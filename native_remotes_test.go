@@ -28,6 +28,15 @@ func TestNativeRemoteBranchTree(t *testing.T) {
 			t.Fatalf("缺少远端分组 %s", label)
 		}
 	}
+	if _, found := tester.Find("origin/main"); found {
+		t.Fatal("远端默认展开导致分支列表占满侧栏")
+	}
+	for _, label := range []string{"远端 origin", "远端 upstream", "远端 team/mirror"} {
+		if err := tester.Click(label); err != nil {
+			t.Fatal(err)
+		}
+		tester.Frame()
+	}
 	parent, _ := tester.Find("远端 origin")
 	child, found := tester.Find("origin/main")
 	if !found || child.Y <= parent.Y {

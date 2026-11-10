@@ -17,6 +17,7 @@ import (
 type nativeRefNode struct {
 	name, reference string
 	remote          bool
+	current         bool
 	children        []*nativeRefNode
 }
 
@@ -24,7 +25,7 @@ type nativeRefKey struct {
 	repository, kind, reference string
 }
 
-func nativeReferenceNodes(names []string, prefix string) []*nativeRefNode {
+func nativeReferenceNodes(names []string, prefix, current string) []*nativeRefNode {
 	var roots []*nativeRefNode
 	nodes := make(map[string]*nativeRefNode)
 	for _, name := range names {
@@ -43,6 +44,7 @@ func nativeReferenceNodes(names []string, prefix string) []*nativeRefNode {
 			}
 			children = &node.children
 		}
+		nodes[name].current = name == current
 	}
 	var sortNodes func([]*nativeRefNode)
 	sortNodes = func(nodes []*nativeRefNode) {
@@ -64,62 +66,116 @@ func nativeReferenceNodes(names []string, prefix string) []*nativeRefNode {
 }
 
 func (app *nativeApp) referenceSidebar(c *ui.Context, title, label string, icon *ui.SVG, nodes []*nativeRefNode, leaf func(string, ui.Element)) {
-	c.Key(title)
-	ui.SidebarSection(c, title, nil, func() {
-		ui.Column(c).Key(app.repository.snapshot.Path).FillWidth().Children(func() {
-			tree := ui.TreeBase(c)
-			tree.Root.FillWidth().Label(label).Children(func() {
-				app.referenceItems(c, tree, nodes, title, icon, leaf)
+	key := nativeRefKey{repository: app.repository.snapshot.Path, kind: title}
+	collapsed, known := app.refCollapsed[key]
+	expanded := !collapsed
+	if !known && title == "标签" {
+		expanded = false
+	}
+	ui.Column(c).Key(title+":"+app.repository.snapshot.Path).FillWidth().Margin(16, 0, 0, 0).Children(func() {
+		tree := ui.TreeBase(c)
+		tree.Root.FillWidth().Label(label).Children(func() {
+			section := tree.Item(&expanded)
+			visibleTitle := title
+			if title == "本地分支" {
+				visibleTitle = "分支"
+			}
+			header := section.Row.Label(title).Height(30).FillWidth().Padding(0, 8).Gap(8).AlignItems(ui.Center).Radius(5)
+			header.FocusRing(header.FocusVisible())
+			if header.Hovered() || header.Pressed() {
+				header.Background(c.Theme().SurfaceHover)
+			}
+			if header.Clicked() {
+				expanded = !expanded
+			}
+			header.Children(func() {
+				ui.Icon(c, icon).FontSize(18).TextColor(c.Theme().TextMuted)
+				ui.Text(c, visibleTitle).FontSize(12).FontWeight(500).TextColor(c.Theme().TextMuted).Grow(1)
+				nativeDisclosure(c, expanded, c.Theme().TextMuted)
+			})
+			app.refCollapsed[key] = !expanded
+			section.Group(func() {
+				app.referenceItems(c, tree, nodes, title, leaf)
 			})
 		})
 	})
 }
 
-func (app *nativeApp) referenceItems(c *ui.Context, tree ui.TreeParts, nodes []*nativeRefNode, kind string, icon *ui.SVG, leaf func(string, ui.Element)) {
+func nativeDisclosure(c *ui.Context, expanded bool, color ui.Color) {
+	degrees := float32(0)
+	if expanded {
+		degrees = 90
+	}
+	ui.Icon(c, nativeIcons["chevron"]).FontSize(10).Rotate(degrees).TextColor(color)
+}
+
+func (app *nativeApp) referenceItems(c *ui.Context, tree ui.TreeParts, nodes []*nativeRefNode, kind string, leaf func(string, ui.Element)) {
 	for _, node := range nodes {
 		group := ui.Column(c).Key(node.reference).FillWidth()
 		key := nativeRefKey{repository: app.repository.snapshot.Path, kind: kind, reference: node.reference}
-		expanded := !app.refCollapsed[key]
+		collapsed, known := app.refCollapsed[key]
+		expanded := !collapsed
+		if !known && node.remote {
+			expanded = false
+		}
 		group.Children(func() {
 			var open *bool
-			if len(node.children) > 0 {
+			if len(node.children) > 0 || node.remote {
 				open = &expanded
 			}
 			item := tree.Item(open)
-			label, symbol := node.reference, icon
+			label := node.reference
 			switch {
 			case node.remote:
-				label, symbol = "远端 "+node.reference, nativeIcons["cloud"]
+				label = "远端 " + node.reference
 			case open != nil:
-				label, symbol = kind+"目录 "+node.reference, nativeIcons["folder"]
+				label = kind + "目录 " + node.reference
 			}
 			row := item.Row.Label(label).Tooltip(node.reference).FillWidth().MinWidth(0).
-				Height(28).Gap(4).AlignItems(ui.Center).Padding(0, 8).
-				PaddingStart(4 + 16*float32(item.Depth())).Radius(c.Theme().Radius)
-			if row.Hovered() {
+				Height(26).Gap(4).AlignItems(ui.Center).Padding(0, 8).
+				PaddingStart(22 + 16*float32(item.Depth()-1)).Radius(5).FontSize(12)
+			if row.Clicked() {
+				app.refSelected = key
+			}
+			selected := app.refSelected == key
+			color := c.Theme().TextMuted
+			if selected {
+				row.Background(c.Theme().Accent).TextColor(c.Theme().AccentText)
+				color = c.Theme().AccentText
+			} else if row.Pressed() || row.Hovered() {
 				row.Background(c.Theme().SurfaceHover)
 			}
+			row.AccessSelected(selected)
 			row.FocusRing(row.FocusVisible())
 			row.Children(func() {
 				arrow := ui.Box(c).Size(14, 14).Shrink(0)
 				if open != nil {
 					arrow.Children(func() {
-						degrees := float32(0)
-						if *open {
-							degrees = 90
+						nativeDisclosure(c, *open, color)
+					})
+				} else if node.current {
+					arrow.AlignItems(ui.Center).Justify(ui.Center).Children(func() {
+						dot := c.Theme().Accent
+						if selected {
+							dot = c.Theme().AccentText
 						}
-						ui.Icon(c, nativeIcons["chevron"]).FontSize(12).Rotate(degrees).TextColor(c.Theme().TextMuted)
+						ui.Box(c).Size(7, 7).Radius(4).Background(dot)
 					})
 				}
-				ui.Icon(c, symbol).FontSize(15).Shrink(0).TextColor(c.Theme().Accent)
-				ui.Text(c, node.name).Grow(1).MinWidth(0).SingleLine()
+				if open != nil && !node.remote {
+					ui.Icon(c, nativeIcons["folder"]).FontSize(15).Shrink(0).TextColor(color)
+				}
+				text := ui.Text(c, node.name).Grow(1).MinWidth(0).SingleLine()
+				if node.current {
+					text.FontWeight(600)
+				}
 			})
 			if open != nil {
 				if row.Clicked() {
 					*open = !*open
 				}
 				app.refCollapsed[key] = !*open
-				item.Group(func() { app.referenceItems(c, tree, node.children, kind, icon, leaf) })
+				item.Group(func() { app.referenceItems(c, tree, node.children, kind, leaf) })
 			} else if !node.remote {
 				leaf(node.reference, row)
 			}
@@ -129,19 +185,23 @@ func (app *nativeApp) referenceItems(c *ui.Context, tree ui.TreeParts, nodes []*
 
 func (app *nativeApp) localBranchSidebar(c *ui.Context) {
 	var names []string
+	var current string
 	branches := make(map[string]gitrepo.Branch)
 	for _, branch := range app.repository.branches {
 		if !branch.Remote {
 			names = append(names, branch.Name)
 			branches[branch.Name] = branch
+			if branch.Current {
+				current = branch.Name
+			}
 		}
 	}
-	app.referenceSidebar(c, "本地分支", "本地分支树", nativeIcons["branch"], nativeReferenceNodes(names, ""), func(name string, item ui.Element) {
+	app.referenceSidebar(c, "本地分支", "本地分支树", nativeIcons["branch"], nativeReferenceNodes(names, "", current), func(name string, item ui.Element) {
 		branch := branches[name]
 		if branch.Current {
-			item.Background(c.Theme().SurfacePressed)
+			item.Tooltip(name + " · 当前分支")
 		}
-		item.AccessSelected(branch.Current).ContextMenu(func(menu *ui.Menu) {
+		item.ContextMenu(func(menu *ui.Menu) {
 			if menu.Item("重命名分支…").Disabled(!app.writable).Chosen() {
 				app.renameBranchDialog(name)
 			}
@@ -151,12 +211,8 @@ func (app *nativeApp) localBranchSidebar(c *ui.Context) {
 			if menu.Item("强制删除分支…").Disabled(branch.Current || !app.writable).Chosen() {
 				app.deleteBranch(name, true)
 			}
-		}).Children(func() {
-			if branch.Current {
-				ui.Icon(c, nativeIcons["check"]).FontSize(13).TextColor(c.Theme().TextMuted)
-			}
 		})
-		if item.Clicked() && app.writable && name != app.repository.snapshot.Branch {
+		if item.Clicked() && app.writable && !branch.Current {
 			app.leaveConflict(func() {
 				app.mutate("正在切换分支…", func(ctx context.Context, path string) error {
 					return app.service.SwitchBranch(ctx, path, name)
@@ -167,16 +223,13 @@ func (app *nativeApp) localBranchSidebar(c *ui.Context) {
 }
 
 func (app *nativeApp) tagSidebar(c *ui.Context) {
-	if len(app.repository.tags) == 0 {
-		return
-	}
 	var names []string
 	tags := make(map[string]gitrepo.Tag)
 	for _, tag := range app.repository.tags {
 		names = append(names, tag.Name)
 		tags[tag.Name] = tag
 	}
-	app.referenceSidebar(c, "标签", "标签树", nativeIcons["tag"], nativeReferenceNodes(names, ""), func(name string, item ui.Element) {
+	app.referenceSidebar(c, "标签", "标签树", nativeIcons["tag"], nativeReferenceNodes(names, "", ""), func(name string, item ui.Element) {
 		tag := tags[name]
 		item.ContextMenu(func(menu *ui.Menu) {
 			if menu.Item("删除标签…").Disabled(!app.writable).Chosen() {

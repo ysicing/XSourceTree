@@ -36,9 +36,6 @@ func (app *nativeApp) remoteSidebar(c *ui.Context) {
 			groups[remote] = append(groups[remote], name)
 		}
 	}
-	if len(groups) == 0 {
-		return
-	}
 	names := make([]string, 0, len(groups))
 	for name := range groups {
 		names = append(names, name)
@@ -48,10 +45,10 @@ func (app *nativeApp) remoteSidebar(c *ui.Context) {
 	for _, remote := range names {
 		nodes = append(nodes, &nativeRefNode{
 			name: remote, reference: remote, remote: true,
-			children: nativeReferenceNodes(groups[remote], remote+"/"),
+			children: nativeReferenceNodes(groups[remote], remote+"/", ""),
 		})
 	}
-	app.referenceSidebar(c, "远端", "远端分支树", nativeIcons["branch"], nodes, func(reference string, item ui.Element) {
+	app.referenceSidebar(c, "远端", "远端分支树", nativeIcons["cloud"], nodes, func(reference string, item ui.Element) {
 		_, name := remoteBranchParts(reference, app.repository.remotes)
 		if name == "HEAD" {
 			item.Tooltip(reference + " · 远端默认分支引用")

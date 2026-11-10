@@ -4,6 +4,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -21,6 +22,12 @@ func TestNativeReferenceDirectoryStateScopes(t *testing.T) {
 	)
 	app.repository.tags = []gitrepo.Tag{{Name: "a/b/c", Hash: app.repository.snapshot.Head}}
 	tester := ui.NewTester(app.view, 1320, 1000)
+	for _, label := range []string{"标签", "远端 origin", "远端 upstream"} {
+		if err := tester.Click(label); err != nil {
+			t.Fatal(err)
+		}
+		tester.Frame()
+	}
 	for _, label := range []string{"本地分支目录 a/b", "远端目录 origin/a/b", "标签目录 a/b"} {
 		if err := tester.Click(label); err != nil {
 			t.Fatal(err)
@@ -55,6 +62,12 @@ func TestNativeReferenceDirectoryStateScopes(t *testing.T) {
 	next.snapshot.Path += "-other"
 	app.repository = &next
 	tester.Frame()
+	for _, label := range []string{"标签", "远端 origin", "远端 upstream"} {
+		if err := tester.Click(label); err != nil {
+			t.Fatal(err)
+		}
+		tester.Frame()
+	}
 	for _, label := range []string{"本地分支目录 a/b", "远端目录 origin/a/b", "标签目录 a/b"} {
 		item, found := tester.Access(label)
 		if !found || !item.Expanded {
@@ -93,6 +106,12 @@ func TestNativeReferenceDirectories(t *testing.T) {
 	app.refresh()
 	finish()
 	tester := ui.NewTester(app.view, 1320, 1000)
+	for _, label := range []string{"标签", "远端 origin"} {
+		if err := tester.Click(label); err != nil {
+			t.Fatal(err)
+		}
+		tester.Frame()
+	}
 	for _, label := range []string{
 		"本地分支目录 a", "本地分支目录 a/b", "a/b/c", "a/b/d",
 		"远端 origin", "远端目录 origin/a", "远端目录 origin/a/b", "origin/a/b/c",
@@ -139,6 +158,12 @@ func TestNativeReferenceDirectories(t *testing.T) {
 	current, found := tester.AccessByRole(ui.RoleTreeItem, "a/b/c")
 	if !found || !current.Selected {
 		t.Fatal("当前分支未标记为选中")
+	}
+	if err := tester.Click("a/b/c"); err != nil {
+		t.Fatal(err)
+	}
+	if app.busy {
+		t.Fatal("分支与标签同名时，重复点击当前分支不应再次切换")
 	}
 	if err := tester.Click("origin/a/b/c"); err != nil {
 		t.Fatal(err)
@@ -190,5 +215,72 @@ func TestNativeReferenceDirectories(t *testing.T) {
 		saveNativeScreenshot(t, tester, directory, "native-reference-tree-light.png")
 		tester.SetDark(true)
 		saveNativeScreenshot(t, tester, directory, "native-reference-tree-dark.png")
+	}
+}
+
+func TestNativeSidebarSectionNavigation(t *testing.T) {
+	app, _, _ := nativeFixture(t)
+	app.repository.remotes = []gitrepo.RemoteConfig{{Name: "origin"}, {Name: "upstream"}}
+	for index := range 80 {
+		app.repository.tags = append(app.repository.tags, gitrepo.Tag{Name: fmt.Sprintf("v1.0.%d", index)})
+		app.repository.branches = append(app.repository.branches, gitrepo.Branch{
+			Name: fmt.Sprintf("origin/feature/task-%d", index), Remote: true,
+		})
+	}
+	tester := ui.NewTester(app.view, 1024, 680)
+	previousY := float32(0)
+	for _, label := range []string{"仓库工作区", "文件变更", "提交历史", "本地分支", "main", "标签", "远端", "远端 origin", "远端 upstream", "储藏", "返回仓库"} {
+		bounds, found := tester.Find(label)
+		if !found || bounds.Y < previousY || bounds.Y+bounds.H > 646 {
+			t.Fatalf("侧栏入口不可见或顺序错误: %s %+v", label, bounds)
+		}
+		previousY = bounds.Y
+	}
+	if _, found := tester.Find("v1.0.0"); found {
+		t.Fatal("大量标签默认展开挤占侧栏")
+	}
+	if err := tester.Click("本地分支"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Frame()
+	if _, found := tester.AccessByRole(ui.RoleTreeItem, "main"); found {
+		t.Fatal("分支分类未折叠")
+	}
+	section, found := tester.Access("本地分支")
+	if !found || section.Expanded {
+		t.Fatal("分类未向辅助功能报告折叠状态")
+	}
+	tester.Key(0, ui.KeyRight)
+	tester.Frame()
+	if _, found := tester.AccessByRole(ui.RoleTreeItem, "main"); !found {
+		t.Fatal("键盘无法重新展开分支分类")
+	}
+	if err := tester.Click("远端 origin"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Frame()
+	if err := tester.Click("远端"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Frame()
+	if err := tester.Click("远端"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Frame()
+	origin, found := tester.Access("远端 origin")
+	if !found || !origin.Expanded {
+		t.Fatal("折叠分类丢失了远端展开状态")
+	}
+	if app.dialog != nil || app.busy {
+		t.Fatal("展开分类触发了 Git 操作")
+	}
+	if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+		if err := tester.Click("远端 origin"); err != nil {
+			t.Fatal(err)
+		}
+		tester.Frame()
+		saveNativeScreenshot(t, tester, directory, "native-sidebar-layout-light.png")
+		tester.SetDark(true)
+		saveNativeScreenshot(t, tester, directory, "native-sidebar-layout-dark.png")
 	}
 }

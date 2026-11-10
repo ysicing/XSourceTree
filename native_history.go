@@ -323,7 +323,7 @@ func (app *nativeApp) historyFiles(c *ui.Context) {
 		if ui.List(c, app.commitList, len(app.commitFiles), func(index int) {
 			file := app.commitFiles[index]
 			ui.Row(c).FillWidth().Height(30).Padding(0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Icon(c, nativeIcons["file"]).Size(14, 14)
+				nativeFileIcon(c, file.Path)
 				ui.Text(c, file.Path).FontSize(12).Grow(1).MinWidth(0).SingleLine().Tooltip(file.Path)
 				ui.Text(c, file.Status).FontSize(10).TextColor(c.Theme().TextMuted)
 			})

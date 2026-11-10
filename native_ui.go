@@ -503,7 +503,7 @@ func (app *nativeApp) changesPanel(c *ui.Context) {
 						color = c.Theme().Danger
 					}
 					if listRow(c, file.Path, app.selectedFile == file.Path && app.staged == staged).Grow(1).Tooltip(file.Path).Children(func() {
-						ui.Icon(c, nativeIcons["file"]).FontSize(14).TextColor(c.Theme().TextMuted)
+						nativeFileIcon(c, file.Path)
 						ui.Text(c, filepath.Base(file.Path)).Grow(1).MinWidth(0).MaxLines(1)
 						if directory := filepath.Dir(file.Path); directory != "." {
 							ui.Text(c, directory).FontSize(11).MaxWidth(90).MaxLines(1).TextColor(c.Theme().TextMuted)

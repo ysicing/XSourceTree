@@ -1,6 +1,7 @@
 import { createHash, createPublicKey, verify } from "node:crypto";
-import { mkdir, mkdtemp, readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { spawn, spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -60,6 +61,44 @@ export async function releasePlan(root, directory = "build") {
     feeds.push({ ...artifact(manifestName, manifestPath, manifestData), version });
   }
   return { version, artifacts, feeds };
+}
+
+export async function verifyAppleRelease(root, directory, plan, run = spawnSync) {
+  const { macos } = JSON.parse(await readFile(resolve(root, "release.config.json"), "utf8"));
+  if (!/^[A-Z0-9]{10}$/.test(macos?.teamID ?? "")) throw new Error("发布配置缺少有效的 Apple 团队 ID");
+  const checked = (program, args) => {
+    const result = run(program, args, { encoding: "utf8", timeout: 120_000, maxBuffer: 1024 * 1024 });
+    if (result.error || result.status !== 0) {
+      throw new Error(`Apple 发布校验失败（${program} ${args.join(" ")}）：${result.error?.message ?? result.stderr ?? result.stdout}`);
+    }
+    return `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+  };
+  const temporary = await mkdtemp(resolve(tmpdir(), "xsourcetree-signing-"));
+  try {
+    for (const arch of ["arm64", "amd64"]) {
+      const folder = resolve(root, directory, `darwin-${arch}`);
+      const extracted = resolve(temporary, arch);
+      await mkdir(extracted);
+      checked("tar", ["-xzf", resolve(folder, `xsourcetree-${plan.version}-darwin-${arch}.tar.gz`), "-C", extracted]);
+      const app = resolve(extracted, "XSourceTree.app");
+      const dmg = resolve(folder, `xsourcetree-${plan.version}-${arch}.dmg`);
+      for (const artifact of [app, dmg]) {
+        checked("codesign", ["--verify", "--deep", "--strict", artifact]);
+        const signature = checked("codesign", ["--display", "--verbose=4", artifact]);
+        if (!/^Authority=Developer ID Application:/m.test(signature) ||
+            !signature.split(/\r?\n/).includes(`TeamIdentifier=${macos.teamID}`) ||
+            (artifact === app && !/flags=.*\bruntime\b/.test(signature))) {
+          throw new Error(`${artifact} 必须使用指定团队的 Developer ID 签名，应用须启用 Hardened Runtime`);
+        }
+        checked("xcrun", ["stapler", "validate", artifact]);
+        checked("spctl", artifact === app
+          ? ["--assess", "--type", "execute", artifact]
+          : ["--assess", "--type", "open", "--context", "context:primary-signature", artifact]);
+      }
+    }
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
 }
 
 async function command(args, hashOutput = false) {
@@ -175,14 +214,18 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       directory = await mkdtemp(resolve(root, "build/release-"));
       const build = spawnSync("bun", ["run", "build", "--", "-platform", "darwin/arm64,darwin/amd64", "-o", directory], {
         cwd: root, stdio: "inherit",
-        env: { ...process.env, GOMAXPROCS: "1", GOFLAGS: `${process.env.GOFLAGS ?? ""} -p=1`.trim() },
+        env: {
+          ...process.env, XSOURCETREE_RELEASE: "1", GOMAXPROCS: "1",
+          GOFLAGS: `${process.env.GOFLAGS ?? ""} -p=1`.trim(),
+        },
       });
       if (build.error || build.status !== 0) throw new Error("发布构建失败，未上传");
       console.log(`发布产物：${directory}`);
     }
     const plan = await releasePlan(root, directory);
+    await verifyAppleRelease(root, directory, plan);
     if (args.includes("--dry-run")) {
-      console.log(`已校验 ${plan.version} 的双架构签名与安装包；将先上传并回读以下对象，再发布更新清单：`);
+      console.log(`已校验 ${plan.version} 的双架构更新签名、Developer ID、公证与 Gatekeeper；将先上传并回读以下对象，再发布更新清单：`);
       console.log([...plan.artifacts, ...plan.feeds].map((file) => file.object).join("\n"));
     } else {
       await publish(plan);

@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { publish, releasePlan } from "./publish-release.mjs";
+import { publish, releasePlan, verifyAppleRelease } from "./publish-release.mjs";
 
 async function fixture(run) {
   const root = await mkdtemp(join(tmpdir(), "xsourcetree-publish-"));
@@ -14,6 +14,7 @@ async function fixture(run) {
     await writeFile(join(root, "release.config.json"), JSON.stringify({
       downloadBase: base, storageTarget: "test/apps/XSourceTree",
       publicKey: publicKey.export({ type: "spki", format: "der" }).subarray(-32).toString("base64"),
+      macos: { teamID: "TEAM123456" },
     }));
     for (const arch of ["arm64", "amd64"]) {
       const target = `darwin-${arch}`;
@@ -110,5 +111,56 @@ test("identical artifacts are safe to retry without overwriting version objects"
     const fake = storage(plan, { existing: true });
     await publish(plan, fake);
     expect(fake.events.filter((args) => args.includes("cp"))).toHaveLength(2);
+  });
+});
+
+test("validates archived apps and disk images for both architectures", async () => {
+  await fixture(async (root) => {
+    const plan = await releasePlan(root);
+    const calls = [];
+    await verifyAppleRelease(root, "build", plan, (program, args) => {
+      calls.push([program, ...args]);
+      return {
+        status: 0,
+        stderr: "Authority=Developer ID Application: Test\nTeamIdentifier=TEAM123456\nCodeDirectory flags=0x10000(runtime)\n",
+      };
+    });
+    const archives = calls.filter(([program]) => program === "tar");
+    expect(archives).toHaveLength(2);
+    expect(archives[0][2]).toEndWith("xsourcetree-1.2.3-darwin-arm64.tar.gz");
+    expect(archives[1][2]).toEndWith("xsourcetree-1.2.3-darwin-amd64.tar.gz");
+    const applications = calls.filter(([program, operation]) => program === "codesign" && operation === "--verify");
+    expect(applications[0].at(-1)).toBe(join(archives[0].at(-1), "XSourceTree.app"));
+    expect(calls.filter(([program]) => program === "xcrun")).toHaveLength(4);
+    expect(calls.filter(([program]) => program === "spctl")).toHaveLength(4);
+    await expect(stat(archives[0].at(-1))).rejects.toThrow();
+  });
+});
+
+test("refuses ad-hoc, development, wrong-team and unhardened signatures", async () => {
+  await fixture(async (root) => {
+    const plan = await releasePlan(root);
+    for (const signature of [
+      "Signature=adhoc\nTeamIdentifier=not set\n",
+      "Authority=Apple Development: Test\nTeamIdentifier=TEAM123456\nflags=0x10000(runtime)\n",
+      "Authority=Developer ID Application: Test\nTeamIdentifier=OTHER12345\nflags=0x10000(runtime)\n",
+      "Authority=Developer ID Application: Test\nTeamIdentifier=TEAM123456\nflags=0x0(none)\n",
+    ]) {
+      await expect(verifyAppleRelease(root, "build", plan, () => ({
+        status: 0, stderr: signature,
+      }))).rejects.toThrow("Developer ID");
+    }
+  });
+});
+
+test("refuses failed extraction, signature, stapling and Gatekeeper checks", async () => {
+  await fixture(async (root) => {
+    const plan = await releasePlan(root);
+    for (const failing of ["tar", "codesign", "xcrun", "spctl"]) {
+      await expect(verifyAppleRelease(root, "build", plan, (program) => ({
+        status: program === failing ? 1 : 0,
+        stderr: "Authority=Developer ID Application: Test\nTeamIdentifier=TEAM123456\nflags=0x10000(runtime)\n",
+      }))).rejects.toThrow("Apple 发布校验失败");
+    }
   });
 });

@@ -8,7 +8,13 @@ export default defineConfig({
   identifier: "com.ysicing.xsourcetree",
   version,
   out: "build",
-  macos: { minimumSystemVersion: "12.0" },
+  macos: {
+    minimumSystemVersion: "12.0",
+    ...(process.env.XSOURCETREE_RELEASE === "1" ? {
+      signingIdentity: release.macos.signingIdentity,
+      notarize: { keychainProfile: release.macos.notaryProfile },
+    } : {}),
+  },
   updates: {
     publicKey: release.publicKey,
     url: release.downloadBase,

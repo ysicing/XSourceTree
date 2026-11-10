@@ -19,7 +19,7 @@ task dev
 task build
 ```
 
-产物位于 `build/darwin-arm64/`（Intel 机器为 `darwin-amd64`）。默认使用本地 ad-hoc 签名，Developer ID 签名与公证尚未配置。应用更新包另用 Ed25519 签名校验，不能替代 macOS 的代码签名与公证。
+产物位于 `build/darwin-arm64/`（Intel 机器为 `darwin-amd64`）。本地构建默认使用 ad-hoc 签名；正式发布由发布脚本启用 Developer ID 签名、Hardened Runtime、Apple 公证和票据装订。应用更新包另用 Ed25519 签名校验，不能替代 macOS 的代码签名与公证。
 
 应用图标源文件为 `resources/icon.png`，MyGo 构建时自动使用。透明底 Logo 位于 `assets/brand/logo.png`，macOS 图标文件位于 `assets/brand/XSourceTree.icns`。
 
@@ -79,6 +79,8 @@ Git 命令使用参数数组执行，路径按字面值处理。写操作限定�
 
 更新包与清单放在自有对象存储，沿用 XStats 的 `mc` 存储别名和 CDN，使用独立目录。[release.config.json](../release.config.json) 统一维护下载根地址 `https://c.ysicing.net/oss/apps/macOS/XSourceTree`、上传目标 `c-ip/oss/apps/macOS/XSourceTree` 和签名公钥。客户端直接通过 HTTPS 检查与下载，再交由 MyGo 验签安装。存储凭证仅由发布机器的 `mc` 管理。
 
+同一配置的 `macos` 保存 Developer ID 证书指纹、预期团队 ID 和公证钥匙串配置名。当前复用本机的 `XStats` 公证配置，凭据和证书私钥保存在钥匙串中，不写入仓库。证书续期后须更新指纹；更换发布机器时须安装对应证书私钥并配置同名公证凭据。可用 `security find-identity -v -p codesigning` 检查证书、`xcrun notarytool history --keychain-profile XStats` 检查公证权限。
+
 Apple Silicon 和 Intel 分别读取下载根地址下的 `update-darwin-arm64.json` 和 `update-darwin-amd64.json`；当前发布完整更新包，不生成增量包。发布脚本要求两个平台的清单与归档齐全，且版本为 `x.y.z` 稳定版。
 
 版本统一修改 [package.json](../package.json) 的 `version`，MyGo 构建配置、关于窗口与界面版本号均使用该版本；同时在 [CHANGELOG.md](../CHANGELOG.md) 添加对应 `## <version>` 节，构建时写入更新说明。
@@ -87,19 +89,14 @@ Apple Silicon 和 Intel 分别读取下载根地址下的 `update-darwin-arm64.j
 
 ### 构建与上传
 
-本地构建签名更新包（不上传）：
-
-```sh
-MYGO_UPDATER_PRIVATE_KEY="$(cat ~/.config/xsourcetree/update-keys/mygo-update.key)" \
-  task build
-```
-
-没有私钥的普通构建仍可检查和安装由维护者签名的更新，但不生成可发布的更新清单。发布机器需安装 `mc` 并配置 `c-ip` 别名。完成版本修改与验证后，可先构建双架构并仅在本地校验：
+构建双架构正式发布包，完成 Apple 公证和本地校验（不上传对象存储；公证会将安装包提交给 Apple）：
 
 ```sh
 MYGO_UPDATER_PRIVATE_KEY="$(cat ~/.config/xsourcetree/update-keys/mygo-update.key)" \
   task release -- --dry-run
 ```
+
+没有更新私钥的普通构建仍可检查和安装由维护者签名的更新，但不生成可发布的更新清单。发布机器需安装 `mc` 并配置 `c-ip` 别名，同时具备配置中的 Developer ID 私钥和公证凭据。`task dev`、`task build` 不启用正式签名和公证。
 
 该命令使用全新的 `build/release-*` 目录，避免复用旧产物，并输出本次目录。确认后发布这份已验证的产物，无需重新构建：
 
@@ -117,6 +114,8 @@ MYGO_UPDATER_PRIVATE_KEY="$(cat ~/.config/xsourcetree/update-keys/mygo-update.ke
 
 ### 发布校验与失败恢复
 
-发布脚本先验证两个架构的版本、URL、大小与 Ed25519 签名，再上传带版本号的 DMG、归档及 `<version>/update-darwin-*.json` 历史清单。版本对象通过条件 PUT 禁止覆盖；已存在且内容相同可重跑，内容不同必须提升版本。全部版本对象经 CDN 完整回读并验证 SHA-256 后，才更新两份固定更新清单并回读确认；固定清单设置 `Cache-Control: no-cache,max-age=0,must-revalidate`，CDN 需遵守该响应头，不能强制长缓存。
+发布脚本先验证两个架构的版本、URL、大小与 Ed25519 签名，再解开实际更新归档，检查其中的应用和 DMG：必须使用指定团队的 Developer ID Application 签名，应用须启用 Hardened Runtime，公证票据和 Gatekeeper 校验都必须通过。`release`、`publish` 和各自的 `--dry-run` 均执行这些检查；ad-hoc、开发证书、错误团队或未公证产物不能上传。
+
+通过校验后，上传带版本号的 DMG、归档及 `<version>/update-darwin-*.json` 历史清单。版本对象通过条件 PUT 禁止覆盖；已存在且内容相同可重跑，内容不同必须提升版本，包括从 ad-hoc 改为 Developer ID 重新签名的情况。全部版本对象经 CDN 完整回读并验证 SHA-256 后，才更新两份固定更新清单并回读确认；固定清单设置 `Cache-Control: no-cache,max-age=0,must-revalidate`，CDN 需遵守该响应头，不能强制长缓存。
 
 同一产品发布须串行执行，两份架构清单并非原子更新；中途失败可使用同一产物目录重跑，脚本拒绝覆盖新版本清单为旧版本。脚本不会修改存储权限、发布 GitHub Release、创建标签或提交推送 Git。

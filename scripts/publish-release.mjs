@@ -15,6 +15,9 @@ const sha256 = (data) => createHash("sha256").update(data).digest("hex");
 export async function releasePlan(root, directory = "build") {
   const { version } = JSON.parse(await readFile(resolve(root, "package.json"), "utf8"));
   const config = JSON.parse(await readFile(resolve(root, "release.config.json"), "utf8"));
+  if (!/^[\w-]+\/[\w.-]+$/.test(config.githubRepository ?? "")) {
+    throw new Error("发布配置缺少有效的 GitHub owner/repository");
+  }
   const base = new URL(config.downloadBase);
   if (!/^\d+\.\d+\.\d+$/.test(version) || base.protocol !== "https:" ||
       base.username || base.password || base.search || base.hash ||
@@ -32,6 +35,7 @@ export async function releasePlan(root, directory = "build") {
   });
   const artifacts = [];
   const feeds = [];
+  let notes;
   for (const arch of ["arm64", "amd64"]) {
     const target = `darwin-${arch}`;
     const folder = resolve(root, directory, target);
@@ -39,6 +43,7 @@ export async function releasePlan(root, directory = "build") {
     const manifestPath = resolve(folder, manifestName);
     const manifestData = await readFile(manifestPath);
     const manifest = JSON.parse(manifestData);
+    notes ??= manifest.notes;
     const archiveName = `xsourcetree-${version}-${target}.tar.gz`;
     const archivePath = resolve(folder, archiveName);
     const archive = await readFile(archivePath);
@@ -65,7 +70,7 @@ export async function releasePlan(root, directory = "build") {
     );
     feeds.push({ ...artifact(manifestName, manifestPath, manifestData), version });
   }
-  return { version, artifacts, feeds };
+  return { version, artifacts, feeds, github: { repository: config.githubRepository, notes } };
 }
 
 export async function verifyAppleRelease(root, directory, plan, run = spawnSync) {
@@ -201,6 +206,72 @@ export async function publish(plan, { run = command, remoteHash = onlineHash } =
   }
 }
 
+export async function publishGitHubRelease(plan, { run = spawnSync } = {}) {
+  const tag = `v${plan.version}`;
+  const repository = plan.github.repository;
+  const repoArgs = ["--repo", `github.com/${repository}`];
+  const invoke = (args, input) => {
+    const result = run("gh", args, {
+      encoding: "utf8", timeout: 300_000, maxBuffer: 4 * 1024 * 1024,
+      input, env: { ...process.env, GH_PROMPT_DISABLED: "1" },
+    });
+    if (result.error || result.status !== 0) {
+      throw new Error(`GitHub Release 操作失败：${result.error?.message ?? result.stderr ?? result.stdout}`);
+    }
+    return result.stdout;
+  };
+  const readRelease = () => {
+    const response = invoke([
+      "api", "--hostname", "github.com", "--paginate", "--jq",
+      `.[] | select(.tag_name == ${JSON.stringify(tag)}) | {tag_name, draft, prerelease, assets: [.assets[] | {name, state, digest}]}`,
+      `repos/${repository}/releases?per_page=100`,
+    ]);
+    if (!response.trim()) return null;
+    const current = JSON.parse(response);
+    if (current.tag_name !== tag || current.prerelease !== false ||
+        typeof current.draft !== "boolean" || !Array.isArray(current.assets)) {
+      throw new Error("GitHub Release 的版本或状态不符合稳定版发布要求");
+    }
+    return current;
+  };
+  const packages = plan.artifacts.filter((file) => file.name.endsWith(".dmg"));
+  const verifyAsset = (file, asset) => {
+    if (asset?.state === "starter") {
+      throw new Error(`GitHub 附件 ${file.name} 是上传失败留下的 starter 占位文件；请在 ${repository} 的 ${tag} Release 中核实并手动删除该占位附件，再用同一产物目录重试；脚本不会删除或覆盖附件`);
+    }
+    if (!asset || asset.state !== "uploaded" || asset.digest !== `sha256:${file.hash}`) {
+      throw new Error(`GitHub 附件 ${file.name} 的 SHA-256 不一致或无法验证，禁止覆盖，请核实后重试`);
+    }
+  };
+  invoke(["api", "--hostname", "github.com", `repos/${repository}/git/ref/tags/${tag}`]);
+  let current = readRelease();
+  const pending = packages.filter((file) => {
+    const existing = current?.assets.find((asset) => asset.name === file.name);
+    if (existing) verifyAsset(file, existing);
+    return !existing;
+  });
+  if (!current) {
+    invoke([
+      "release", "create", tag, ...repoArgs, "--verify-tag", "--draft",
+      "--title", `XSourceTree ${tag}`, "--notes-file", "-",
+    ], plan.github.notes);
+  }
+  for (const file of pending) {
+    invoke(["release", "upload", tag, file.path, ...repoArgs]);
+  }
+  current = readRelease();
+  for (const file of packages) {
+    verifyAsset(file, current?.assets.find((asset) => asset.name === file.name));
+  }
+  if (current.draft) invoke(["release", "edit", tag, ...repoArgs, "--draft=false", "--verify-tag"]);
+  current = readRelease();
+  if (!current || current.draft) throw new Error("GitHub Release 仍未公开发布，请使用同一产物重试");
+  for (const file of packages) {
+    verifyAsset(file, current.assets.find((asset) => asset.name === file.name));
+  }
+  return `https://github.com/${repository}/releases/tag/${tag}`;
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const args = process.argv.slice(2).filter((value) => value !== "--");
@@ -232,9 +303,17 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     if (args.includes("--dry-run")) {
       console.log(`已校验 ${plan.version} 的双架构更新签名、Developer ID、公证与 Gatekeeper；将先上传并回读以下对象，再发布更新清单：`);
       console.log([...plan.artifacts, ...plan.feeds].map((file) => file.object).join("\n"));
+      console.log(`随后发布 GitHub Release：${plan.github.repository} v${plan.version}，附加双架构 DMG：`);
+      console.log(plan.artifacts.filter((file) => file.name.endsWith(".dmg")).map((file) => file.name).join("\n"));
     } else {
       await publish(plan);
       console.log(`已发布 XSourceTree ${plan.version}，双架构 CDN 文件及更新清单回读通过`);
+      try {
+        const url = await publishGitHubRelease(plan);
+        console.log(`GitHub Release 与双架构安装包已发布并校验：${url}`);
+      } catch (error) {
+        throw new Error(`CDN 与更新清单已发布，GitHub Release 尚未完成；请保留同一产物目录重试：${error.message}`);
+      }
     }
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));

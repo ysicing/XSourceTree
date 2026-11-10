@@ -123,9 +123,9 @@ MYGO_UPDATER_PRIVATE_KEY="$(cat ~/.config/xsourcetree/update-keys/mygo-update.ke
   task release -- --dry-run
 ```
 
-没有更新私钥的普通构建仍可检查和安装由维护者签名的更新，但不生成可发布的更新清单。发布机器需安装 `mc` 并配置 `c-ip` 别名，同时具备配置中的 Developer ID 私钥和公证凭据。`task dev`、`task build` 不启用正式签名和公证。
+没有更新私钥的普通构建仍可检查和安装由维护者签名的更新，但不生成可发布的更新清单。发布机器需安装 `mc` 并配置 `c-ip` 别名，同时具备配置中的 Developer ID 私钥和公证凭据。还需安装 `gh`，通过 `gh auth status --hostname github.com` 确认发布账户具备 `release.config.json` 中 `githubRepository` 的 Release 写权限。`task dev`、`task build` 不启用正式签名和公证。
 
-该命令使用全新的 `build/release-*` 目录，避免复用旧产物，并输出本次目录。确认后发布这份已验证的产物，无需重新构建：
+该命令使用全新的 `build/release-*` 目录，避免复用旧产物，并输出本次目录。正式上传前，须提交并推送本版本源码和对应的 `v<version>` tag，确认 tag 指向产物对应的源码提交。确认后发布这份已验证的产物，无需重新构建：
 
 ```sh
 task publish -- --dir build/release-实际目录 --dry-run
@@ -145,4 +145,6 @@ MYGO_UPDATER_PRIVATE_KEY="$(cat ~/.config/xsourcetree/update-keys/mygo-update.ke
 
 通过校验后，上传带版本号的 DMG、归档及 `<version>/update-darwin-*.json` 历史清单。版本对象通过条件 PUT 禁止覆盖；已存在且内容相同可重跑，内容不同必须提升版本，包括从 ad-hoc 改为 Developer ID 重新签名的情况。全部版本对象经 CDN 完整回读并验证 SHA-256 后，才更新两份固定更新清单并回读确认；固定清单设置 `Cache-Control: no-cache,max-age=0,must-revalidate`，CDN 需遵守该响应头，不能强制长缓存。
 
-同一产品发布须串行执行，两份架构清单并非原子更新；中途失败可使用同一产物目录重跑，脚本拒绝覆盖新版本清单为旧版本。脚本不会修改存储权限、发布 GitHub Release、创建标签或提交推送 Git。
+CDN 与更新清单验证通过后，脚本自动创建或补齐 `githubRepository` 中对应 `v<version>` 的 GitHub Release，附加同一产物目录中的 `xsourcetree-<version>-arm64.dmg` 和 `xsourcetree-<version>-amd64.dmg`。新 Release 先创建草稿，使用更新清单内的版本说明，确认两个附件在 GitHub 上的 SHA-256 digest 与本地一致后才公开。已有同名且 SHA-256 相同的附件直接复用，缺失附件补传，内容不同或无法校验时停止，绝不覆盖。tag 本身没有附件，正式发版不能仅有 tag 或 GitHub 自动生成的源码压缩包。
+
+同一产品发布须串行执行，两份架构清单并非原子更新；中途失败可使用同一产物目录重跑，脚本拒绝覆盖新版本清单为旧版本。CDN 已生效但 GitHub 阶段失败会明确报告部分完成；保留原目录重跑，不重建同版本包、不回退清单。若上传失败留下同名 `starter` 占位附件，脚本会停止并提示：先在对应 Release 中核实并手动删除该占位附件，再用原产物目录重跑；脚本不自动删除附件，不允许删除已有完整附件来绕过内容冲突。`--dry-run` 仅列出 GitHub 发布计划，不验证远端 tag 或权限，不创建 Release、不上传附件。脚本不会修改存储权限、创建标签或提交推送 Git。

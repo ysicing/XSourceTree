@@ -405,6 +405,48 @@ try {
   await evaluate("document.querySelector('[data-action=\"refresh\"]').click()");
   await waitFor("!!document.querySelector('.clean-state') && !document.querySelector('#statusbar .spinner')", "区块测试恢复");
 
+  writeFileSync(join(cloned, "hunks.txt"), hunkChanged);
+  gitAt(cloned, "add", "hunks.txt");
+  writeFileSync(join(cloned, "hunks.txt"), hunkChanged + "discard me\n");
+  await evaluate("document.querySelector('[data-action=\"refresh\"]').click()");
+  await waitFor("document.querySelectorAll('[data-action=\"select-file\"]').length === 2 && !document.querySelector('#statusbar .spinner')", "部分暂存文件");
+  await evaluate("document.querySelector('[data-action=\"select-file\"][data-staged=\"false\"]').click()");
+  await waitFor("!!document.querySelector('[data-action=\"discard-file\"]:not(:disabled)')", "丢弃入口");
+  await evaluate("document.querySelector('[data-action=\"discard-file\"]').click()");
+  await evaluate("document.querySelector('[data-action=\"cancel-dialog\"]').click()");
+  assert.equal(readFileSync(join(cloned, "hunks.txt"), "utf8"), hunkChanged + "discard me\n");
+  await evaluate("document.querySelector('[data-action=\"discard-file\"]').click()");
+  writeFileSync(join(cloned, "hunks.txt"), hunkChanged + "external edit\n");
+  await evaluate("document.querySelector('#confirm-form').requestSubmit()");
+  await waitFor("document.querySelector('#alerts')?.textContent.includes('已改变') && !document.querySelector('#statusbar .spinner')", "丢弃拒绝外部编辑");
+  assert.equal(readFileSync(join(cloned, "hunks.txt"), "utf8"), hunkChanged + "external edit\n");
+  await waitFor("!!document.querySelector('[data-action=\"discard-file\"]:not(:disabled)')", "刷新后的丢弃入口");
+  await execute(`document.querySelector('[data-action="discard-file"]').click(); document.querySelector('#confirm-form').requestSubmit();`);
+  await waitFor("document.querySelectorAll('[data-action=\"stage\"]').length === 0 && !document.querySelector('#statusbar .spinner')", "丢弃未暂存修改");
+  assert.equal(readFileSync(join(cloned, "hunks.txt"), "utf8"), hunkChanged);
+  assert.equal(gitAt(cloned, "show", ":hunks.txt"), hunkChanged.trim(), "丢弃必须保留暂存区");
+  gitAt(cloned, "commit", "-m", "discard fixture");
+  writeFileSync(join(cloned, "discard-untracked.txt"), "keep backup\n");
+  await evaluate("document.querySelector('[data-action=\"refresh\"]').click()");
+  await waitFor("document.querySelector('[data-action=\"discard-file\"]')?.textContent.includes('删除') && !document.querySelector('#statusbar .spinner')", "未跟踪文件删除入口");
+  await execute(`document.querySelector('[data-action="discard-file"]').click(); document.querySelector('#confirm-form').requestSubmit();`);
+  await waitFor("!!document.querySelector('.clean-state') && !document.querySelector('#statusbar .spinner')", "删除未跟踪文件");
+  assert(!existsSync(join(cloned, "discard-untracked.txt")));
+  assert.equal(await evaluate("document.querySelectorAll('[data-action=\"reveal-discard-backups\"]').length"), 1);
+
+  const largeBefore = "before line\n".repeat(220000);
+  const largeAfter = "after line!\n".repeat(220000);
+  writeFileSync(join(cloned, "discard-large.txt"), largeBefore);
+  gitAt(cloned, "add", "discard-large.txt");
+  gitAt(cloned, "commit", "-m", "large discard fixture");
+  writeFileSync(join(cloned, "discard-large.txt"), largeAfter);
+  await evaluate("document.querySelector('[data-action=\"refresh\"]').click()");
+  await waitFor("!!document.querySelector('.diff-error') && !document.querySelector('#statusbar .spinner')", "大文本差异超限");
+  assert.equal(await evaluate("document.querySelectorAll('[data-action=\"discard-file\"]:not(:disabled)').length"), 1, "差异超限不应隐藏丢弃入口");
+  await execute(`document.querySelector('[data-action="discard-file"]').click(); document.querySelector('#confirm-form').requestSubmit();`);
+  await waitFor("!!document.querySelector('.clean-state') && !document.querySelector('#statusbar .spinner')", "大文本丢弃");
+  assert.equal(readFileSync(join(cloned, "discard-large.txt"), "utf8"), largeBefore);
+
   writeFileSync(join(cloned, "history-one.txt"), "first history file\n");
   writeFileSync(join(cloned, "history-two.txt"), "second history file\n");
   gitAt(cloned, "add", "history-one.txt", "history-two.txt");

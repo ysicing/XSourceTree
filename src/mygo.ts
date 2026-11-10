@@ -51,6 +51,13 @@ export interface Diff {
   truncated: boolean;
 }
 
+export interface DiscardPreview {
+  token: string;
+  supported: boolean;
+  untracked: boolean;
+  reason: string;
+}
+
 export interface File {
   path: string;
   originalPath: string;
@@ -203,6 +210,12 @@ export const RepositoryService = {
   diff(path: string, file: string, staged: boolean): Promise<Diff> {
     return call("RepositoryService.Diff", path, file, staged);
   },
+  discard(path: string, file: string, token: string): Promise<string> {
+    return call("RepositoryService.Discard", path, file, token);
+  },
+  discardPreview(path: string, file: string): Promise<DiscardPreview> {
+    return call("RepositoryService.DiscardPreview", path, file);
+  },
   dropStash(path: string, hash: string): Promise<void> {
     return call("RepositoryService.DropStash", path, hash);
   },
@@ -250,6 +263,9 @@ export const RepositoryService = {
   },
   resolveConflict(path: string, file: string, token: string, choice: string, content: string): Promise<void> {
     return call("RepositoryService.ResolveConflict", path, file, token, choice, content);
+  },
+  revealDiscardBackups(): Promise<void> {
+    return call("RepositoryService.RevealDiscardBackups");
   },
   revealRepository(path: string): Promise<void> {
     return call("RepositoryService.RevealRepository", path);

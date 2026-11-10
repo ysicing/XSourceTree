@@ -1,5 +1,5 @@
 import "./style.css";
-import { RepositoryService as api, events, type Branch, type Commit, type CommitFile, type Conflict, type ConflictSide, type Diff, type File, type Library, type LocalRepository, type Patch, type ScanResult, type Snapshot, type Stash, type Tag } from "./mygo";
+import { RepositoryService as api, events, type Branch, type Commit, type CommitFile, type Conflict, type ConflictSide, type Diff, type DiscardPreview, type File, type Library, type LocalRepository, type Patch, type ScanResult, type Snapshot, type Stash, type Tag } from "./mygo";
 import { escapeHTML as escape, fileGroups, graphRows, parseDiff, type GraphRow } from "./presentation";
 import { icon } from "./icons";
 import { settleMutation } from "./mutations";
@@ -30,6 +30,7 @@ const state = {
   selection: null as Selection | null,
   diff: null as Diff | null,
   patch: null as Patch | null,
+  discard: null as DiscardPreview | null,
   selectedLines: new Set<number>(),
   diffLoading: false,
   diffError: "",
@@ -190,6 +191,7 @@ function renderToolbar(): void {
       ${button("merge", "合并", "merge", !repo.unborn && !repo.operation.kind && !repo.files.length ? "" : 'disabled title="请先提交或储藏变更"')}
       <span class="toolbar-separator"></span>
       <button class="small-button" data-action="reveal-repository" ${disabled()}>在 Finder 中显示</button>
+      <button class="small-button" data-action="reveal-discard-backups" ${disabled()}>恢复副本</button>
       <button class="icon-button" data-action="refresh" title="刷新（⌘R）" aria-label="刷新仓库" ${disabled()}>${icon("refresh")}</button>
     </div>` : `<div class="toolbar-context"><strong>开始使用</strong></div><span class="muted">XSourceTree</span>`;
 }
@@ -427,7 +429,9 @@ function renderDiffPanel(): string {
     ${state.commitFiles.map((file) => `<button data-action="select-commit-file" data-path="${escape(file.path)}" class="${selection.file === file.path ? "selected" : ""}" title="${escape(file.originalPath ? `${file.originalPath} → ${file.path}` : file.path)}"><span class="file-status">${file.status}</span>${escape(file.path)}</button>`).join("")}</div>` : "";
   const lineActions = state.patch?.supported && "path" in selection && !state.diff?.truncated && parseDiff(state.diff?.text ?? "").length <= 4000
     ? `<div class="line-actions"><button data-action="apply-lines" data-mutates ${state.busy || !state.selectedLines.size ? "disabled" : ""}>${selection.staged ? "取消暂存所选行" : "暂存所选行"}${state.selectedLines.size ? ` (${state.selectedLines.size})` : ""}</button><button data-action="clear-lines" ${state.busy || !state.selectedLines.size ? "disabled" : ""}>清除选择</button></div>` : "";
-  return `<div class="diff-heading">${icon("file", 16)}<strong title="${escape(title)}">${escape(title)}</strong><span>${subtitle}</span>${state.diff?.binary ? '<span class="badge">二进制</span>' : ""}${navigation}</div>${files}${state.commitFilesError ? `<div role="alert" class="diff-limit">${escape(state.commitFilesError)}</div>` : ""}${stashActions}${lineActions}${body}`;
+  const discardAction = state.discard && "path" in selection && !selection.staged && !state.diffLoading
+    ? `<button class="small-button danger-text" data-action="discard-file" data-mutates ${state.busy || !state.discard.supported ? "disabled" : ""} title="${escape(state.discard.reason)}">${state.discard.untracked ? "删除文件…" : "丢弃修改…"}</button>` : "";
+  return `<div class="diff-heading">${icon("file", 16)}<strong title="${escape(title)}">${escape(title)}</strong><span>${subtitle}</span>${state.diff?.binary ? '<span class="badge">二进制</span>' : ""}${discardAction}${navigation}</div>${files}${state.commitFilesError ? `<div role="alert" class="diff-limit">${escape(state.commitFilesError)}</div>` : ""}${stashActions}${lineActions}${body}`;
 }
 
 async function loadSelection(): Promise<void> {
@@ -436,6 +440,7 @@ async function loadSelection(): Promise<void> {
   const repo = state.repo;
   state.diff = null;
   state.patch = null;
+  state.discard = null;
   state.selectedLines.clear();
   state.commitFiles = [];
   state.commitFilesError = "";
@@ -460,6 +465,9 @@ async function loadSelection(): Promise<void> {
       const conflict = await api.conflict(repo.path, selection.path);
       if (version === selectionVersion) state.conflict = conflict;
     } else {
+      const discard = "path" in selection && !selection.staged
+        ? await api.discardPreview(repo.path, selection.path).catch(() => null) : null;
+      if (version === selectionVersion) state.discard = discard;
       const diff = "path" in selection ? await api.diff(repo.path, selection.path, selection.staged)
         : "stash" in selection ? await api.stashDiff(repo.path, selection.stash)
         : selection.file ? await api.commitFileDiff(repo.path, selection.hash, selection.file) : await api.commitDiff(repo.path, selection.hash);
@@ -778,7 +786,7 @@ function confirmAction(title: string, description: string, label: string, action
 }
 
 function confirmationTarget(): string {
-  return JSON.stringify([state.screen, state.libraryGroup, state.repo?.path, state.selection, state.repo?.operation.token, state.conflict?.token]);
+  return JSON.stringify([state.screen, state.libraryGroup, state.repo?.path, state.selection, state.repo?.operation.token, state.conflict?.token, state.discard?.token]);
 }
 
 function resolveConflict(choice: string): void {
@@ -834,6 +842,23 @@ document.addEventListener("click", (event) => {
     case "reveal-repository":
       void perform("正在打开 Finder…", async () => { await api.revealRepository(state.repo!.path); });
       break;
+    case "reveal-discard-backups":
+      void perform("正在打开恢复副本…", async () => { await api.revealDiscardBackups(); });
+      break;
+    case "discard-file": {
+      const selection = state.selection;
+      const preview = state.discard;
+      if (!selection || !("path" in selection) || selection.staged || !preview?.supported || state.diffLoading) break;
+      confirmAction(`${preview.untracked ? "删除" : "丢弃修改"}：${selection.path}？`,
+        preview.untracked ? "此未跟踪文件将从工作区删除。操作前会保存恢复副本，可从工具栏打开。"
+          : "将此文件恢复为暂存区版本，保留已暂存内容。操作前会保存恢复副本，可从工具栏打开。",
+        preview.untracked ? "删除文件" : "丢弃修改", () => {
+          void mutate("正在保存副本并丢弃修改…", async (path) => {
+            await api.discard(path, selection.path, preview.token);
+          }, "已丢弃未暂存修改，原内容已保存至恢复副本");
+        });
+      break;
+    }
     case "new-tag": showRefDialog("tag"); break;
     case "rename-branch": showRefDialog("rename", target.dataset.name!); break;
     case "delete-tag": {

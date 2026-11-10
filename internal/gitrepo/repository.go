@@ -395,6 +395,10 @@ func (repo *Repository) Remote(ctx context.Context, action string) error {
 	default:
 		return errors.New("不支持的远程操作")
 	}
+	return repo.runRemote(ctx, args...)
+}
+
+func (repo *Repository) runRemote(ctx context.Context, args ...string) error {
 	if os.Getenv("GIT_SSH_COMMAND") == "" && os.Getenv("GIT_SSH") == "" {
 		ssh, err := repo.git(ctx, "config", "--get", "core.sshCommand")
 		if err != nil && !exitCode(err, 1) {

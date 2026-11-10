@@ -1,5 +1,5 @@
 import "./style.css";
-import { RepositoryService as api, events, type Branch, type Commit, type CommitFile, type Conflict, type ConflictSide, type Diff, type DiscardPreview, type File, type Library, type LocalRepository, type Patch, type ScanResult, type Snapshot, type Stash, type Tag } from "./mygo";
+import { RepositoryService as api, events, type Branch, type Commit, type CommitFile, type Conflict, type ConflictSide, type Diff, type DiscardPreview, type File, type Library, type LocalRepository, type Patch, type RemoteConfig, type ScanResult, type Snapshot, type Stash, type Tag } from "./mygo";
 import { escapeHTML as escape, fileGroups, graphRows, parseDiff, type DiffRow, type GraphRow } from "./presentation";
 import { sideBySideRows, type DiffCell } from "./diff-layout";
 import { icon } from "./icons";
@@ -17,6 +17,8 @@ const state = {
   libraryGroup: "ALL",
   libraryQuery: "",
   branches: [] as Branch[],
+  remoteConfigs: [] as RemoteConfig[],
+  expandedRemotes: new Set<string>(),
   commits: [] as Commit[],
   commitFiles: [] as CommitFile[],
   commitFilesError: "",
@@ -153,11 +155,23 @@ function renderSidebar(): void {
           <button data-action="delete-branch" data-mutates data-name="${escape(branch.name)}" ${state.busy || branch.current ? "disabled" : ""}>删除已合并分支…</button>
           <button data-action="force-delete-branch" data-mutates data-name="${escape(branch.name)}" ${state.busy || branch.current ? "disabled" : ""}>强制删除…</button>
         </div></details></div>`).join("") || `<div class="branch-item current">${icon("branch", 15)}<span>${escape(repo.branch)}</span><span class="muted">未提交</span></div>`}</div>
+      <div class="sidebar-heading branch-heading"><span>远程</span><button class="icon-button" data-action="remote-settings" aria-label="远程设置" title="远程设置" ${disabled()}>${icon("more", 15)}</button></div>
+      <div class="remote-list">${state.remoteConfigs.map((remote) => {
+        const branches = state.branches.filter((branch) => branch.remote && remoteForBranch(branch.name)?.name === remote.name && !branch.name.endsWith("/HEAD"));
+        return `<details class="remote-group" data-remote="${escape(remote.name)}" ${state.expandedRemotes.has(remote.name) ? "open" : ""}>
+          <summary title="${escape(remote.urls.join("\n"))}"><span class="remote-caret">${icon("chevron", 12)}</span>${icon("cloud", 15)}<span>${escape(remote.name)}</span><span class="count">${branches.length}</span></summary>
+          ${branches.map((branch) => `<button class="branch-item remote-branch" data-action="checkout-remote" data-mutates data-name="${escape(branch.name)}" title="检出 ${escape(branch.name)}" ${disabled()}>${icon("branch", 14)}<span>${escape(branch.name.slice(remote.name.length + 1))}</span></button>`).join("") || '<div class="sidebar-empty">获取后显示远程分支</div>'}
+        </details>`;
+      }).join("") || `<button class="branch-item" data-action="add-remote" ${disabled()}>${icon("plus", 15)}<span>添加远程…</span></button>`}</div>
       <div class="sidebar-heading branch-heading"><span>标签</span><button class="icon-button" data-action="new-tag" data-mutates aria-label="新建标签" title="在选中提交或 HEAD 上新建标签" ${repo.unborn ? "disabled" : disabled()}>${icon("plus", 15)}</button></div>
       <div class="tag-list">${state.tags.map((tag) => `<div class="ref-row"><span class="tag-name" title="${escape(tag.name)} · ${tag.hash}">${escape(tag.name)}</span><button class="icon-button" data-action="delete-tag" data-mutates data-name="${escape(tag.name)}" aria-label="删除标签 ${escape(tag.name)}" ${disabled()}>${icon("minus", 14)}</button></div>`).join("")}</div>
       <div class="sidebar-bottom">${groups.staged.length ? `<span class="staged-dot"></span>${groups.staged.length} 个文件已暂存` : ""}</div>
     ` : ""}
   `;
+}
+
+function remoteForBranch(name: string): RemoteConfig | undefined {
+  return [...state.remoteConfigs].sort((left, right) => right.name.length - left.name.length).find((remote) => name.startsWith(`${remote.name}/`));
 }
 
 function renderGroupNavigation(id: string, name: string, count: number): string {
@@ -191,9 +205,10 @@ function renderToolbar(): void {
   document.querySelector("#toolbar")!.innerHTML = repo ? `
     <div class="toolbar-context"><strong>${escape(repo.name)}</strong><span class="branch-pill">${icon("branch", 13)}${escape(repo.branch)}</span></div>
     <div class="toolbar-actions">
-      ${button("fetch", "获取", "cloud", repo.remotes.length ? 'title="获取远程更新"' : 'disabled title="请先配置远程仓库"')}
-      ${button("pull", `拉取${repo.behind ? ` ${repo.behind}` : ""}`, "down", repo.upstream ? 'title="仅快进拉取"' : 'disabled title="请先在命令行设置上游分支"')}
-      ${button("push", `推送${repo.ahead ? ` ${repo.ahead}` : ""}`, "up", repo.upstream ? 'title="推送到当前上游分支"' : 'disabled title="请先在命令行设置上游分支"')}
+      ${button(repo.remotes.length ? "fetch" : "add-remote", repo.remotes.length ? "获取" : "添加远程", "cloud", 'title="获取远程更新或配置远程地址"')}
+      ${button("pull", `拉取${repo.behind ? ` ${repo.behind}` : ""}`, "down", repo.upstream ? 'title="仅快进拉取"' : 'disabled title="发布分支或检出远程分支后即可拉取"')}
+      ${button(repo.upstream ? "push" : "publish-branch", repo.upstream ? `推送${repo.ahead ? ` ${repo.ahead}` : ""}` : "发布分支", "up",
+        repo.upstream ? `title="推送到 ${escape(repo.upstream)}"` : repo.unborn ? 'disabled title="请先创建首次提交"' : repo.detached ? 'disabled title="请先切换到本地分支"' : repo.operation.kind ? 'disabled title="请先完成当前 Git 操作"' : 'title="推送当前分支并设置上游"')}
       ${button("new-stash", "储藏", "stash", repo.files.length && !repo.operation.kind && !repo.files.some((file) => file.conflict) ? "" : "disabled")}
       ${button("merge", "合并", "merge", !repo.unborn && !repo.operation.kind && !repo.files.length ? "" : 'disabled title="请先提交或储藏变更"')}
       <span class="toolbar-separator"></span>
@@ -555,15 +570,16 @@ function refresh(): Promise<void> {
 async function refreshRepository(): Promise<void> {
   const path = state.repo?.path;
   if (!path) return;
-  const [repo, branches, commits, stashes, tags] = await Promise.all([api.snapshot(path), api.branches(path),
+  const [repo, branches, commits, stashes, tags, remoteConfigs] = await Promise.all([api.snapshot(path), api.branches(path),
     state.historyFilter.query || state.historyFilter.path ? api.searchHistory(path, state.historyFilter.query, state.historyFilter.path, 0) : api.history(path, 0),
-    api.stashes(path), api.tags(path)]);
+    api.stashes(path), api.tags(path), api.remoteConfigs(path)]);
   if (state.repo?.path !== path) return;
   state.repo = repo;
   state.branches = branches;
   state.commits = commits;
   state.stashes = stashes;
   state.tags = tags;
+  state.remoteConfigs = remoteConfigs;
   state.hasMore = commits.length === 100;
   state.stale = false;
   state.library = await api.library();
@@ -778,6 +794,56 @@ function showDialog(contents: string, formID: string): void {
 
 const dialogButtons = (label: string, danger = false) => `<div class="dialog-actions"><button type="button" data-action="cancel-dialog">取消</button><button class="${danger ? "danger-button" : "primary"}" type="submit">${label}</button></div>`;
 
+function showRemoteSettings(): void {
+  showDialog(`<h2 id="dialog-title">远程设置</h2>
+    <div class="remote-settings-list">${state.remoteConfigs.map((remote) => `<div class="remote-setting">
+      <div class="remote-setting-address"><strong>${escape(remote.name)}</strong>${remote.urls.map((url) => `<code>${escape(url)}</code>`).join("")}
+        ${remote.pushURLs.join("\n") !== remote.urls.join("\n") ? `<span>推送至 ${escape(remote.pushURLs.join("、"))}</span>` : ""}</div>
+      <div class="remote-setting-actions"><button type="button" class="small-button" data-action="edit-remote" data-name="${escape(remote.name)}" ${remote.urls.length !== 1 ? 'disabled title="多个地址请使用命令行修改"' : ""}>编辑…</button>
+        <button type="button" class="small-button danger-text" data-action="remove-remote" data-name="${escape(remote.name)}">移除…</button></div>
+      </div>`).join("") || '<p>尚未配置远程仓库</p>'}</div>
+    <div class="dialog-actions"><button type="button" data-action="add-remote">添加远程…</button><button type="submit" class="primary">完成</button></div>`, "remote-settings-form");
+}
+
+function showRemoteDialog(remote?: RemoteConfig): void {
+  showDialog(`<h2 id="dialog-title">${remote ? "编辑远程" : "添加远程"}</h2>
+    <input type="hidden" name="token" value="${escape(remote?.token ?? "")}">
+    <label for="remote-name">名称</label><input id="remote-name" name="name" value="${escape(remote?.name ?? (state.remoteConfigs.some((item) => item.name === "origin") ? "" : "origin"))}" ${remote ? "readonly" : ""} required autocomplete="off" spellcheck="false">
+    <label for="remote-url">仓库地址</label><input id="remote-url" name="url" value="${escape(remote?.urls[0] ?? "")}" placeholder="https://… 或 git@…" required autocomplete="off" spellcheck="false">
+    ${remote && remote.pushURLs.join("\n") !== remote.urls.join("\n") ? `<p class="remote-dialog-note">独立推送地址或地址重写配置将保留。当前推送至 ${escape(remote.pushURLs.join("、"))}</p>` : ""}
+    ${dialogButtons(remote ? "保存" : "添加")}`, "remote-form");
+  if (remote) document.querySelector<HTMLInputElement>("#remote-url")?.focus();
+}
+
+function showPublishDialog(): void {
+  const repo = state.repo;
+  if (!repo || state.busy || state.stale || repo.unborn || repo.detached || repo.operation.kind) return;
+  if (!state.remoteConfigs.length) return showRemoteDialog();
+  const selected = state.remoteConfigs.find((remote) => remote.name === "origin") ?? state.remoteConfigs[0]!;
+  showDialog(`<h2 id="dialog-title">发布分支</h2>
+    <input type="hidden" name="branch" value="${escape(repo.branch)}"><input type="hidden" name="head" value="${escape(repo.head)}">
+    <label for="publish-remote">远程仓库</label><select id="publish-remote" name="remote">${state.remoteConfigs.map((remote) => `<option value="${escape(remote.name)}" data-token="${escape(remote.token)}" data-destination="${escape(remote.pushURLs.join("、"))}" ${remote.name === selected.name ? "selected" : ""}>${escape(remote.name)}</option>`).join("")}</select>
+    <p id="publish-destination" class="remote-dialog-note">${escape(selected.pushURLs.join("、"))}</p>
+    <label for="publish-name">远程分支名称</label><input id="publish-name" name="name" value="${escape(repo.branch)}" required autocomplete="off" spellcheck="false">
+    ${dialogButtons("发布并设置上游")}`, "publish-form");
+}
+
+function showCheckoutDialog(remoteBranch: string): void {
+  const tracked = state.branches.filter((branch) => !branch.remote && branch.upstream === remoteBranch);
+  if (tracked.length === 1) {
+    void mutate("正在切换分支…", (path) => api.switchBranch(path, tracked[0]!.name), "已切换到跟踪此远程分支的本地分支");
+    return;
+  }
+  const remote = remoteForBranch(remoteBranch);
+  if (!remote) return;
+  showDialog(`<h2 id="dialog-title">检出远程分支</h2>
+    <input type="hidden" name="remote-branch" value="${escape(remoteBranch)}">
+    <label for="checkout-source">远程分支</label><input id="checkout-source" value="${escape(remoteBranch)}" readonly>
+    <label for="checkout-name">本地分支名称</label><input id="checkout-name" name="name" value="${escape(remoteBranch.slice(remote.name.length + 1))}" required autocomplete="off" spellcheck="false">
+    ${dialogButtons("创建并切换")}`, "checkout-form");
+  document.querySelector<HTMLInputElement>("#checkout-name")?.focus();
+}
+
 function showStashDialog(): void {
   showDialog(`<h2 id="dialog-title">储藏变更</h2>
     <label for="stash-message">说明（可选）</label><input id="stash-message" name="message" autocomplete="off">
@@ -859,6 +925,23 @@ document.addEventListener("click", (event) => {
   }
   if (state.busy) return;
   switch (action) {
+    case "remote-settings": showRemoteSettings(); break;
+    case "add-remote": showRemoteDialog(); break;
+    case "edit-remote": {
+      const remote = state.remoteConfigs.find((item) => item.name === target.dataset.name);
+      if (remote) showRemoteDialog(remote);
+      break;
+    }
+    case "remove-remote": {
+      const remote = state.remoteConfigs.find((item) => item.name === target.dataset.name);
+      if (!remote) break;
+      confirmAction(`移除远程“${remote.name}”？`, "将移除远程配置及其远程跟踪引用，保留远端仓库、本地分支和文件。", "移除远程", () => {
+        void mutate("正在移除远程…", (path) => api.removeRemote(path, remote.name, remote.token), "远程已移除");
+      });
+      break;
+    }
+    case "publish-branch": showPublishDialog(); break;
+    case "checkout-remote": showCheckoutDialog(target.dataset.name!); break;
     case "reveal-repository":
       void perform("正在打开 Finder…", async () => { await api.revealRepository(state.repo!.path); });
       break;
@@ -1133,7 +1216,10 @@ document.addEventListener("input", (event) => {
 
 document.addEventListener("change", (event) => {
   const target = event.target as HTMLInputElement;
-  if (target.id === "file-sort") {
+  if (target.id === "publish-remote") {
+    const selected = (event.target as HTMLSelectElement).selectedOptions[0];
+    document.querySelector("#publish-destination")!.textContent = selected?.dataset.destination ?? "";
+  } else if (target.id === "file-sort") {
     state.fileSort = target.value === "name" ? "name" : "path";
     render();
   } else if (target.matches(".group-check, .file-check") && state.repo && !state.busy && !state.stale) {
@@ -1153,6 +1239,14 @@ document.addEventListener("change", (event) => {
     updateScanSelection();
   }
 });
+
+document.addEventListener("toggle", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLDetailsElement) || !target.isConnected || !target.matches(".remote-group")) return;
+  const name = target.dataset.remote!;
+  if (target.open) state.expandedRemotes.add(name);
+  else state.expandedRemotes.delete(name);
+}, true);
 
 function resizePanel(kind: string, value: number): void {
   const content = document.querySelector<HTMLElement>(".changes-content");
@@ -1207,6 +1301,30 @@ document.addEventListener("submit", (event) => {
   event.preventDefault();
   if (form.id === "commit-form") void commit();
   const data = new FormData(form);
+  if (form.id === "remote-settings-form") document.querySelector<HTMLDialogElement>("dialog[open]")?.close();
+  if (form.id === "remote-form" && !state.busy) {
+    const name = String(data.get("name") ?? "").trim();
+    const url = String(data.get("url") ?? "").trim();
+    if (!name || !url) return;
+    document.querySelector<HTMLDialogElement>("dialog[open]")?.close();
+    void mutate("正在保存远程…", (path) => api.saveRemote(path, name, url, String(data.get("token") ?? "")), "远程配置已保存");
+  }
+  if (form.id === "publish-form" && !state.busy) {
+    const remote = form.querySelector<HTMLSelectElement>("#publish-remote")?.selectedOptions[0];
+    const name = String(data.get("name") ?? "").trim();
+    if (!remote || !name) return;
+    document.querySelector<HTMLDialogElement>("dialog[open]")?.close();
+    void mutate("正在发布分支…", (path) => api.publishBranch(path, {
+      remote: remote.value, token: remote.dataset.token ?? "", name,
+      branch: String(data.get("branch") ?? ""), head: String(data.get("head") ?? ""),
+    }), "分支已发布并设置上游");
+  }
+  if (form.id === "checkout-form" && !state.busy) {
+    const name = String(data.get("name") ?? "").trim();
+    if (!name) return;
+    document.querySelector<HTMLDialogElement>("dialog[open]")?.close();
+    void mutate("正在检出远程分支…", (path) => api.checkoutRemote(path, String(data.get("remote-branch") ?? ""), name), "已创建本地跟踪分支");
+  }
   if (form.id === "history-search-form") {
     state.historyQuery = String(data.get("query") ?? "");
     state.historyPath = String(data.get("path") ?? "");

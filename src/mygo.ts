@@ -104,9 +104,24 @@ export interface PatchHunk {
   header: string;
 }
 
+export interface PublishBranchRequest {
+  remote: string;
+  token: string;
+  name: string;
+  branch: string;
+  head: string;
+}
+
 export interface Recent {
   name: string;
   path: string;
+}
+
+export interface RemoteConfig {
+  name: string;
+  urls: string[];
+  pushURLs: string[];
+  token: string;
 }
 
 export interface ScanResult {
@@ -164,6 +179,9 @@ export const RepositoryService = {
   },
   cancelScan(): Promise<void> {
     return call("RepositoryService.CancelScan");
+  },
+  checkoutRemote(path: string, remoteBranch: string, name: string): Promise<void> {
+    return call("RepositoryService.CheckoutRemote", path, remoteBranch, name);
   },
   choose(): Promise<Snapshot | null> {
     return call("RepositoryService.Choose");
@@ -240,6 +258,9 @@ export const RepositoryService = {
   patch(path: string, file: string, staged: boolean): Promise<Patch> {
     return call("RepositoryService.Patch", path, file, staged);
   },
+  publishBranch(path: string, request: PublishBranchRequest): Promise<void> {
+    return call("RepositoryService.PublishBranch", path, request);
+  },
   recent(): Promise<Recent[]> {
     return call("RepositoryService.Recent");
   },
@@ -249,8 +270,14 @@ export const RepositoryService = {
   remote(path: string, action: string): Promise<void> {
     return call("RepositoryService.Remote", path, action);
   },
+  remoteConfigs(path: string): Promise<RemoteConfig[]> {
+    return call("RepositoryService.RemoteConfigs", path);
+  },
   removeGroup(id: string): Promise<Library> {
     return call("RepositoryService.RemoveGroup", id);
+  },
+  removeRemote(path: string, name: string, token: string): Promise<void> {
+    return call("RepositoryService.RemoveRemote", path, name, token);
   },
   removeRepository(path: string): Promise<Library> {
     return call("RepositoryService.RemoveRepository", path);
@@ -269,6 +296,9 @@ export const RepositoryService = {
   },
   revealRepository(path: string): Promise<void> {
     return call("RepositoryService.RevealRepository", path);
+  },
+  saveRemote(path: string, name: string, address: string, token: string): Promise<void> {
+    return call("RepositoryService.SaveRemote", path, name, address, token);
   },
   scan(root: string): Promise<ScanResult> {
     return call("RepositoryService.Scan", root);

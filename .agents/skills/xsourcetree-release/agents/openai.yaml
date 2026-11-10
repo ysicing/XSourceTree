@@ -1,0 +1,4 @@
+interface:
+  display_name: "XSourceTree 发版"
+  short_description: "本地允许 ad-hoc，正式发版完成 Apple 签名公证、tag、对象存储及 Homebrew 更新"
+  default_prompt: "使用 $xsourcetree-release 完成本次 XSourceTree 正式发版，使用 Apple 证书签名与公证，推送版本 tag，发布双架构包到自有对象存储并更新 ysicing/homebrew-tap。"

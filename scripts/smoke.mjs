@@ -121,7 +121,7 @@ async function clickRepository(path, action = "open") {
 }
 
 try {
-  await execute("window.__smokeReloading = true; setTimeout(() => location.reload(), 0);");
+  await execute("localStorage.removeItem('diff-layout'); window.__smokeReloading = true; setTimeout(() => location.reload(), 0);");
   await waitFor("!window.__smokeReloading && !!document.querySelector('#repo-search')", "本地仓库页");
   await observeErrors();
   assert.equal(await evaluate("document.querySelectorAll('[data-action=\"clone\"]').length"), 0);
@@ -387,7 +387,13 @@ try {
   writeFileSync(join(cloned, "hunks.txt"), hunkChanged);
   await evaluate("document.querySelector('[data-action=\"refresh\"]').click()");
   await waitFor("document.querySelectorAll('[data-action=\"select-line\"]').length === 4 && !document.querySelector('#statusbar .spinner')", "逐行选择入口");
-  await execute(`document.querySelector('[data-action="select-line"][data-line="1"]').click(); document.querySelector('[data-action="select-line"][data-line="3"]').click(); document.querySelector('[data-action="apply-lines"]').click();`);
+  await execute(`document.querySelector('[data-action="select-line"][data-line="1"]').click(); document.querySelector('[data-action="diff-split"]').click();`);
+  assert.equal(await evaluate("document.querySelector('[data-action=\"select-line\"][data-line=\"1\"]').checked"), true, "切换布局保留选择");
+  assert.equal(await evaluate("document.querySelectorAll('.split-row').length > 0"), true);
+  assert.equal(await evaluate("[...document.querySelectorAll('.split-row')].every(row => row.children[0].getBoundingClientRect().top === row.children[1].getBoundingClientRect().top)"), true, "两侧行垂直对齐");
+  await execute(`document.querySelector('[data-action="select-line"][data-line="3"]').click(); document.querySelector('[data-action="diff-unified"]').click();`);
+  assert.equal(await evaluate("document.querySelectorAll('[data-action=\"select-line\"]:checked').length"), 2);
+  await execute(`document.querySelector('[data-action="diff-split"]').click(); document.querySelector('[data-action="apply-lines"]').click();`);
   await waitFor("document.querySelectorAll('[data-action=\"unstage\"]').length === 1 && !document.querySelector('#statusbar .spinner')", "跨区块逐行暂存");
   assert.equal(gitAt(cloned, "show", ":hunks.txt"), hunkBase.replace("line 3\n", "line 3\nfirst hunk\n").replace("line 30\n", "line 30\nlast hunk\n").trim());
   assert.equal(readFileSync(join(cloned, "hunks.txt"), "utf8"), hunkChanged);
@@ -396,6 +402,14 @@ try {
   await execute(`document.querySelector('[data-action="select-line"][data-line="0"]').click(); document.querySelector('[data-action="select-line"][data-line="1"]').click(); document.querySelector('[data-action="apply-lines"]').click();`);
   await waitFor("document.querySelectorAll('[data-action=\"apply-hunk\"]').length === 2 && !document.querySelector('#statusbar .spinner')", "逐行取消暂存完成");
   assert.equal(gitAt(cloned, "diff", "--cached"), "");
+  assert.deepEqual(await evaluate("window.__smokeErrors"), []);
+  await execute("window.__smokeReloading = true; setTimeout(() => location.reload(), 0);");
+  await waitFor("!window.__smokeReloading && !!document.querySelector('#repo-search')", "重新载入验证差异布局");
+  await observeErrors();
+  await clickRepository(cloned);
+  await waitFor("document.querySelectorAll('[data-action=\"apply-hunk\"]').length === 2 && !document.querySelector('#statusbar .spinner')", "恢复仓库文件状态");
+  assert.equal(await evaluate("document.querySelector('[data-action=\"diff-split\"]')?.getAttribute('aria-pressed')"), "true", "并排布局持久化");
+  assert.equal(await evaluate("document.querySelectorAll('[data-action=\"select-line\"]:checked').length"), 0, "重新载入不能复用旧选择");
   writeFileSync(join(cloned, "hunks.txt"), hunkChanged + "outside edit\n");
   await evaluate("document.querySelector('[data-action=\"apply-hunk\"]').click()");
   await waitFor("document.querySelector('#alerts')?.textContent.includes('已改变') && !document.querySelector('#statusbar .spinner')", "过期补丁保护");
@@ -528,13 +542,25 @@ try {
   await waitFor("document.querySelector('.diff-error')?.textContent.includes('4 MiB') && document.querySelectorAll('.commit-files [data-path]').length === 2", "完整差异失败后保留文件列表");
   await evaluate("document.querySelector('[data-action=\"select-commit-file\"][data-path=\"small-history.txt\"]').click()");
   await waitFor("document.querySelector('.diff-code')?.textContent.includes('+small independent diff')", "大提交仍可查看单个小文件");
+  writeFileSync(join(cloned, "layout.txt"), "shared line\nold value\nold end");
+  gitAt(cloned, "add", "layout.txt");
+  gitAt(cloned, "commit", "-m", "layout fixture");
+  writeFileSync(join(cloned, "layout.txt"), `shared line\nnew value ${"long text ".repeat(30)}\nextra line\n<img src=x onerror="window.__splitXss=true">`);
+  await evaluate("document.querySelector('[data-action=\"changes\"]').click()");
+  await evaluate("document.querySelector('[data-action=\"refresh\"]').click()");
+  await waitFor("document.querySelectorAll('.diff-note').length === 2 && !document.querySelector('#statusbar .spinner')", "并排无换行标记");
+  assert.equal(await evaluate("document.querySelectorAll('.split-cell.absent').length > 0"), true, "增删数量不等时保留空侧");
+  assert.equal(await evaluate("document.querySelectorAll('.split-code img').length"), 0, "并排源码必须转义");
+  assert.equal(await evaluate("!!window.__splitXss"), false);
+  assert.equal(await evaluate("[...document.querySelectorAll('.split-row')].every(row => row.children[0].getBoundingClientRect().height === row.children[1].getBoundingClientRect().height)"), true, "长行换行保持两侧等高");
+  assert.equal(await evaluate("document.querySelector('.split-code').scrollWidth <= document.querySelector('.diff-scroll').clientWidth + 1"), true, "长行不能撑破并排容器");
   assert.deepEqual(await evaluate("window.__smokeErrors"), [], "桌面页面不应出现未处理的脚本错误");
 
   if (process.env.XSOURCETREE_SCREENSHOT) {
     const capture = await request("capture");
     writeFileSync(process.env.XSOURCETREE_SCREENSHOT, Buffer.from(capture.png, "base64"));
   }
-  console.log("PASS：真实 MyGo 本地仓库管理、暂存/提交/区块操作、储藏/冲突处理、历史搜索/翻页/单文件差异、分支和标签管理");
+  console.log("PASS：真实 MyGo 本地仓库管理、暂存/提交/逐块逐行操作、丢弃及外部编辑保护、并排 Diff、储藏/冲突处理、历史搜索/翻页/单文件差异、分支和标签管理");
   console.log(`测试仓库：${fixture}`);
   console.log(`克隆仓库：${cloned}`);
 } finally {

@@ -133,12 +133,39 @@ main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: colu
 .line-actions { display: flex; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--border); }
 .diff-line code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; padding: 0 14px; tab-size: 4; white-space: pre; }
 .line-number { font-family: "SFMono-Regular", Consolas, monospace; font-size: 10px; color: var(--line-number); min-width: 38px; width: 38px; text-align: right; padding-right: 8px; user-select: none; flex: none; }
-.line-number:nth-child(2) { border-right: 1px solid var(--border-soft); }
+.diff-line > .line-number + .line-number, .split-cell > .line-number { border-right: 1px solid var(--border-soft); }
 .diff-line.added { background: var(--diff-added); color: var(--diff-added-text); }
 .diff-line.removed { background: var(--diff-removed); color: var(--diff-removed-text); }
 .diff-line.hunk { background: var(--diff-hunk); color: var(--accent); margin: 9px 0 5px; }
 .diff-line.meta { color: var(--muted); }
 .diff-line.meta code { font-size: 10px; }
+.diff-panel { container-type: inline-size; }
+.diff-layout { display: inline-flex; flex: none; border: 1px solid var(--border); border-radius: 5px; overflow: hidden; }
+.diff-layout button { border: 0; border-radius: 0; padding: 3px 7px; font-size: 11px; white-space: nowrap; }
+.diff-layout button[aria-pressed="true"] { background: var(--accent); color: white; }
+.split-code { width: 100%; min-width: 0; }
+.split-row, .split-labels { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.split-labels { position: sticky; top: -10px; z-index: 1; background: var(--code-surface); border-bottom: 1px solid var(--border); color: var(--muted); font-size: 11px; line-height: 27px; }
+.split-labels > span { padding: 0 12px; }
+.split-cell { display: flex; min-width: 0; min-height: 23px; align-items: flex-start; }
+.split-cell:first-child, .split-labels > span:first-child { border-right: 1px solid var(--border); }
+.split-cell.added { background: var(--diff-added); color: var(--diff-added-text); }
+.split-cell.removed { background: var(--diff-removed); color: var(--diff-removed-text); }
+.split-cell.absent { background: var(--border-soft); }
+.split-cell .line-select { height: 23px; }
+.diff-sign { width: 12px; flex: 0 0 12px; font-family: monospace; white-space: pre; }
+.diff-text { min-width: 0; flex: 1; padding: 0 10px 0 2px; }
+.diff-text code { white-space: pre-wrap; overflow-wrap: anywhere; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; tab-size: 4; }
+.diff-note { display: block; color: var(--muted); font-size: 10px; }
+.split-code > .diff-line { white-space: pre-wrap; padding-right: 8px; }
+.split-code > .diff-line code { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
+.split-code > .diff-line .line-number, .split-code > .diff-line .line-select { display: none; }
+.split-code > .hunk { scroll-margin-top: 30px; }
+@container (max-width: 560px) {
+  .diff-heading { padding: 0 10px; gap: 5px; flex-wrap: wrap; height: auto; min-height: 49px; padding-block: 6px; }
+  .diff-heading > .diff-subtitle { display: none; }
+  .diff-heading strong { flex: 1; }
+}
 .diff-limit { color: var(--orange); padding: 15px 20px; font-size: 11px; position: sticky; left: 0; }
 .diff-error { padding: 24px; color: var(--red); white-space: pre-wrap; font-size: 12px; line-height: 1.6; overflow-y: auto; }
 .empty-state { flex: 1; min-height: 140px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px; color: var(--subtle); font-size: 12px; }

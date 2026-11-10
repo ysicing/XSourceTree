@@ -1,6 +1,7 @@
 import "./style.css";
 import { RepositoryService as api, events, type Branch, type Commit, type CommitFile, type Conflict, type ConflictSide, type Diff, type DiscardPreview, type File, type Library, type LocalRepository, type Patch, type ScanResult, type Snapshot, type Stash, type Tag } from "./mygo";
-import { escapeHTML as escape, fileGroups, graphRows, parseDiff, type GraphRow } from "./presentation";
+import { escapeHTML as escape, fileGroups, graphRows, parseDiff, type DiffRow, type GraphRow } from "./presentation";
+import { sideBySideRows, type DiffCell } from "./diff-layout";
 import { icon } from "./icons";
 import { settleMutation } from "./mutations";
 import { filterRepositories } from "./library";
@@ -32,6 +33,7 @@ const state = {
   patch: null as Patch | null,
   discard: null as DiscardPreview | null,
   selectedLines: new Set<number>(),
+  diffLayout: readDiffLayout(),
   diffLoading: false,
   diffError: "",
   busy: "",
@@ -57,6 +59,11 @@ function readSize(key: string, fallback: number, min: number, max: number): numb
     const value = raw === null ? fallback : Number(raw);
     return Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
   } catch { return fallback; }
+}
+
+function readDiffLayout(): "unified" | "split" {
+  try { return localStorage.getItem("diff-layout") === "split" ? "split" : "unified"; }
+  catch { return "unified"; }
 }
 
 app.innerHTML = `
@@ -413,14 +420,25 @@ function renderDiffPanel(): string {
   else {
     const rows = parseDiff(state.diff.text);
     const selectable = rows.length <= 4000 && !state.diff.truncated && state.patch?.supported && "path" in selection;
+    const split = state.diffLayout === "split" && !state.diff.binary;
     let hunk = -1;
-    body = `<div class="diff-scroll"><div class="diff-code" role="region" aria-label="统一差异" tabindex="0">${rows.slice(0, 4000).map((row) => {
+    const renderCheck = (row: DiffRow) => selectable ? `<span class="line-select">${row.changeID !== undefined ? `<input type="checkbox" data-action="select-line" data-line="${row.changeID}" aria-label="选择${row.kind === "added" ? "新增" : "删除"}行 ${row.after ?? row.before}" ${state.selectedLines.has(row.changeID) ? "checked" : ""} ${disabled()}>` : ""}</span>` : "";
+    const renderRow = (row: DiffRow) => {
       if (row.kind === "hunk") hunk++;
       const action = row.kind === "hunk" && rows.length <= 4000 && !state.diff!.truncated && state.patch?.supported && state.patch.hunks[hunk]?.header === row.content && "path" in selection
         ? `<button class="hunk-action" data-action="apply-hunk" data-hunk="${state.patch.hunks[hunk]!.id}" data-mutates ${disabled()}>${selection.staged ? "取消暂存此块" : "暂存此块"}</button>` : "";
-      const check = selectable ? `<span class="line-select">${row.changeID !== undefined ? `<input type="checkbox" data-action="select-line" data-line="${row.changeID}" aria-label="选择${row.kind === "added" ? "新增" : "删除"}行 ${row.after ?? row.before}" ${state.selectedLines.has(row.changeID) ? "checked" : ""} ${disabled()}>` : ""}</span>` : "";
-      return `<div class="diff-line ${row.kind}" ${row.kind === "hunk" ? 'tabindex="-1"' : ""}>${check}<span class="line-number" aria-hidden="true">${row.before ?? ""}</span><span class="line-number" aria-hidden="true">${row.after ?? ""}</span><code>${escape(row.content) || " "}</code>${action}</div>`;
-    }).join("")}</div>
+      return `<div class="diff-line ${row.kind}" ${row.kind === "hunk" ? 'tabindex="-1"' : ""}>${renderCheck(row)}<span class="line-number" aria-hidden="true">${row.before ?? ""}</span><span class="line-number" aria-hidden="true">${row.after ?? ""}</span><code>${escape(row.content) || " "}</code>${action}</div>`;
+    };
+    const renderCell = (cell: DiffCell | null, side: "before" | "after") => {
+      if (!cell) return '<div class="split-cell absent" aria-label="无对应行"></div>';
+      const row = cell.row;
+      return `<div class="split-cell ${row.kind}">${renderCheck(row)}<span class="line-number" aria-hidden="true">${row[side] ?? ""}</span><span class="diff-sign" aria-hidden="true">${row.content[0]}</span><div class="diff-text"><code>${escape(row.content.slice(1)) || " "}</code>${cell.note ? '<span class="diff-note">无末尾换行</span>' : ""}</div></div>`;
+    };
+    const visible = rows.slice(0, 4000);
+    const markup = split ? sideBySideRows(visible).map((row) => row.kind === "shared" ? renderRow(row.row)
+      : `<div class="split-row">${renderCell(row.before, "before")}${renderCell(row.after, "after")}</div>`).join("") : visible.map(renderRow).join("");
+    const labels = "path" in selection ? selection.staged ? ["HEAD", "暂存区"] : ["暂存区", "工作区"] : ["原版本", "新版本"];
+    body = `<div class="diff-scroll">${split ? `<div class="split-labels"><span>${labels[0]}</span><span>${labels[1]}</span></div>` : ""}<div class="diff-code ${split ? "split-code" : ""}" role="region" aria-label="${split ? "并排" : "统一"}差异" tabindex="0">${markup}</div>
       ${state.diff.truncated || rows.length > 4000 ? '<div class="diff-limit">预览已截断，请使用命令行查看完整差异。</div>' : ""}</div>`;
   }
   const navigation = state.diff?.text ? '<button class="small-button" data-action="previous-hunk" title="上一差异块">↑</button><button class="small-button" data-action="next-hunk" title="下一差异块">↓</button>' : "";
@@ -431,7 +449,9 @@ function renderDiffPanel(): string {
     ? `<div class="line-actions"><button data-action="apply-lines" data-mutates ${state.busy || !state.selectedLines.size ? "disabled" : ""}>${selection.staged ? "取消暂存所选行" : "暂存所选行"}${state.selectedLines.size ? ` (${state.selectedLines.size})` : ""}</button><button data-action="clear-lines" ${state.busy || !state.selectedLines.size ? "disabled" : ""}>清除选择</button></div>` : "";
   const discardAction = state.discard && "path" in selection && !selection.staged && !state.diffLoading
     ? `<button class="small-button danger-text" data-action="discard-file" data-mutates ${state.busy || !state.discard.supported ? "disabled" : ""} title="${escape(state.discard.reason)}">${state.discard.untracked ? "删除文件…" : "丢弃修改…"}</button>` : "";
-  return `<div class="diff-heading">${icon("file", 16)}<strong title="${escape(title)}">${escape(title)}</strong><span>${subtitle}</span>${state.diff?.binary ? '<span class="badge">二进制</span>' : ""}${discardAction}${navigation}</div>${files}${state.commitFilesError ? `<div role="alert" class="diff-limit">${escape(state.commitFilesError)}</div>` : ""}${stashActions}${lineActions}${body}`;
+  const layoutControl = state.diff?.text && !state.diff.binary
+    ? `<div class="diff-layout" role="group" aria-label="差异布局"><button data-action="diff-unified" aria-pressed="${state.diffLayout === "unified"}">统一</button><button data-action="diff-split" aria-pressed="${state.diffLayout === "split"}">并排</button></div>` : "";
+  return `<div class="diff-heading">${icon("file", 16)}<strong title="${escape(title)}">${escape(title)}</strong><span class="diff-subtitle">${subtitle}</span>${state.diff?.binary ? '<span class="badge">二进制</span>' : ""}${discardAction}${layoutControl}${navigation}</div>${files}${state.commitFilesError ? `<div role="alert" class="diff-limit">${escape(state.commitFilesError)}</div>` : ""}${stashActions}${lineActions}${body}`;
 }
 
 async function loadSelection(): Promise<void> {
@@ -1018,6 +1038,16 @@ document.addEventListener("click", (event) => {
         (path) => api.applyHunk(path, selection.path, selection.staged, patch.token, id));
       break;
     }
+    case "diff-unified":
+    case "diff-split": {
+      state.diffLayout = action === "diff-split" ? "split" : "unified";
+      try { localStorage.setItem("diff-layout", state.diffLayout); } catch {}
+      const top = document.querySelector(".diff-scroll")?.scrollTop ?? 0;
+      renderDiffOnly();
+      document.querySelector(".diff-scroll")?.scrollTo(0, top);
+      document.querySelector<HTMLElement>(`[data-action="${action}"]`)?.focus({ preventScroll: true });
+      break;
+    }
     case "select-line": {
       if (state.busy) break;
       const id = Number(target.dataset.line);
@@ -1047,7 +1077,7 @@ document.addEventListener("click", (event) => {
     case "previous-hunk":
     case "next-hunk": {
       const hunks = [...document.querySelectorAll<HTMLElement>(".diff-line.hunk")];
-      const top = document.querySelector(".diff-scroll")?.getBoundingClientRect().top ?? 0;
+      const top = (document.querySelector(".diff-scroll")?.getBoundingClientRect().top ?? 0) + (document.querySelector(".split-labels")?.getBoundingClientRect().height ?? 0);
       const candidate = action === "next-hunk" ? hunks.find((hunk) => hunk.getBoundingClientRect().top > top + 5)
         : hunks.reverse().find((hunk) => hunk.getBoundingClientRect().top < top - 5);
       candidate?.scrollIntoView({ block: "start" });

@@ -75,13 +75,14 @@ func awaitNativeAI(t *testing.T, entered <-chan struct{}) {
 }
 
 func TestNativeAIInlineConsentGenerateAndUndo(t *testing.T) {
-	app, path, finish, _, _ := nativeAIFixture(t, false)
+	app, path, finish, entered, _ := nativeAIFixture(t, false)
 	writeNativeFile(t, path, "hello.txt", "unstaged secret\n")
 	app.refresh()
 	finish()
 	app.selectFile("hello.txt", true)
 	finish()
 	app.prefs.AIConsent = false
+	app.prefs.AI.Model = "group/codex"
 	tester := ui.NewTester(app.view, 1320, 860)
 	if err := tester.Click("AI 生成"); err != nil {
 		t.Fatal(err)
@@ -124,6 +125,75 @@ func TestNativeAIInlineConsentGenerateAndUndo(t *testing.T) {
 	defer restored.cancel()
 	if !restored.prefs.AIConsent || restored.prefs.Drafts[path] != "" {
 		t.Fatal("AI 偏好和撤销结果未持久化")
+	}
+	awaitNativeAI(t, entered)
+	app.requestCommitAI()
+	if app.dialog != nil {
+		t.Fatal("已同意发送后不应重复确认")
+	}
+	finish()
+}
+
+func TestNativeAIFirstUseOpensGlobalSettings(t *testing.T) {
+	app, _, finish, entered, _ := nativeAIFixture(t, false)
+	app.prefs.AIConsent = false
+	mygo.App.SetPath(mygo.PathUserData, t.TempDir())
+	t.Cleanup(func() { mygo.App.SetPath(mygo.PathUserData, "") })
+	settingsTestUpdater.Do(func() {
+		mygo.Use(native.New(updater.Options{DisableAutomaticChecks: true, Language: "zh-Hans"}))
+	})
+	tester := ui.NewTester(app.view, 1024, 680)
+	if err := tester.Click("AI 生成"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Frame()
+	if app.dialog == nil || app.dialog.title != "应用设置" {
+		t.Fatal("未配置模型时应先打开全局 AI 设置")
+	}
+	if _, found := tester.Find("测试连接"); !found {
+		t.Fatal("首次使用应直接进入 AI 分类")
+	}
+	if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+		saveNativeScreenshot(t, tester, directory, "ai-first-use-light.png")
+		tester.SetDark(true)
+		saveNativeScreenshot(t, tester, directory, "ai-first-use-dark.png")
+		tester.SetSize(780, 480)
+		saveNativeScreenshot(t, tester, directory, "ai-first-use-narrow.png")
+		tester.SetSize(1024, 680)
+		tester.SetDark(false)
+	}
+	app.closeDialog(app.dialog)
+	if app.ai != nil || app.prefs.AIConsent {
+		t.Fatal("关闭设置不能授权或自动生成")
+	}
+	app.requestCommitAI()
+	tester.Frame()
+	if err := tester.Click("测试连接"); err != nil {
+		t.Fatal(err)
+	}
+	finish()
+	if app.prefs.AI.Model != "group/codex" || app.settingsError != "" {
+		t.Fatalf("连接测试应选中可用模型: %s", app.settingsError)
+	}
+	restored := newNativeApp(app.service, app.stateFile)
+	defer restored.cancel()
+	if restored.prefs.AI.Model != "group/codex" || restored.prefs.AIConsent {
+		t.Fatal("模型应全局保存，但配置不代表同意发送")
+	}
+	app.closeDialog(app.dialog)
+	app.requestCommitAI()
+	if app.dialog == nil || app.dialog.title != "使用 AI 生成提交说明？" {
+		t.Fatal("配置后仍需单独确认数据发送")
+	}
+	app.closeDialog(app.dialog)
+	app.requestCommitAI()
+	if app.dialog == nil || app.dialog.title != "使用 AI 生成提交说明？" || app.prefs.AIConsent || app.ai != nil {
+		t.Fatal("取消发送后再次点击应继续确认")
+	}
+	select {
+	case <-entered:
+		t.Fatal("配置和取消确认期间不能发送差异")
+	default:
 	}
 }
 

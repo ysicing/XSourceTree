@@ -70,6 +70,11 @@ func (app *nativeApp) requestCommitAI() {
 	if !app.canGenerateCommit() || app.dialog != nil {
 		return
 	}
+	if !app.prefs.AIConsent && strings.TrimSpace(app.prefs.AI.Model) == "" {
+		app.aiSettingsDialog()
+		app.dialog.detail = "先测试连接并选择模型，AI 配置对所有仓库生效。关闭设置后，再点击“AI 生成”。"
+		return
+	}
 	if app.prefs.AIConsent {
 		app.generateCommitAI()
 		return
@@ -77,7 +82,7 @@ func (app *nativeApp) requestCommitAI() {
 	path := app.repository.snapshot.Path
 	app.dialog = &nativeDialog{
 		title:  "使用 AI 生成提交说明？",
-		detail: "已暂存文件的路径和差异会通过本机 Magpie 发送给所选模型。Magpie 可能连接云端模型，请确认暂存内容适合发送。",
+		detail: "已暂存文件的路径和差异会通过本机 Magpie 发送给所选模型。Magpie 可能连接云端模型，请确认暂存内容适合发送。确认后将记住此授权，适用于所有仓库。",
 		action: "开始生成",
 		submit: func(_ *nativeDialog) {
 			app.dialog = nil

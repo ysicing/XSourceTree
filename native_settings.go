@@ -222,9 +222,6 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 				dialog.action = locales.Save()
 			}
 			ui.Column(c).Grow(1).MinHeight(0).MinWidth(0).Gap(20).Padding(4, 0).Children(func() {
-				if tab != 4 {
-					ui.Text(c, categories[tab]).FontSize(18).Bold()
-				}
 				ui.Scroll(c).Key(tab).Grow(1).MinHeight(0).FillWidth().Children(func() {
 					ui.Column(c).FillWidth().Gap(16).Padding(2, 4, 6).Children(func() {
 						switch tab {

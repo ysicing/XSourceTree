@@ -80,6 +80,101 @@ func writeNativeFile(t *testing.T, path, name, content string) {
 	}
 }
 
+func TestNativeTopToolbar(t *testing.T) {
+	app, _, _ := nativeFixture(t)
+	app.repository.snapshot.Name = strings.Repeat("长仓库名称", 12)
+	app.repository.snapshot.Branch = "feature/" + strings.Repeat("long-branch/", 12) + "toolbar"
+	for _, size := range [][2]int{{1024, 680}, {1320, 860}} {
+		for _, appearance := range []string{appearanceLight, appearanceDark} {
+			app.prefs.Appearance = appearance
+			for _, screen := range []string{"changes", "history", "stash", "library"} {
+				app.screen = screen
+				tester := ui.NewTester(app.view, size[0], size[1])
+				labels := []string{"获取", "拉取", "推送", "分支", "合并", "仓库设置", "更多", "刷新", "设置"}
+				if screen == "library" {
+					labels = []string{"添加仓库", "输入路径", "扫描文件夹", "刷新", "设置"}
+				}
+				for _, label := range labels {
+					role := ui.RoleButton
+					if label == "更多" {
+						role = ui.RoleMenuButton
+					}
+					info, found := tester.AccessByRole(role, label)
+					if !found || info.Offscreen || info.Bounds.W <= 0 || info.Bounds.H <= 0 ||
+						info.Bounds.Y < 0 || info.Bounds.Y+info.Bounds.H > 52 ||
+						info.Bounds.X+info.Bounds.W > float32(size[0]) {
+						t.Errorf("%v %s %s 顶部命令 %s 位置错误: %+v", size, appearance, screen, label, info)
+					}
+				}
+				if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" && size[0] == 1024 &&
+					(screen == "changes" || screen == "library") {
+					saveNativeScreenshot(t, tester, directory, "native-top-toolbar-"+screen+"-"+appearance+".png")
+				}
+			}
+		}
+	}
+}
+
+func TestNativeTopToolbarProtectsActions(t *testing.T) {
+	app, _, finish := nativeFixture(t)
+	tester := ui.NewTester(app.view, 1024, 680)
+	app.writable = false
+	tester.Frame()
+	for _, label := range []string{"获取", "拉取", "推送", "分支", "合并"} {
+		info, found := tester.AccessByRole(ui.RoleButton, label)
+		if !found || !info.Disabled {
+			t.Errorf("不可写仓库应禁用 %s", label)
+		}
+	}
+	for _, label := range []string{"仓库设置", "刷新", "设置"} {
+		info, found := tester.AccessByRole(ui.RoleButton, label)
+		if !found || info.Disabled {
+			t.Errorf("不可写仓库仍应允许查看 %s", label)
+		}
+	}
+	app.writable = true
+	app.busy = true
+	tester.Frame()
+	for _, label := range []string{"获取", "拉取", "推送", "分支", "合并", "仓库设置", "更多", "刷新", "设置"} {
+		role := ui.RoleButton
+		if label == "更多" {
+			role = ui.RoleMenuButton
+		}
+		info, found := tester.AccessByRole(role, label)
+		if !found || !info.Disabled {
+			t.Errorf("后台写操作期间应禁用 %s", label)
+		}
+	}
+	app.busy = false
+	tester.Frame()
+	if err := tester.Click("仓库设置"); err != nil {
+		t.Fatal(err)
+	}
+	if app.dialog == nil {
+		t.Fatal("顶部仓库设置入口未打开设置")
+	}
+	finish()
+	toolbar := ui.NewTester(app.toolbar, 800, 52)
+	for _, label := range []string{"获取", "仓库设置", "刷新"} {
+		info, found := toolbar.AccessByRole(ui.RoleButton, label)
+		if !found || !info.Disabled {
+			t.Errorf("弹窗打开期间应禁用 %s", label)
+		}
+	}
+	tester.Frame()
+	if err := tester.Click("关闭设置"); err != nil {
+		t.Fatal(err)
+	}
+	app.showLibrary()
+	tester.Frame()
+	if err := tester.Click("输入路径"); err != nil {
+		t.Fatal(err)
+	}
+	if app.dialog == nil || app.dialog.title != "添加本地仓库" {
+		t.Fatal("仓库首页顶部入口未打开添加表单")
+	}
+}
+
 func TestNativeStageCommitAndDraftRecovery(t *testing.T) {
 	app, path, finish := nativeFixture(t)
 	writeNativeFile(t, path, "hello.txt", "修改后\n")

@@ -59,6 +59,15 @@ func toolButton(c *ui.Context, label string, icon *ui.SVG) ui.Element {
 	})
 }
 
+func titlebarButton(c *ui.Context, label string, icon *ui.SVG) ui.Element {
+	return ui.Button(c, "").Label(label).Tooltip(label).Height(44).MinWidth(48).Padding(4, 8).Children(func() {
+		ui.Column(c).AlignItems(ui.Center).Gap(2).Children(func() {
+			ui.Icon(c, icon).FontSize(16)
+			ui.Text(c, label).FontSize(11).SingleLine()
+		})
+	})
+}
+
 func listRow(c *ui.Context, label string, selected bool) ui.Element {
 	row := ui.ButtonBase(c).Label(label).FillWidth().MinWidth(0).Padding(7, 10).Gap(8).Radius(c.Theme().Radius).AlignItems(ui.Center).AccessSelected(selected)
 	if selected {
@@ -77,25 +86,36 @@ func (app *nativeApp) view(c *ui.Context) {
 		c.SetTheme(ui.DarkTheme())
 	}
 	ui.Column(c).Fill().Background(c.Theme().Background).Children(func() {
-		ui.Row(c).Height(52).Padding(0, 18, 0, 100).AlignItems(ui.Center).Gap(12).DragWindow().Children(func() {
+		bar := c.TitleBar()
+		ui.Row(c).Height(52).Shrink(0).Padding(0, bar.Right+12, 0, bar.Left+12).AlignItems(ui.Center).Gap(12).DragWindow().Children(func() {
 			title := "本地仓库"
 			if app.repository != nil && app.screen != "library" {
 				title = app.repository.snapshot.Name
 			}
-			ui.Text(c, title).Bold().FontSize(14)
-			ui.Spacer(c)
+			ui.Column(c).Width(220).MinWidth(0).Shrink(1).Gap(2).Children(func() {
+				ui.Text(c, title).Bold().FontSize(14).MaxLines(1).FillWidth().Tooltip(title)
+				if app.repository != nil && app.screen != "library" {
+					snapshot := app.repository.snapshot
+					ui.Row(c).AlignItems(ui.Center).Gap(5).Children(func() {
+						ui.Icon(c, nativeIcons["branch"]).FontSize(12).TextColor(c.Theme().TextMuted)
+						ui.Text(c, snapshot.Branch).FontSize(11).TextColor(c.Theme().TextMuted).MaxLines(1).MinWidth(0).Shrink(1).Tooltip(snapshot.Branch)
+						if snapshot.Ahead > 0 || snapshot.Behind > 0 {
+							ui.Text(c, fmt.Sprintf("↑%d ↓%d", snapshot.Ahead, snapshot.Behind)).FontSize(11).TextColor(c.Theme().TextMuted)
+						}
+					})
+				}
+			})
+			app.toolbar(c)
 			ui.Toolbar(c, func() {
 				if iconButton(c, "设置", nativeIcons["settings"]).Tooltip("设置（⌘,）").Disabled(app.busy || app.dialog != nil).Clicked() {
 					app.settingsDialog()
 				}
-			}).Label("应用操作").Padding(0)
+			}).Label("应用操作").Padding(0).Shrink(0)
 		})
 		ui.Divider(c)
 		ui.Column(c).Grow(1).MinHeight(0).Disabled(app.busy).Children(func() {
 			ui.Split(c, &app.prefs.Sidebar, func() { app.sidebar(c) }, func() {
 				ui.Column(c).Fill().MinWidth(0).Children(func() {
-					app.toolbar(c)
-					ui.Divider(c)
 					switch app.screen {
 					case "library":
 						app.libraryView(c)
@@ -248,49 +268,43 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 }
 
 func (app *nativeApp) toolbar(c *ui.Context) {
+	disabled := app.busy || app.dialog != nil
 	ui.Toolbar(c, func() {
+		ui.Spacer(c)
 		if app.screen == "library" {
-			if ui.PrimaryButton(c, "添加仓库").Clicked() {
+			if ui.PrimaryButton(c, "添加仓库").Disabled(disabled).Clicked() {
 				app.chooseLocal()
 			}
-			if ui.Button(c, "输入路径").Clicked() {
+			if ui.Button(c, "输入路径").Disabled(disabled).Clicked() {
 				app.pathDialog()
 			}
-			if toolButton(c, "扫描文件夹", nativeIcons["folder"]).Clicked() {
+			if toolButton(c, "扫描文件夹", nativeIcons["folder"]).Disabled(disabled).Clicked() {
 				app.chooseScan()
 			}
 		} else if app.repository != nil {
-			ui.Row(c).AlignItems(ui.Center).Gap(6).Padding(0, 8, 0, 2).Children(func() {
-				ui.Icon(c, nativeIcons["branch"]).TextColor(c.Theme().TextMuted)
-				ui.Text(c, app.repository.snapshot.Branch).Bold().MaxLines(1).MaxWidth(140).Tooltip(app.repository.snapshot.Branch)
-				if app.repository.snapshot.Ahead > 0 || app.repository.snapshot.Behind > 0 {
-					ui.Text(c, fmt.Sprintf("↑%d ↓%d", app.repository.snapshot.Ahead, app.repository.snapshot.Behind)).TextColor(c.Theme().TextMuted).FontSize(12)
-				}
-			})
 			ui.Row(c).Children(func() {
 				for _, remote := range []struct{ id, title string }{{"fetch", "获取"}, {"pull", "拉取"}, {"push", "推送"}} {
 					remote := remote
-					if toolButton(c, remote.title, nativeIcons[remote.id]).Disabled(!app.writable).Clicked() {
+					if titlebarButton(c, remote.title, nativeIcons[remote.id]).Disabled(disabled || !app.writable).Clicked() {
 						app.remoteAction(remote.id)
 					}
 				}
 			})
-			if toolButton(c, "分支", nativeIcons["branch"]).Disabled(!app.writable).Clicked() {
+			if titlebarButton(c, "分支", nativeIcons["branch"]).Disabled(disabled || !app.writable).Clicked() {
 				app.branchDialog()
 			}
-			if toolButton(c, "合并", nativeIcons["merge"]).Disabled(!app.writable).Clicked() {
+			if titlebarButton(c, "合并", nativeIcons["merge"]).Disabled(disabled || !app.writable).Clicked() {
 				app.mergeDialog()
 			}
-			if toolButton(c, "仓库设置", nativeIcons["settings"]).Clicked() {
+			if titlebarButton(c, "仓库设置", nativeIcons["settings"]).Disabled(disabled).Clicked() {
 				app.repositorySettingsDialog()
 			}
-			iconButton(c, "更多", nativeIcons["more"]).Menu(app.repositoryActions)
+			iconButton(c, "更多", nativeIcons["more"]).Disabled(disabled).Menu(app.repositoryActions)
 		}
-		ui.Spacer(c)
-		if iconButton(c, "刷新", nativeIcons["refresh"]).Clicked() {
+		if iconButton(c, "刷新", nativeIcons["refresh"]).Disabled(disabled).Clicked() {
 			app.refresh()
 		}
-	}).Label("仓库操作").FillWidth().Height(48).Padding(6, 12)
+	}).Label("仓库操作").Grow(1).MinWidth(0).Height(52).Padding(0)
 }
 
 func (app *nativeApp) libraryView(c *ui.Context) {

@@ -231,6 +231,11 @@ func TestNativeSidebarSectionNavigation(t *testing.T) {
 	previousY := float32(0)
 	for _, label := range []string{"仓库工作区", "文件变更", "提交历史", "本地分支", "main", "标签", "远端", "远端 origin", "远端 upstream", "储藏", "返回仓库"} {
 		bounds, found := tester.Find(label)
+		if label == "main" {
+			var branch ui.AccessInfo
+			branch, found = tester.AccessByRole(ui.RoleTreeItem, label)
+			bounds = branch.Bounds
+		}
 		if !found || bounds.Y < previousY || bounds.Y+bounds.H > 646 {
 			t.Fatalf("侧栏入口不可见或顺序错误: %s %+v", label, bounds)
 		}

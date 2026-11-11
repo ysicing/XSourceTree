@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/ysicing/XSourceTree/internal/gitrepo"
+	"github.com/ysicing/XSourceTree/locales"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -62,11 +63,11 @@ func (app *nativeApp) filesFiltered() bool {
 
 func (app *nativeApp) fileControls(c *ui.Context) {
 	ui.Row(c).FillWidth().Padding(8, 12, 4, 12).Gap(6).AlignItems(ui.Center).Children(func() {
-		if ui.TextInput(c, &app.fileQuery).Label("筛选文件").Search().Placeholder("筛选文件").Grow(1).MinWidth(0).Changed() {
+		if ui.TextInput(c, &app.fileQuery).Label(locales.FileFilter()).Search().Placeholder(locales.FileFilter()).Grow(1).MinWidth(0).Changed() {
 			clear(app.fileCollapsed)
 		}
 		if app.filesFiltered() {
-			if iconButton(c, "清除筛选", nativeIcons["close"]).Clicked() {
+			if iconButton(c, locales.ClearFilter(), nativeIcons["close"]).Clicked() {
 				app.fileQuery, app.fileFilter = "", ""
 				clear(app.fileCollapsed)
 			}
@@ -74,16 +75,16 @@ func (app *nativeApp) fileControls(c *ui.Context) {
 	})
 	ui.Toolbar(c, func() {
 		filters := []struct{ value, label string }{
-			{"", "全部变更"}, {"conflicts", "冲突"}, {"untracked", "未跟踪"}, {"tracked", "已跟踪变更"},
+			{"", locales.AllChanges()}, {"conflicts", locales.Conflicts()}, {"untracked", locales.Untracked()}, {"tracked", locales.TrackedChanges()},
 		}
-		filterLabel := "全部变更"
+		filterLabel := locales.AllChanges()
 		for _, filter := range filters {
 			if app.fileFilter == filter.value {
 				filterLabel = filter.label
 			}
 		}
 		if app.fileFilter == "tracked" {
-			filterLabel = "已跟踪"
+			filterLabel = locales.Tracked()
 		}
 		ui.MenuButton(c, filterLabel, func(menu *ui.Menu) {
 			for _, filter := range filters {
@@ -92,44 +93,44 @@ func (app *nativeApp) fileControls(c *ui.Context) {
 					clear(app.fileCollapsed)
 				}
 			}
-		}).Label("文件筛选").FontSize(12)
-		orderLabel := "路径"
+		}).Label(locales.FileFiltering()).FontSize(12)
+		orderLabel := locales.Path()
 		switch app.prefs.FileSort {
 		case "name":
-			orderLabel = "文件名"
+			orderLabel = locales.FileName()
 		case "status":
-			orderLabel = "状态"
+			orderLabel = locales.Status()
 		}
 		if app.prefs.FileDescending {
 			orderLabel += " ↓"
 		}
 		ui.MenuButton(c, orderLabel, func(menu *ui.Menu) {
 			for _, order := range []struct{ value, label string }{
-				{"path", "按路径排序"}, {"name", "按文件名排序"}, {"status", "按文件状态排序"},
+				{"path", locales.SortByPath()}, {"name", locales.SortByName()}, {"status", locales.SortByStatus()},
 			} {
 				if menu.Item(order.label).Checked(app.prefs.FileSort == order.value).Chosen() {
 					app.prefs.FileSort = order.value
 				}
 			}
 			menu.Separator()
-			if menu.Item("倒序").Checked(app.prefs.FileDescending).Chosen() {
+			if menu.Item(locales.Descending()).Checked(app.prefs.FileDescending).Chosen() {
 				app.prefs.FileDescending = !app.prefs.FileDescending
 			}
-		}).Label("文件排序").FontSize(12)
+		}).Label(locales.FileSorting()).FontSize(12)
 		ui.Spacer(c)
-		viewLabel := "列表"
+		viewLabel := locales.List()
 		if app.prefs.FileTree {
-			viewLabel = "目录树"
+			viewLabel = locales.Tree()
 		}
 		ui.MenuButton(c, viewLabel, func(menu *ui.Menu) {
-			if menu.Item("平面列表").Checked(!app.prefs.FileTree).Chosen() {
+			if menu.Item(locales.FlatList()).Checked(!app.prefs.FileTree).Chosen() {
 				app.prefs.FileTree = false
 			}
-			if menu.Item("目录树").Checked(app.prefs.FileTree).Chosen() {
+			if menu.Item(locales.Tree()).Checked(app.prefs.FileTree).Chosen() {
 				app.prefs.FileTree = true
 			}
-		}).Label("文件视图").FontSize(12)
-	}).Label("文件显示选项").FillWidth().Padding(0, 8, 4, 8)
+		}).Label(locales.FileView()).FontSize(12)
+	}).Label(locales.FileDisplayOptions()).FillWidth().Padding(0, 8, 4, 8)
 }
 
 type nativeFileNode struct {
@@ -209,9 +210,9 @@ func (app *nativeApp) fileTree(c *ui.Context, tree ui.TreeParts, nodes []*native
 		ui.Column(c).Key("directory:" + key).FillWidth().Children(func() {
 			expanded := !app.fileCollapsed[key]
 			item := tree.Item(&expanded)
-			label := "未暂存目录 " + node.path
+			label := locales.UnstagedDirectory(node.path)
 			if staged {
-				label = "已暂存目录 " + node.path
+				label = locales.StagedDirectory(node.path)
 			}
 			row := item.Row.Label(label).Tooltip(node.path).Height(28).FillWidth().
 				Padding(0, 6).PaddingStart(6 + float32(depth)*16).Gap(6).AlignItems(ui.Center).Radius(5)
@@ -234,14 +235,14 @@ func (app *nativeApp) fileTree(c *ui.Context, tree ui.TreeParts, nodes []*native
 }
 
 func (app *nativeApp) changeFileRow(c *ui.Context, file gitrepo.File, staged bool, tree *ui.TreeParts, depth int) {
-	label := "未暂存文件"
+	label := locales.SelectUnstagedFile(file.Path)
 	if staged {
-		label = "已暂存文件"
+		label = locales.SelectStagedFile(file.Path)
 	}
 	key := fmt.Sprintf("%t:%s", staged, file.Path)
 	ui.Row(c).Key("file:" + key).FillWidth().PaddingStart(float32(depth) * 16).Gap(2).AlignItems(ui.Center).Children(func() {
 		checked := app.selectedFiles[key]
-		if ui.Checkbox(c, &checked, "").Label("选择 " + label + " " + file.Path).Disabled(file.Conflict || !app.writable).Changed() {
+		if ui.Checkbox(c, &checked, "").Label(label).Disabled(file.Conflict || !app.writable).Changed() {
 			app.selectedFiles[key] = checked
 		}
 		selected := app.selectedFile == file.Path && app.staged == staged

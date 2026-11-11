@@ -4,12 +4,14 @@
 package main
 
 import (
-	"fmt"
 	"slices"
 	"strings"
 	"time"
 
+	"github.com/ysicing/XSourceTree/locales"
+
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/plugins/updater"
 	"github.com/egoist/mygo/ui"
 )
@@ -193,7 +195,7 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 	app.settingsAutoDownloads = updater.AutomaticDownloads()
 	app.shortcutDraft = app.prefs.Shortcuts
 	app.settingsError = ""
-	dialog := &nativeDialog{title: "应用设置", width: 620, height: 520, dismiss: "取消"}
+	dialog := &nativeDialog{title: locales.ApplicationSettings(), titleText: locales.ApplicationSettings, width: 620, height: 520, dismiss: locales.Cancel()}
 	tab := initialTab
 	identity := &nativeIdentityEditor{}
 	ai := &nativeAISettings{manual: app.prefs.AI.Endpoint != ""}
@@ -204,9 +206,9 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 	dialog.submit = func(dialog *nativeDialog) { identity.save(app, dialog) }
 	dialog.canSubmit = func() bool { return tab == 1 && identity.dirty() }
 	dialog.body = func(c *ui.Context) {
-		categories := []string{"外观", "Git", "快捷键", "更新", "AI"}
+		categories := []string{locales.General(), "Git", locales.Shortcuts(), locales.Updates(), "AI"}
 		ui.Column(c).Fill().MinHeight(0).Gap(16).Children(func() {
-			if ui.Tabs(c, &tab, categories...).Label("应用设置分类").Changed() {
+			if ui.Tabs(c, &tab, categories...).Label(locales.SettingsCategories()).Changed() {
 				dialog.problem = ""
 				if tab != 4 {
 					ai.stop()
@@ -217,7 +219,7 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 			}
 			dialog.action = ""
 			if tab == 1 {
-				dialog.action = "保存"
+				dialog.action = locales.Save()
 			}
 			ui.Column(c).Grow(1).MinHeight(0).MinWidth(0).Gap(20).Padding(4, 0).Children(func() {
 				if tab != 4 {
@@ -227,53 +229,56 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 					ui.Column(c).FillWidth().Gap(16).Padding(2, 4, 6).Children(func() {
 						switch tab {
 						case 0:
-							app.appearancePreferences(c)
+							app.generalPreferences(c)
 						case 1:
-							ui.Text(c, "保存到全局 Git 配置，也会影响其他 Git 工具。").FontSize(12).TextColor(c.Theme().TextMuted)
+							ui.Text(c, locales.GlobalGitScope()).FontSize(12).TextColor(c.Theme().TextMuted)
 							identity.view(app, dialog, c)
 						case 2:
-							shortcutPreference(app, c, "本地仓库", &app.shortcutDraft.Library)
-							shortcutPreference(app, c, "添加本地仓库", &app.shortcutDraft.AddRepository)
-							shortcutPreference(app, c, "扫描文件夹", &app.shortcutDraft.Scan)
-							shortcutPreference(app, c, "刷新", &app.shortcutDraft.Refresh)
-							shortcutPreference(app, c, "提交", &app.shortcutDraft.Commit)
+							shortcutPreference(app, c, locales.LocalRepositories(), &app.shortcutDraft.Library)
+							shortcutPreference(app, c, locales.AddLocalRepository(), &app.shortcutDraft.AddRepository)
+							shortcutPreference(app, c, locales.ScanFolders(), &app.shortcutDraft.Scan)
+							shortcutPreference(app, c, locales.Refresh(), &app.shortcutDraft.Refresh)
+							shortcutPreference(app, c, locales.Commit(), &app.shortcutDraft.Commit)
 							ui.Row(c).FillWidth().Children(func() {
-								if ui.Button(c, "恢复默认快捷键").Clicked() {
+								if ui.Button(c, locales.RestoreShortcuts()).Clicked() {
 									app.shortcutDraft = defaultNativeShortcuts()
 									app.applyShortcutDraft()
 								}
 							})
 						case 3:
-							if ui.Checkbox(c, &app.settingsAutoChecks, "自动检查更新").Changed() {
+							if ui.Checkbox(c, &app.settingsAutoChecks, locales.AutomaticUpdates()).Changed() {
 								updater.SetAutomaticChecks(app.settingsAutoChecks)
 							}
 							ui.Row(c).FillWidth().Gap(12).AlignItems(ui.Center).Children(func() {
-								ui.Text(c, "检查频率").FontSize(13).Grow(1)
-								choice := ui.Select(c, &app.prefs.UpdateCheckFrequency, nativeUpdateCheckFrequencies).
-									Label("检查频率").Width(180).Disabled(!app.settingsAutoChecks)
+								ui.Text(c, locales.UpdateFrequency()).FontSize(13).Grow(1)
+								frequencies := []string{locales.Hourly(), locales.SixHourly(), locales.Daily(), locales.Weekly()}
+								selected := frequencies[slices.Index(nativeUpdateCheckFrequencies, app.prefs.UpdateCheckFrequency)]
+								choice := ui.Select(c, &selected, frequencies).
+									Label(locales.UpdateFrequency()).Width(180).Disabled(!app.settingsAutoChecks)
 								if choice.Changed() {
+									app.prefs.UpdateCheckFrequency = nativeUpdateCheckFrequencies[slices.Index(frequencies, selected)]
 									app.settingsError = ""
 									app.saveSettings()
 								}
 							})
-							ui.Text(c, "检查频率更改将在下次启动后生效。").FontSize(12).TextColor(c.Theme().TextMuted)
-							if ui.Checkbox(c, &app.settingsAutoDownloads, "自动下载更新（下次启动时安装）").Changed() {
+							ui.Text(c, locales.FrequencyNextLaunch()).FontSize(12).TextColor(c.Theme().TextMuted)
+							if ui.Checkbox(c, &app.settingsAutoDownloads, locales.AutomaticDownloads()).Changed() {
 								updater.SetAutomaticDownloads(app.settingsAutoDownloads)
 							}
 							lastCheck := updater.LastCheck()
-							lastCheckLabel := "尚未检查"
+							lastCheckLabel := locales.NeverChecked()
 							if !lastCheck.IsZero() {
 								lastCheckLabel = lastCheck.Local().Format("2006-01-02 15:04")
 							}
 							ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
-								ui.Text(c, "上次检查").FontSize(12).TextColor(c.Theme().TextMuted).Grow(1)
+								ui.Text(c, locales.LastCheck()).FontSize(12).TextColor(c.Theme().TextMuted).Grow(1)
 								ui.Text(c, lastCheckLabel).FontSize(12).TextColor(c.Theme().TextMuted)
 							})
 							if app.availableVersion != "" {
-								ui.Text(c, "新版本 v"+app.availableVersion).FontSize(13).TextColor(c.Theme().Accent)
+								ui.Text(c, locales.NewVersion(app.availableVersion)).FontSize(13).TextColor(c.Theme().Accent)
 							}
 							ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
-								if ui.Button(c, "立即检查更新").Clicked() {
+								if ui.Button(c, locales.CheckNow()).Clicked() {
 									updater.CheckForUpdates()
 								}
 							})
@@ -293,8 +298,9 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 
 func (app *nativeApp) appearancePreferences(c *ui.Context) {
 	appearances := []string{appearanceSystem, appearanceLight, appearanceDark}
+	labels := []string{locales.SystemAppearance(), locales.LightAppearance(), locales.DarkAppearance()}
 	selected := slices.Index(appearances, app.prefs.Appearance)
-	if ui.Segmented(c, &selected, appearances...).Label("外观模式").AlignSelf(ui.Start).Changed() {
+	if ui.Segmented(c, &selected, labels...).Label(locales.AppearanceMode()).AlignSelf(ui.Start).Changed() {
 		app.prefs.Appearance = appearances[selected]
 		app.settingsError = ""
 		app.applyAppearance()
@@ -302,12 +308,37 @@ func (app *nativeApp) appearancePreferences(c *ui.Context) {
 	}
 }
 
+var nativeLanguageTags = []string{"", "zh-Hans", "zh-Hant", "en"}
+
+func (app *nativeApp) generalPreferences(c *ui.Context) {
+	ui.Column(c).FillWidth().Gap(8).Children(func() {
+		ui.Text(c, locales.Appearance()).FontSize(13)
+		app.appearancePreferences(c)
+	})
+	ui.Divider(c)
+	ui.Row(c).FillWidth().Gap(16).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, locales.Language()).FontSize(13).Grow(1)
+		labels := []string{locales.AutomaticLanguage(), "简体中文", "繁體中文", "English"}
+		tag := app.chosenLanguage
+		if tag != "" {
+			tag = i18n.Match([]string{tag}, nativeLanguageTags[1:])
+		}
+		index := max(0, slices.Index(nativeLanguageTags, tag))
+		selected := labels[index]
+		c.Key("application-language")
+		if ui.Select(c, &selected, labels).Label(locales.Language()).Width(200).Changed() {
+			app.chosenLanguage = nativeLanguageTags[slices.Index(labels, selected)]
+			app.chooseLanguage(app.chosenLanguage)
+		}
+	})
+}
+
 func (app *nativeApp) applyAppearance() {
 	if app.win == nil {
 		return
 	}
 	if err := app.win.SetBackgroundColor(appearanceBackground(app.prefs.Appearance)); err != nil {
-		app.settingsError = fmt.Sprintf("无法应用外观：%v", err)
+		app.settingsError = locales.AppearanceError(err.Error())
 		return
 	}
 	app.win.SetWindowButtonsTheme(appearanceThemeSource(app.prefs.Appearance))
@@ -315,7 +346,7 @@ func (app *nativeApp) applyAppearance() {
 
 func (app *nativeApp) shortcutDraftChanged() {
 	if !shortcutsUnique(app.shortcutDraft) {
-		app.settingsError = "快捷键不能重复，请为每项选择不同组合。"
+		app.settingsError = locales.DuplicateShortcuts()
 		return
 	}
 	app.prefs.Shortcuts = app.shortcutDraft
@@ -330,14 +361,14 @@ func (app *nativeApp) applyShortcutDraft() {
 
 func (app *nativeApp) saveSettings() {
 	if err := app.savePreferences(); err != nil {
-		app.settingsError = fmt.Sprintf("无法保存设置：%v", err)
+		app.settingsError = locales.SaveSettingsError(err.Error())
 	}
 }
 
 func shortcutPreference(app *nativeApp, c *ui.Context, label string, value *string) {
 	ui.Row(c).FillWidth().Gap(12).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, label).FontSize(13).Grow(1)
-		choice := ui.Select(c, value, nativeShortcutChoices).Label(label + "快捷键").Width(180)
+		choice := ui.Select(c, value, nativeShortcutChoices).Label(locales.ShortcutLabel(label)).Width(180)
 		if choice.Changed() {
 			app.shortcutDraftChanged()
 		}

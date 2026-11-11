@@ -34,7 +34,7 @@ func TestNativeSettingsKeepsBoundsAcrossCategories(t *testing.T) {
 	tester := ui.NewTester(app.view, 1024, 680)
 	for _, size := range [][2]int{{1024, 680}, {780, 480}} {
 		tester.SetSize(size[0], size[1])
-		if err := tester.Click("外观"); err != nil {
+		if err := tester.Click("通用"); err != nil {
 			t.Fatal(err)
 		}
 		tester.Frame()
@@ -42,7 +42,7 @@ func TestNativeSettingsKeepsBoundsAcrossCategories(t *testing.T) {
 		if !found {
 			t.Fatal("未找到设置弹窗")
 		}
-		for _, category := range []string{"Git", "快捷键", "更新", "AI", "外观"} {
+		for _, category := range []string{"Git", "快捷键", "更新", "AI", "通用"} {
 			if err := tester.Click(category); err != nil {
 				t.Fatal(err)
 			}
@@ -98,7 +98,7 @@ func TestNativeApplicationSettingsCategories(t *testing.T) {
 	if _, found := tester.Find("完成"); found {
 		t.Fatal("自动保存的设置不应显示完成按钮")
 	}
-	for _, label := range []string{"外观", "Git", "快捷键", "更新", "AI"} {
+	for _, label := range []string{"通用", "Git", "快捷键", "更新", "AI"} {
 		if _, found := tester.Find(label); !found {
 			t.Fatalf("缺少设置分类: %s", label)
 		}
@@ -145,7 +145,7 @@ func TestNativeApplicationSettingsCategories(t *testing.T) {
 		saveNativeScreenshot(t, tester, directory, "settings-appearance-small.png")
 	}
 	tester.SetSize(1024, 680)
-	if err := tester.Click("外观"); err != nil {
+	if err := tester.Click("通用"); err != nil {
 		t.Fatal(err)
 	}
 	tester.Key(0, ui.KeyRight)

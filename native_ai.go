@@ -6,10 +6,11 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/ysicing/XSourceTree/internal/commitai"
+	"github.com/ysicing/XSourceTree/locales"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -80,9 +81,9 @@ func (app *nativeApp) requestCommitAI() {
 	}
 	path := app.repository.snapshot.Path
 	app.dialog = &nativeDialog{
-		title:  "使用 AI 生成提交说明？",
-		detail: "已暂存文件的路径和差异会通过本机 Magpie 发送给所选模型。Magpie 可能连接云端模型，请确认暂存内容适合发送。确认后将记住此授权，适用于所有仓库。",
-		action: "开始生成",
+		title:  locales.AiConsentTitle(),
+		detail: locales.AiConsentDetail(),
+		action: locales.StartGeneration(),
 		submit: func(_ *nativeDialog) {
 			app.dialog = nil
 			if app.repository == nil || app.repository.snapshot.Path != path {
@@ -91,7 +92,7 @@ func (app *nativeApp) requestCommitAI() {
 			app.prefs.AIConsent = true
 			if err := app.savePreferences(); err != nil {
 				app.prefs.AIConsent = false
-				app.problem = "无法保存 AI 偏好：" + err.Error()
+				app.problem = locales.SaveAiFailed(err.Error())
 				return
 			}
 			app.generateCommitAI()
@@ -139,7 +140,7 @@ func (app *nativeApp) generateCommitAI() {
 				return err
 			}
 			if current != token {
-				return errors.New("暂存区已变化，请重新生成")
+				return errors.New(locales.IndexChanged())
 			}
 			return nil
 		}()
@@ -162,10 +163,10 @@ func (app *nativeApp) generateCommitAI() {
 
 func commitAIError(err error) string {
 	if errors.Is(err, context.Canceled) {
-		return "已取消生成"
+		return locales.GenerationCancelled()
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		return "AI 请求超时，请重试"
+		return locales.AiTimeout()
 	}
 	return err.Error()
 }
@@ -181,7 +182,7 @@ func (app *nativeApp) applyCommitAI(state *nativeCommitAI) {
 	state.applied = true
 	state.revision = app.draftRevision
 	if err := app.savePreferences(); err != nil {
-		state.problem = "已填入提交说明，但保存草稿失败：" + err.Error()
+		state.problem = locales.GeneratedDraftSaveFailed(err.Error())
 	}
 }
 
@@ -210,9 +211,9 @@ func (app *nativeApp) adoptCommitAI() {
 				state.problem = commitAIError(err)
 			case current != state.token:
 				state.generated = ""
-				state.problem = "暂存区已变化，请重新生成"
+				state.problem = locales.IndexChanged()
 			case app.draftRevision != revision || app.prefs.Drafts[state.path] != draft:
-				state.problem = "草稿已编辑，请确认后再次采用建议"
+				state.problem = locales.DraftEdited()
 			default:
 				app.applyCommitAI(state)
 			}
@@ -229,26 +230,26 @@ func (app *nativeApp) undoCommitAI() {
 	app.draftRevision++
 	state.applied = false
 	if err := app.savePreferences(); err != nil {
-		state.problem = "已撤销生成，但保存草稿失败：" + err.Error()
+		state.problem = locales.UndoDraftSaveFailed(err.Error())
 	}
 }
 
 func (app *nativeApp) commitAIHeader(c *ui.Context) {
 	ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
-		ui.Text(c, "提交说明").FontSize(13).Grow(1)
+		ui.Text(c, locales.CommitMessage()).FontSize(13).Grow(1)
 		if app.ai != nil && app.ai.running {
-			ui.Text(c, "正在生成…").FontSize(12).TextColor(c.Theme().TextMuted)
-			if ui.Button(c, "取消生成").FontSize(12).Clicked() {
+			ui.Text(c, locales.Generating()).FontSize(12).TextColor(c.Theme().TextMuted)
+			if ui.Button(c, locales.CancelGeneration()).FontSize(12).Clicked() {
 				app.stopCommitAI()
 			}
 			return
 		}
-		label := "AI 生成"
+		label := locales.GenerateAi()
 		if app.ai != nil {
-			label = "重新生成"
+			label = locales.Regenerate()
 		}
 		if ui.Button(c, label).FontSize(12).Disabled(!app.canGenerateCommit()).
-			Tooltip("根据全部已暂存变更生成提交说明").Clicked() {
+			Tooltip(locales.GenerateTooltip()).Clicked() {
 			app.requestCommitAI()
 		}
 	})
@@ -261,7 +262,7 @@ func (app *nativeApp) commitAIResult(c *ui.Context) {
 	}
 	if state.problem != "" {
 		ui.Text(c, state.problem).FontSize(12).TextColor(c.Theme().Danger).MaxLines(3).Tooltip(state.problem)
-		if ui.Button(c, "AI 设置").FontSize(12).Clicked() {
+		if ui.Button(c, locales.AiSettings()).FontSize(12).Clicked() {
 			app.aiSettingsDialog()
 		}
 	}
@@ -270,7 +271,7 @@ func (app *nativeApp) commitAIResult(c *ui.Context) {
 	}
 	if state.applied {
 		ui.Row(c).FillWidth().Children(func() {
-			if ui.Button(c, "撤销生成").FontSize(12).
+			if ui.Button(c, locales.UndoGeneration()).FontSize(12).
 				Disabled(app.draftRevision != state.revision || app.prefs.Drafts[state.path] != state.generated).Clicked() {
 				app.undoCommitAI()
 			}
@@ -279,7 +280,7 @@ func (app *nativeApp) commitAIResult(c *ui.Context) {
 	}
 	ui.Text(c, state.generated).FontSize(12).MaxLines(3).Selectable()
 	ui.Row(c).FillWidth().Children(func() {
-		if ui.Button(c, "采用建议").FontSize(12).Disabled(!app.canGenerateCommit()).Clicked() {
+		if ui.Button(c, locales.UseSuggestion()).FontSize(12).Disabled(!app.canGenerateCommit()).Clicked() {
 			app.adoptCommitAI()
 		}
 	})
@@ -344,7 +345,7 @@ func (editor *nativeAISettings) check(app *nativeApp, dialog *nativeDialog) {
 			}
 			editor.models, editor.endpoint, editor.connected = models, endpoint, true
 			if len(models) == 0 {
-				editor.problem = "请先在 Magpie 中配置模型，再重新检测。"
+				editor.problem = locales.ConfigureMagpieModels()
 				return
 			}
 			model, err := commitai.SelectModel(models, app.prefs.AI.Model)
@@ -366,7 +367,7 @@ func (editor *nativeAISettings) reset() {
 
 func aiSettingsRow(c *ui.Context, label string, content func()) {
 	ui.Row(c).FillWidth().Gap(16).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, label).FontSize(13).Width(72).Shrink(0)
+		ui.Text(c, label).FontSize(13).Width(112).Shrink(0)
 		ui.Column(c).Grow(1).MinWidth(0).Children(content)
 	})
 }
@@ -374,19 +375,19 @@ func aiSettingsRow(c *ui.Context, label string, content func()) {
 func (editor *nativeAISettings) view(app *nativeApp, dialog *nativeDialog, c *ui.Context) {
 	ui.Column(c).FillWidth().Gap(20).Children(func() {
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "连接与模型").FontSize(13).Bold()
+			ui.Text(c, locales.ConnectionAndModel()).FontSize(13).Bold()
 			ui.Spacer(c)
-			ui.Text(c, "适用于所有仓库").FontSize(12).TextColor(c.Theme().TextMuted)
+			ui.Text(c, locales.AllRepositories()).FontSize(12).TextColor(c.Theme().TextMuted)
 		})
 		ui.Column(c).FillWidth().Gap(12).Children(func() {
-			aiSettingsRow(c, "连接方式", func() {
-				mode := "自动发现本机 Magpie"
+			aiSettingsRow(c, locales.ConnectionMethod(), func() {
+				mode := locales.DiscoverMagpie()
 				if editor.manual {
-					mode = "手动输入地址"
+					mode = locales.ManualAddress()
 				}
-				if ui.Select(c, &mode, []string{"自动发现本机 Magpie", "手动输入地址"}).
-					Label("连接方式").FillWidth().Disabled(editor.checking).Changed() {
-					editor.manual = mode == "手动输入地址"
+				if ui.Select(c, &mode, []string{locales.DiscoverMagpie(), locales.ManualAddress()}).
+					Label(locales.ConnectionMethod()).FillWidth().Disabled(editor.checking).Changed() {
+					editor.manual = mode == locales.ManualAddress()
 					editor.reset()
 					app.settingsError = ""
 					if !editor.manual {
@@ -396,8 +397,8 @@ func (editor *nativeAISettings) view(app *nativeApp, dialog *nativeDialog, c *ui
 				}
 			})
 			if editor.manual {
-				aiSettingsRow(c, "服务地址", func() {
-					if ui.TextInput(c, &app.prefs.AI.Endpoint).Label("Magpie 地址").
+				aiSettingsRow(c, locales.ServiceAddress(), func() {
+					if ui.TextInput(c, &app.prefs.AI.Endpoint).Label(locales.MagpieAddress()).
 						Placeholder("http://127.0.0.1:3425/v1").FillWidth().Disabled(editor.checking).Changed() {
 						editor.reset()
 						app.settingsError = ""
@@ -405,18 +406,18 @@ func (editor *nativeAISettings) view(app *nativeApp, dialog *nativeDialog, c *ui
 					}
 				})
 			}
-			aiSettingsRow(c, "连接状态", func() {
+			aiSettingsRow(c, locales.ConnectionStatus(), func() {
 				ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
-					status, label := "未连接", "连接"
+					status, label := locales.NotConnected(), locales.Connect()
 					color := c.Theme().TextMuted
 					switch {
 					case editor.checking:
-						status, label = "正在连接", "正在连接…"
+						status, label = locales.Connecting(), locales.ConnectingProgress()
 						ui.Spinner(c).Size(14, 14)
 					case editor.connected:
-						status, label = fmt.Sprintf("已连接 · %d 个模型", len(editor.models)), "重新检测"
+						status, label = locales.ConnectedModels(len(editor.models)), locales.Recheck()
 					case editor.problem != "":
-						status, label, color = "连接失败", "重试", c.Theme().Danger
+						status, label, color = locales.ConnectionFailed(), locales.Retry(), c.Theme().Danger
 					}
 					ui.Text(c, status).FontSize(13).TextColor(color).
 						Grow(1).MinWidth(0).Tooltip(editor.endpoint)
@@ -435,9 +436,9 @@ func (editor *nativeAISettings) view(app *nativeApp, dialog *nativeDialog, c *ui
 					ui.Text(c, editor.problem).FontSize(12).TextColor(c.Theme().Danger).Selectable()
 				})
 			}
-			aiSettingsRow(c, "模型", func() {
+			aiSettingsRow(c, locales.Model(), func() {
 				if len(editor.models) > 0 {
-					if ui.Select(c, &app.prefs.AI.Model, editor.models).Label("AI 模型").
+					if ui.Select(c, &app.prefs.AI.Model, editor.models).Label(locales.AiModel()).
 						FillWidth().Tooltip(app.prefs.AI.Model).Disabled(editor.checking).Changed() {
 						editor.problem, app.settingsError = "", ""
 						app.saveSettings()
@@ -445,26 +446,26 @@ func (editor *nativeAISettings) view(app *nativeApp, dialog *nativeDialog, c *ui
 				} else {
 					model := app.prefs.AI.Model
 					if model == "" {
-						model = "连接后选择模型"
+						model = locales.ChooseModelAfterConnecting()
 					}
 					if editor.connected {
-						model = "暂无可用模型"
+						model = locales.NoModels()
 					}
-					ui.Select(c, &model, []string{model}).Label("AI 模型").FillWidth().Disabled(true)
+					ui.Select(c, &model, []string{model}).Label(locales.AiModel()).FillWidth().Disabled(true)
 				}
 			})
 		})
 		ui.Divider(c)
 		ui.Column(c).FillWidth().Gap(12).Children(func() {
-			ui.Text(c, "生成偏好").FontSize(13).Bold()
+			ui.Text(c, locales.GenerationPreferences()).FontSize(13).Bold()
 			if aiOutputPreferences(c, &app.prefs.AI.Language, &app.prefs.AI.Format, false) {
 				app.settingsError = ""
 				app.saveSettings()
 			}
 		})
-		ui.Text(c, "仅发送已暂存文件的路径与差异；所选模型可能在云端运行。").FontSize(12).TextColor(c.Theme().TextMuted)
+		ui.Text(c, locales.StagedDataNotice()).FontSize(12).TextColor(c.Theme().TextMuted)
 		if !app.prefs.AIConsent && editor.connected && len(editor.models) > 0 && editor.problem == "" && app.settingsError == "" {
-			ui.Text(c, "已配置，关闭设置后可返回生成提交说明。").FontSize(12).TextColor(c.Theme().TextMuted)
+			ui.Text(c, locales.AiReady()).FontSize(12).TextColor(c.Theme().TextMuted)
 		}
 	})
 }
@@ -472,16 +473,28 @@ func (editor *nativeAISettings) view(app *nativeApp, dialog *nativeDialog, c *ui
 func aiOutputPreferences(c *ui.Context, language, format *string, inherit bool) bool {
 	languages := []string{commitai.Chinese, commitai.English}
 	formats := []string{commitai.Conventional, commitai.Plain}
+	languageLabels := []string{locales.SimplifiedChinese(), locales.English()}
+	formatLabels := []string{commitai.Conventional, locales.PlainText()}
 	if inherit {
 		languages = append([]string{"跟随应用设置"}, languages...)
 		formats = append([]string{"跟随应用设置"}, formats...)
+		languageLabels = append([]string{locales.InheritApplication()}, languageLabels...)
+		formatLabels = append([]string{locales.InheritApplication()}, formatLabels...)
 	}
 	changed := false
-	aiSettingsRow(c, "语言", func() {
-		changed = ui.Select(c, language, languages).Label("提交说明语言").FillWidth().Changed() || changed
+	aiSettingsRow(c, locales.Language(), func() {
+		selected := languageLabels[max(0, slices.Index(languages, *language))]
+		if ui.Select(c, &selected, languageLabels).Label(locales.CommitLanguage()).FillWidth().Changed() {
+			*language = languages[slices.Index(languageLabels, selected)]
+			changed = true
+		}
 	})
-	aiSettingsRow(c, "格式", func() {
-		changed = ui.Select(c, format, formats).Label("提交说明格式").FillWidth().Changed() || changed
+	aiSettingsRow(c, locales.Format(), func() {
+		selected := formatLabels[max(0, slices.Index(formats, *format))]
+		if ui.Select(c, &selected, formatLabels).Label(locales.CommitFormat()).FillWidth().Changed() {
+			*format = formats[slices.Index(formatLabels, selected)]
+			changed = true
+		}
 	})
 	return changed
 }

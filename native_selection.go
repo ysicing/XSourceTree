@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/ysicing/XSourceTree/internal/gitrepo"
+	"github.com/ysicing/XSourceTree/locales"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
@@ -115,7 +116,7 @@ func (app *nativeApp) selectFile(file string, staged bool) {
 	path := app.repository.snapshot.Path
 	files := app.repository.snapshot.Files
 	app.leaveConflict(func() {
-		app.load("正在读取差异…", nativeReadDiff, func(ctx context.Context) (func(), error) {
+		app.load(locales.ReadingDiff(), nativeReadDiff, func(ctx context.Context) (func(), error) {
 			selection, err := app.readSelection(ctx, path, file, staged, files)
 			return func() {
 				app.clearDiff()
@@ -144,14 +145,14 @@ func (app *nativeApp) setSelection(selection *nativeSelection) {
 	if selection.conflict != nil {
 		app.conflict = selection.conflict
 		app.conflictEdit = editor.State{
-			Buffer: editor.NewBuffer(selection.conflict.Result), SoftWrap: true, Label: "合并结果",
+			Buffer: editor.NewBuffer(selection.conflict.Result), SoftWrap: true, Label: locales.MergeResult(),
 		}
 		for index, side := range []gitrepo.ConflictSide{selection.conflict.Base, selection.conflict.Ours, selection.conflict.Theirs} {
 			text := side.Text
 			if !side.Present {
-				text = "此版本不存在"
+				text = locales.VersionAbsent()
 			} else if side.Binary {
-				text = "二进制文件"
+				text = locales.BinaryFile()
 			}
 			app.conflictBase[index] = editor.State{Buffer: editor.NewBuffer(text), ReadOnly: true, SoftWrap: true}
 		}
@@ -203,7 +204,7 @@ func (app *nativeApp) setDiff(diff gitrepo.Diff) {
 	}
 	app.rawDiff = editor.State{
 		Buffer: editor.NewBuffer(diff.Text), ReadOnly: true, SoftWrap: app.prefs.Wrap,
-		Label: "差异文本", NoScrollPastEnd: true,
+		Label: locales.DiffText(), NoScrollPastEnd: true,
 	}
 }
 
@@ -243,7 +244,7 @@ func (app *nativeApp) searchHistory(more bool) {
 	if more {
 		skip = len(app.history)
 	}
-	app.load("正在搜索历史…", nativeReadHistory, func(ctx context.Context) (func(), error) {
+	app.load(locales.SearchingHistory(), nativeReadHistory, func(ctx context.Context) (func(), error) {
 		commits, err := app.service.SearchHistory(ctx, path, query, file, skip)
 		return func() {
 			// 搜索取消或超时时保留已读取结果。
@@ -267,7 +268,7 @@ func (app *nativeApp) selectCommit(hash string) {
 		return
 	}
 	path := app.repository.snapshot.Path
-	app.load("正在读取提交…", nativeReadCommit, func(ctx context.Context) (func(), error) {
+	app.load(locales.ReadingCommit(), nativeReadCommit, func(ctx context.Context) (func(), error) {
 		files, err := app.service.CommitFiles(ctx, path, hash)
 		if err != nil {
 			return func() {
@@ -308,7 +309,7 @@ func (app *nativeApp) selectCommitFile(file string) {
 		return
 	}
 	path, hash := app.repository.snapshot.Path, app.commitHash
-	app.load("正在读取文件差异…", nativeReadDiff, func(ctx context.Context) (func(), error) {
+	app.load(locales.ReadingFileDiff(), nativeReadDiff, func(ctx context.Context) (func(), error) {
 		diff, err := app.service.CommitFileDiff(ctx, path, hash, file)
 		return func() {
 			app.clearDiff()
@@ -331,7 +332,7 @@ func (app *nativeApp) selectStash(hash string) {
 		return
 	}
 	path := app.repository.snapshot.Path
-	app.load("正在读取储藏…", nativeReadDiff, func(ctx context.Context) (func(), error) {
+	app.load(locales.ReadingStash(), nativeReadDiff, func(ctx context.Context) (func(), error) {
 		diff, err := app.service.StashDiff(ctx, path, hash)
 		return func() {
 			app.clearDiff()
@@ -348,7 +349,7 @@ func (app *nativeApp) applyHunk() {
 		return
 	}
 	file, staged, token, id := app.selectedFile, app.staged, app.patch.Token, app.hunk
-	app.mutate("正在应用区块…", func(ctx context.Context, path string) error {
+	app.mutate(locales.ApplyingHunk(), func(ctx context.Context, path string) error {
 		return app.service.ApplyHunk(ctx, path, file, staged, token, id)
 	})
 }
@@ -361,11 +362,11 @@ func (app *nativeApp) applyLines() {
 		}
 	}
 	if len(ids) == 0 {
-		app.problem = "请至少选择一行变更"
+		app.problem = locales.SelectOneLine()
 		return
 	}
 	file, staged, token := app.selectedFile, app.staged, app.patch.Token
-	app.mutateForm(app.dialog, "正在应用所选行…", func(ctx context.Context, path string) error {
+	app.mutateForm(app.dialog, locales.ApplyingLines(), func(ctx context.Context, path string) error {
 		return app.service.ApplyLines(ctx, path, file, staged, token, ids)
 	})
 }

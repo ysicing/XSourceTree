@@ -6,17 +6,19 @@ package main
 import (
 	"strings"
 
+	"github.com/ysicing/XSourceTree/locales"
+
 	"github.com/egoist/mygo/ui"
 )
 
 func (app *nativeApp) versionButton(c *ui.Context) bool {
-	label := "检查更新"
+	label := locales.CheckUpdates()
 	text := buildVersionLabel()
 	color := c.Theme().TextMuted
-	tooltip := label + "\n当前版本：" + text
+	tooltip := label + "\n" + locales.CurrentVersion(text)
 	if app.availableVersion != "" {
-		text = "新版本 v" + app.availableVersion
-		label = text + "，检查更新"
+		text = locales.NewVersion(app.availableVersion)
+		label = locales.NewVersionCheck(text)
 		tooltip += "\n" + text
 		color = c.Theme().Accent
 	}

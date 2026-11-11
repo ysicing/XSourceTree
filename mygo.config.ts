@@ -13,6 +13,7 @@ export default defineConfig({
   identifier: "com.ysicing.xsourcetree",
   version,
   out: "build",
+  i18n: { dir: "locales", source: "zh-Hans" },
   macos: {
     minimumSystemVersion: "12.0",
     ...(process.env.XSOURCETREE_BUILD_NUMBER ? {

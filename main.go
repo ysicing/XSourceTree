@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/ysicing/XSourceTree/internal/workspace"
+	"github.com/ysicing/XSourceTree/locales"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/updater"
@@ -30,7 +31,6 @@ func main() {
 	service := &RepositoryService{manager: manager}
 	desktop := newNativeApp(service, filepath.Join(dir, "native-state.json"))
 	mygo.Use(native.New(updater.Options{
-		Language: "zh-Hans",
 		Interval: nativeUpdateCheckInterval(desktop.prefs.UpdateCheckFrequency),
 	}))
 	open := func() {
@@ -60,14 +60,14 @@ func main() {
 		}
 	}
 	app.OnSecondInstance(func(_ []string, _ string) { open() })
-	app.WhenReady(func() {
+	setMenu := func() {
 		app.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
 			{Label: "XSourceTree", Submenu: []*mygo.MenuItem{
-				{Label: "关于 XSourceTree", Click: func(_ *mygo.MenuItem, _ *mygo.Window) {
+				{Label: locales.About(), Click: func(_ *mygo.MenuItem, _ *mygo.Window) {
 					showNativeAbout()
 				}},
 				updater.MenuItem(),
-				{ID: "settings", Label: "设置…", Accelerator: "CmdOrCtrl+,", Click: command(func(desktop *nativeApp) { desktop.settingsDialog() })},
+				{ID: "settings", Label: locales.SettingsMenu(), Accelerator: "CmdOrCtrl+,", Click: command(func(desktop *nativeApp) { desktop.settingsDialog() })},
 				mygo.Separator(),
 				{Role: mygo.RoleServices},
 				mygo.Separator(),
@@ -77,24 +77,31 @@ func main() {
 				mygo.Separator(),
 				{Role: mygo.RoleQuit},
 			}},
-			{Label: "文件", Submenu: []*mygo.MenuItem{
-				{ID: shortcutLibrary, Label: "本地仓库", Accelerator: shortcutAccelerator(defaultNativeShortcuts().Library), Click: command(func(desktop *nativeApp) { desktop.showLibrary() })},
-				{ID: shortcutAddRepo, Label: "添加已有的本地仓库…", Accelerator: shortcutAccelerator(defaultNativeShortcuts().AddRepository), Click: command(func(desktop *nativeApp) { desktop.chooseLocal() })},
-				{ID: shortcutScan, Label: "扫描文件夹…", Accelerator: shortcutAccelerator(defaultNativeShortcuts().Scan), Click: command(func(desktop *nativeApp) { desktop.chooseScan() })},
-				{Label: "新建仓库组…", Click: command(func(desktop *nativeApp) { desktop.groupDialog("") })},
+			{Label: locales.FilesMenu(), Submenu: []*mygo.MenuItem{
+				{ID: shortcutLibrary, Label: locales.LocalRepositories(), Accelerator: shortcutAccelerator(defaultNativeShortcuts().Library), Click: command(func(desktop *nativeApp) { desktop.showLibrary() })},
+				{ID: shortcutAddRepo, Label: locales.AddExistingRepositoryMenu(), Accelerator: shortcutAccelerator(defaultNativeShortcuts().AddRepository), Click: command(func(desktop *nativeApp) { desktop.chooseLocal() })},
+				{ID: shortcutScan, Label: locales.ScanFoldersMenu(), Accelerator: shortcutAccelerator(defaultNativeShortcuts().Scan), Click: command(func(desktop *nativeApp) { desktop.chooseScan() })},
+				{Label: locales.NewGroupMenu(), Click: command(func(desktop *nativeApp) { desktop.groupDialog("") })},
 				mygo.Separator(),
 				{Role: mygo.RoleClose},
 			}},
 			{Role: mygo.RoleEditMenu},
-			{Label: "仓库", Submenu: []*mygo.MenuItem{
-				{ID: shortcutRefresh, Label: "刷新", Accelerator: shortcutAccelerator(defaultNativeShortcuts().Refresh), Click: command(func(desktop *nativeApp) { desktop.refresh() })},
-				{ID: shortcutCommit, Label: "提交", Accelerator: shortcutAccelerator(defaultNativeShortcuts().Commit), Click: command(func(desktop *nativeApp) { desktop.commit() })},
+			{Label: locales.Repository(), Submenu: []*mygo.MenuItem{
+				{ID: shortcutRefresh, Label: locales.Refresh(), Accelerator: shortcutAccelerator(defaultNativeShortcuts().Refresh), Click: command(func(desktop *nativeApp) { desktop.refresh() })},
+				{ID: shortcutCommit, Label: locales.Commit(), Accelerator: shortcutAccelerator(defaultNativeShortcuts().Commit), Click: command(func(desktop *nativeApp) { desktop.commit() })},
 				mygo.Separator(),
-				{Label: "仓库设置…", Click: command(func(desktop *nativeApp) { desktop.repositorySettingsDialog() })},
+				{Label: locales.RepositorySettingsMenu(), Click: command(func(desktop *nativeApp) { desktop.repositorySettingsDialog() })},
 			}},
 			{Role: mygo.RoleViewMenu},
 			{Role: mygo.RoleWindowMenu},
 		}))
+		if desktop != nil {
+			applyNativeShortcuts(desktop.prefs.Shortcuts)
+		}
+	}
+	app.WhenReady(func() {
+		setMenu()
+		app.OnLocaleChanged(func(_ string) { setMenu() })
 		open()
 	})
 	app.OnWindowAllClosed(func() {})

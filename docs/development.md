@@ -13,6 +13,8 @@ task dev
 
 界面直接使用 MyGo 的 `ui` 和 `ui/editor` Go 组件，不需要 TypeScript 绑定、Vite 服务或前端资源构建。Bun 仅用于 MyGo 打包工具与发布脚本。Git 请求在后台执行，通过 `Window.Update` 将结果交回界面线程。
 
+界面翻译使用 MyGo 原生 i18n，消息目录位于 `locales/`，源语言为 `zh-Hans`，同时维护 `zh-Hant` 和 `en`。修改消息后运行 `bun run mygo generate` 更新并提交 `locales/catalog_gen.go`，通过 `bun run mygo i18n check` 检查翻译完整性。语言选择由 MyGo 持久化；界面标签使用翻译，已有配置值和 Git 引用保持不变。
+
 文件差异、提交详情、储藏预览和历史搜索使用局部加载状态，不禁用整个工作区；连续选择会取消旧读取，仅允许当前仓库、页面及最后一次请求回填结果。导航、写操作和窗口关闭会取消未完成的读取；写操作等待已取消的读取退出后执行。重复点击已加载的文件保留 Diff 编辑器状态。
 
 构建 macOS 应用与 DMG：

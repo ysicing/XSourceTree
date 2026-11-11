@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ysicing/XSourceTree/locales"
+
 	"github.com/egoist/mygo"
 )
 
@@ -19,7 +21,7 @@ var (
 func buildVersionLabel() string {
 	version := mygo.App.Version()
 	if version == "" {
-		return "开发版"
+		return locales.DevelopmentBuild()
 	}
 	label := "v" + version
 	if buildNumber != "" {
@@ -39,17 +41,17 @@ func showNativeAbout() {
 func buildDetails() string {
 	var details []string
 	if buildNumber != "" {
-		details = append(details, "构建号："+buildNumber)
+		details = append(details, locales.BuildNumber(buildNumber))
 	}
 	if buildCommit != "" {
-		details = append(details, "提交："+buildCommit)
+		details = append(details, locales.BuildCommit(buildCommit))
 	}
 	if buildTime != "" {
 		formatted := buildTime
 		if timestamp, err := time.Parse(time.RFC3339, buildTime); err == nil {
 			formatted = timestamp.Local().Format("2006-01-02 15:04:05 -07:00")
 		}
-		details = append(details, "构建时间："+formatted)
+		details = append(details, locales.BuildTime(formatted))
 	}
 	return strings.Join(details, "\n")
 }

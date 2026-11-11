@@ -10,6 +10,7 @@ import (
 
 	"github.com/ysicing/XSourceTree/internal/gitrepo"
 	"github.com/ysicing/XSourceTree/internal/workspace"
+	"github.com/ysicing/XSourceTree/locales"
 
 	"github.com/egoist/mygo/plugins/updater"
 	"github.com/egoist/mygo/ui"
@@ -88,7 +89,7 @@ func (app *nativeApp) view(c *ui.Context) {
 	ui.Column(c).Fill().Background(c.Theme().Background).Children(func() {
 		bar := c.TitleBar()
 		ui.Row(c).Height(52).Shrink(0).Padding(0, bar.Right+12, 0, bar.Left+12).AlignItems(ui.Center).Gap(12).DragWindow().Children(func() {
-			title := "本地仓库"
+			title := locales.LocalRepositories()
 			if app.repository != nil && app.screen != "library" {
 				title = app.repository.snapshot.Name
 			}
@@ -107,10 +108,10 @@ func (app *nativeApp) view(c *ui.Context) {
 			})
 			app.toolbar(c)
 			ui.Toolbar(c, func() {
-				if iconButton(c, "设置", nativeIcons["settings"]).Tooltip("设置（⌘,）").Disabled(app.busy || app.dialog != nil).Clicked() {
+				if iconButton(c, locales.Settings(), nativeIcons["settings"]).Tooltip(locales.Settings() + "（⌘,）").Disabled(app.busy || app.dialog != nil).Clicked() {
 					app.settingsDialog()
 				}
-			}).Label("应用操作").Padding(0).Shrink(0)
+			}).Label(locales.ApplicationActions()).Padding(0).Shrink(0)
 		})
 		ui.Divider(c)
 		ui.Column(c).Grow(1).MinHeight(0).Disabled(app.busy).Children(func() {
@@ -132,8 +133,8 @@ func (app *nativeApp) view(c *ui.Context) {
 			if app.busy {
 				ui.Spinner(c).Size(14, 14)
 				ui.Text(c, app.status).FontSize(12).TextColor(c.Theme().TextMuted).MinWidth(0).MaxLines(1).Shrink(1)
-				if strings.Contains(app.status, "扫描") || strings.Contains(app.status, "搜索") {
-					if ui.Button(c, "取消").Clicked() {
+				if app.scanning {
+					if ui.Button(c, locales.Cancel()).Clicked() {
 						app.service.CancelScan()
 						app.service.CancelHistory()
 					}
@@ -141,13 +142,13 @@ func (app *nativeApp) view(c *ui.Context) {
 			} else if app.problem != "" {
 				summary := strings.SplitN(app.problem, "\n", 2)[0]
 				if strings.HasPrefix(summary, "git ") || strings.HasPrefix(summary, "fatal:") || strings.HasPrefix(summary, "error:") || strings.HasPrefix(summary, "ssh:") {
-					summary = "Git 操作失败，请查看详情"
+					summary = locales.GitOperationFailed()
 				}
 				ui.Text(c, summary).FontSize(12).TextColor(c.Theme().Danger).MaxLines(1).Grow(1).Selectable().Tooltip(app.problem)
-				if ui.Button(c, "查看详情").Clicked() {
+				if ui.Button(c, locales.ShowDetails()).Clicked() {
 					problem := app.problem
 					app.dialog = &nativeDialog{
-						title: "操作失败",
+						title: locales.OperationFailed(),
 						body: func(c *ui.Context) {
 							ui.Scroll(c).Height(280).FillWidth().Children(func() {
 								ui.Text(c, problem).FontSize(12).Selectable().FillWidth()
@@ -155,13 +156,13 @@ func (app *nativeApp) view(c *ui.Context) {
 						},
 					}
 				}
-				if ui.Button(c, "关闭提示").Clicked() {
+				if ui.Button(c, locales.DismissNotice()).Clicked() {
 					app.problem = ""
 				}
 			} else if app.repository != nil && app.screen != "library" {
 				ui.Text(c, app.repository.snapshot.Path).FontSize(12).TextColor(c.Theme().TextMuted).MinWidth(0).MaxLines(1).Shrink(1).Selectable()
 			} else {
-				ui.Text(c, fmt.Sprintf("%d 个本地仓库", len(app.library.Repositories))).FontSize(12).TextColor(c.Theme().TextMuted)
+				ui.Text(c, locales.LocalRepositoryCount(len(app.library.Repositories))).FontSize(12).TextColor(c.Theme().TextMuted)
 			}
 			ui.Spacer(c)
 			if app.versionButton(c) {
@@ -181,50 +182,50 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 		}
 		if ui.Sidebar(c, &selected, func() {
 			if inLibrary {
-				ui.SidebarItem(c, "screen:library", nativeIcons["folder"], "本地仓库")
+				ui.SidebarItem(c, "screen:library", nativeIcons["folder"], locales.LocalRepositories())
 				if len(app.library.Groups) > 0 {
-					ui.SidebarSection(c, "仓库组", nil, func() {
+					ui.SidebarSection(c, locales.RepositoryGroups(), nil, func() {
 						for _, group := range app.library.Groups {
 							group := group
 							ui.Row(c).Key(group.ID).FillWidth().AlignItems(ui.Center).Children(func() {
 								ui.SidebarItem(c, "group:"+group.ID, nativeIcons["folder"], group.Name).Grow(1).MinWidth(0).Tooltip(group.Name).Label(group.Name).ContextMenu(func(menu *ui.Menu) {
-									if menu.Item("重命名").Chosen() {
+									if menu.Item(locales.Rename()).Chosen() {
 										app.groupDialog(group.ID)
 									}
-									if menu.Item("移除分组").Chosen() {
+									if menu.Item(locales.RemoveGroup()).Chosen() {
 										app.removeGroup(group)
 									}
 								})
-								iconButton(c, "管理仓库组 "+group.Name, nativeIcons["more"]).OnClick(func() { app.groupActions(group) })
+								iconButton(c, locales.ManageGroup(group.Name), nativeIcons["more"]).OnClick(func() { app.groupActions(group) })
 							})
 						}
 					})
 				}
 				return
 			}
-			ui.Row(c).Height(30).Padding(0, 8).Gap(8).AlignItems(ui.Center).Label("仓库工作区").Children(func() {
+			ui.Row(c).Height(30).Padding(0, 8).Gap(8).AlignItems(ui.Center).Label(locales.RepositoryWorkspace()).Children(func() {
 				ui.Icon(c, nativeIcons["folder"]).FontSize(18).TextColor(c.Theme().TextMuted)
-				ui.Text(c, "工作区").FontSize(12).FontWeight(500).TextColor(c.Theme().TextMuted)
+				ui.Text(c, locales.Workspace()).FontSize(12).FontWeight(500).TextColor(c.Theme().TextMuted)
 			})
 			ui.Column(c).FillWidth().Children(func() {
-				ui.SidebarItem(c, "screen:changes", nil, "文件变更").Label("文件变更").
+				ui.SidebarItem(c, "screen:changes", nil, locales.FileChanges()).Label(locales.FileChanges()).
 					Height(26).Padding(0, 8, 0, 40).FontSize(12).Children(func() {
 					if count := len(app.repository.snapshot.Files); count > 0 {
 						ui.Badge(c, fmt.Sprint(count))
 					}
 				})
-				ui.SidebarItem(c, "screen:history", nil, "提交历史").Height(26).Padding(0, 8, 0, 40).FontSize(12)
+				ui.SidebarItem(c, "screen:history", nil, locales.CommitHistory()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
 			})
 			app.localBranchSidebar(c)
 			app.tagSidebar(c)
 			app.remoteSidebar(c)
-			ui.SidebarItem(c, "screen:stash", nativeIcons["stash"], "储藏").Label("储藏").
+			ui.SidebarItem(c, "screen:stash", nativeIcons["stash"], locales.Stash()).Label(locales.Stash()).
 				Height(30).Margin(16, 0, 0, 0).FontSize(12).Children(func() {
 				if count := len(app.repository.stashes); count > 0 {
 					ui.Badge(c, fmt.Sprint(count))
 				}
 			})
-		}).Label("仓库导航").Grow(1).MinHeight(0).FillWidth().Changed() {
+		}).Label(locales.RepositoryNavigation()).Grow(1).MinHeight(0).FillWidth().Changed() {
 			switch {
 			case strings.HasPrefix(selected, "screen:"):
 				screen := strings.TrimPrefix(selected, "screen:")
@@ -243,21 +244,21 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 		}
 		if inLibrary {
 			ui.Toolbar(c, func() {
-				if toolButton(c, "新建仓库组", nativeIcons["plus"]).Clicked() {
+				if toolButton(c, locales.NewGroup(), nativeIcons["plus"]).Clicked() {
 					app.groupDialog("")
 				}
-			}).FillWidth().Padding(8, 10).Label("仓库组操作")
+			}).FillWidth().Padding(8, 10).Label(locales.RepositoryGroupActions())
 		} else {
 			ui.Divider(c)
 			ui.Column(c).FillWidth().Padding(6, 10).Children(func() {
-				button := ui.ButtonBase(c).Label("返回仓库").FillWidth().Height(28).
+				button := ui.ButtonBase(c).Label(locales.BackToRepositories()).FillWidth().Height(28).
 					Padding(0, 8).Gap(8).AlignItems(ui.Center).Radius(5).TextColor(c.Theme().TextMuted)
 				if button.Hovered() || button.Pressed() {
 					button.Background(c.Theme().SurfaceHover)
 				}
 				button.Children(func() {
 					ui.Icon(c, nativeIcons["back"]).FontSize(15)
-					ui.Text(c, "返回仓库").FontSize(12)
+					ui.Text(c, locales.BackToRepositories()).FontSize(12)
 				})
 				if button.Clicked() {
 					app.showLibrary()
@@ -272,51 +273,51 @@ func (app *nativeApp) toolbar(c *ui.Context) {
 	ui.Toolbar(c, func() {
 		ui.Spacer(c)
 		if app.screen == "library" {
-			if ui.PrimaryButton(c, "添加仓库").Disabled(disabled).Clicked() {
+			if ui.PrimaryButton(c, locales.AddRepository()).Disabled(disabled).Clicked() {
 				app.chooseLocal()
 			}
-			if ui.Button(c, "输入路径").Disabled(disabled).Clicked() {
+			if ui.Button(c, locales.EnterPath()).Disabled(disabled).Clicked() {
 				app.pathDialog()
 			}
-			if toolButton(c, "扫描文件夹", nativeIcons["folder"]).Disabled(disabled).Clicked() {
+			if toolButton(c, locales.ScanFolders(), nativeIcons["folder"]).Disabled(disabled).Clicked() {
 				app.chooseScan()
 			}
 		} else if app.repository != nil {
 			ui.Row(c).Children(func() {
-				for _, remote := range []struct{ id, title string }{{"fetch", "获取"}, {"pull", "拉取"}, {"push", "推送"}} {
+				for _, remote := range []struct{ id, title string }{{"fetch", locales.Fetch()}, {"pull", locales.Pull()}, {"push", locales.Push()}} {
 					remote := remote
 					if titlebarButton(c, remote.title, nativeIcons[remote.id]).Disabled(disabled || !app.writable).Clicked() {
 						app.remoteAction(remote.id)
 					}
 				}
 			})
-			if titlebarButton(c, "分支", nativeIcons["branch"]).Disabled(disabled || !app.writable).Clicked() {
+			if titlebarButton(c, locales.Branch(), nativeIcons["branch"]).Disabled(disabled || !app.writable).Clicked() {
 				app.branchDialog()
 			}
-			if titlebarButton(c, "合并", nativeIcons["merge"]).Disabled(disabled || !app.writable).Clicked() {
+			if titlebarButton(c, locales.Merge(), nativeIcons["merge"]).Disabled(disabled || !app.writable).Clicked() {
 				app.mergeDialog()
 			}
-			if titlebarButton(c, "仓库设置", nativeIcons["settings"]).Disabled(disabled).Clicked() {
+			if titlebarButton(c, locales.RepositorySettings(), nativeIcons["settings"]).Disabled(disabled).Clicked() {
 				app.repositorySettingsDialog()
 			}
-			iconButton(c, "更多", nativeIcons["more"]).Disabled(disabled).Menu(app.repositoryActions)
+			iconButton(c, locales.More(), nativeIcons["more"]).Disabled(disabled).Menu(app.repositoryActions)
 		}
-		if iconButton(c, "刷新", nativeIcons["refresh"]).Disabled(disabled).Clicked() {
+		if iconButton(c, locales.Refresh(), nativeIcons["refresh"]).Disabled(disabled).Clicked() {
 			app.refresh()
 		}
-	}).Label("仓库操作").Grow(1).MinWidth(0).Height(52).Padding(0)
+	}).Label(locales.RepositoryActions()).Grow(1).MinWidth(0).Height(52).Padding(0)
 }
 
 func (app *nativeApp) libraryView(c *ui.Context) {
 	ui.Column(c).FillWidth().Grow(1).MinHeight(0).Padding(22).Gap(16).Children(func() {
-		title := "本地仓库"
+		title := locales.LocalRepositories()
 		for _, group := range app.library.Groups {
 			if group.ID == app.group {
 				title = group.Name
 			}
 		}
 		ui.Text(c, title).FontSize(24).Bold()
-		ui.TextInput(c, &app.query).Search().Placeholder("搜索仓库名称、路径或分支").FillWidth()
+		ui.TextInput(c, &app.query).Search().Placeholder(locales.SearchRepositories()).FillWidth()
 		var entries []workspace.LocalRepository
 		for _, entry := range app.library.Repositories {
 			if app.group != "" && entry.GroupID != app.group {
@@ -328,15 +329,15 @@ func (app *nativeApp) libraryView(c *ui.Context) {
 		}
 		if len(entries) == 0 {
 			ui.Column(c).Grow(1).FillWidth().Center().Gap(10).Children(func() {
-				message := "尚未添加仓库"
+				message := locales.EmptyRepositories()
 				if app.query != "" {
-					message = "没有匹配的仓库"
+					message = locales.NoMatchingRepositories()
 				} else if app.group != "" {
-					message = "此分组暂无仓库"
+					message = locales.EmptyGroup()
 				}
 				ui.Text(c, message).FontSize(17).Bold()
 				if app.query != "" {
-					if ui.Button(c, "清除搜索").Clicked() {
+					if ui.Button(c, locales.ClearSearch()).Clicked() {
 						app.query = ""
 					}
 				}
@@ -362,7 +363,7 @@ func (app *nativeApp) libraryView(c *ui.Context) {
 							ui.Badge(c, fmt.Sprintf("%d", entry.Changes))
 						}
 					}).OnClick(func() { app.openRepository(entry.Path) })
-					if iconButton(c, "管理", nativeIcons["more"]).Clicked() {
+					if iconButton(c, locales.Manage(), nativeIcons["more"]).Clicked() {
 						app.repositoryEntryDialog(entry)
 					}
 				})
@@ -393,18 +394,18 @@ func (app *nativeApp) operationBar(c *ui.Context) {
 		return
 	}
 	ui.Column(c).FillWidth().Padding(12).Gap(8).Background(c.Theme().Surface).Children(func() {
-		ui.Text(c, "正在进行"+operationName(operation.Kind)).Bold()
+		ui.Text(c, locales.OperationInProgress(operationName(operation.Kind))).Bold()
 		ui.Row(c).Gap(6).Children(func() {
 			conflicts := slices.ContainsFunc(app.repository.snapshot.Files, func(file gitrepo.File) bool { return file.Conflict })
-			if ui.Button(c, "继续").Disabled(!app.writable || conflicts).Clicked() {
+			if ui.Button(c, locales.Continue()).Disabled(!app.writable || conflicts).Clicked() {
 				app.operationAction("continue")
 			}
 			if operation.Kind != "merge" {
-				if ui.Button(c, "跳过").Disabled(!app.writable).Clicked() {
+				if ui.Button(c, locales.Skip()).Disabled(!app.writable).Clicked() {
 					app.operationAction("skip")
 				}
 			}
-			if ui.Button(c, "中止").Disabled(!app.writable).Clicked() {
+			if ui.Button(c, locales.Abort()).Disabled(!app.writable).Clicked() {
 				app.operationAction("abort")
 			}
 		})
@@ -425,7 +426,7 @@ func (app *nativeApp) changesPanel(c *ui.Context) {
 	ui.Column(c).FillWidth().Padding(12).Gap(8).Disabled(!app.writable).Children(func() {
 		draft := app.prefs.Drafts[app.repository.snapshot.Path]
 		app.commitAIHeader(c)
-		if ui.TextArea(c, &draft).Label("提交说明").Placeholder("提交说明").Lines(3, 6).FillWidth().Changed() {
+		if ui.TextArea(c, &draft).Label(locales.CommitMessage()).Placeholder(locales.CommitMessage()).Lines(3, 6).FillWidth().Changed() {
 			app.prefs.Drafts[app.repository.snapshot.Path] = draft
 			app.draftRevision++
 		}
@@ -438,16 +439,16 @@ func (app *nativeApp) changesPanel(c *ui.Context) {
 			}
 			conflicts = conflicts || file.Conflict
 		}
-		if ui.PrimaryButton(c, fmt.Sprintf("提交 %d 个文件", count)).FillWidth().Disabled(count == 0 || conflicts || app.repository.snapshot.Operation.Kind != "" || strings.TrimSpace(draft) == "").Clicked() {
+		if ui.PrimaryButton(c, locales.CommitFiles(count)).FillWidth().Disabled(count == 0 || conflicts || app.repository.snapshot.Operation.Kind != "" || strings.TrimSpace(draft) == "").Clicked() {
 			app.commit()
 		}
 	})
 }
 
 func (app *nativeApp) changesSection(c *ui.Context, staged bool) {
-	label, action, selectedAction := "未暂存文件", "全部暂存", "暂存所选文件"
+	label, action, selectedAction := locales.UnstagedFiles(), locales.StageAll(), locales.StageSelected()
 	if staged {
-		label, action, selectedAction = "已暂存文件", "全部取消暂存", "取消暂存所选文件"
+		label, action, selectedAction = locales.StagedFiles(), locales.UnstageAll(), locales.UnstageSelected()
 	}
 	files := app.visibleFiles(staged)
 	slices.SortFunc(files, func(first, second gitrepo.File) int {
@@ -469,12 +470,12 @@ func (app *nativeApp) changesSection(c *ui.Context, staged bool) {
 		rowCount, listWidth = app.fileTreeSize(c, nodes, staged, 0)
 	}
 	if app.filesFiltered() {
-		action = fmt.Sprintf("暂存筛选结果 (%d)", count)
+		action = locales.StageFiltered(fmt.Sprint(count))
 		if staged {
-			action = fmt.Sprintf("取消筛选结果暂存 (%d)", count)
+			action = locales.UnstageFiltered(fmt.Sprint(count))
 		}
 	}
-	section := ui.Column(c).Key(label).FillWidth().MinHeight(0)
+	section := ui.Column(c).Key(staged).FillWidth().MinHeight(0)
 	if len(files) == 0 {
 		section.Height(72)
 	} else {
@@ -502,21 +503,24 @@ func (app *nativeApp) changesSection(c *ui.Context, staged bool) {
 			if ui.Button(c, action).FontSize(12).Disabled(!app.writable || count == 0).Clicked() {
 				app.stageFiles(staged, true)
 			}
-		}).Label(label+"操作").FillWidth().Padding(4, 12)
+		}).Label(locales.SectionActions(label)).FillWidth().Padding(4, 12)
 		if len(files) == 0 {
-			message := "暂无" + label
+			message := locales.NoUnstagedFiles()
+			if staged {
+				message = locales.NoStagedFiles()
+			}
 			if app.filesFiltered() {
-				message = "无匹配文件"
+				message = locales.NoMatchingFiles()
 			}
 			ui.Text(c, message).FontSize(12).TextColor(c.Theme().TextMuted).Padding(6, 12)
 			return
 		}
-		scroll := ui.ScrollBoth(c).Label(label+"列表").Grow(1).MinHeight(0).FillWidth().Padding(0, 6, 6)
+		scroll := ui.ScrollBoth(c).Label(locales.SectionList(label)).Grow(1).MinHeight(0).FillWidth().Padding(0, 6, 6)
 		scroll.Children(func() {
 			ui.Column(c).FillWidth().MinWidth(max(listWidth, scroll.LayoutBounds().W-12)).Children(func() {
 				if app.prefs.FileTree {
 					tree := ui.TreeBase(c)
-					tree.Root.Label(label + "目录树").FillWidth().Children(func() {
+					tree.Root.Label(locales.SectionTree(label)).FillWidth().Children(func() {
 						app.fileTree(c, tree, nodes, staged, 0)
 					})
 				} else {
@@ -531,21 +535,21 @@ func (app *nativeApp) changesSection(c *ui.Context, staged bool) {
 				if ui.Button(c, fmt.Sprintf("%s (%d)", selectedAction, count)).Label(selectedAction).Disabled(!app.writable).Clicked() {
 					app.stageFiles(staged, false)
 				}
-			}).FillWidth().Padding(4, 12).Label(label + "批量操作")
+			}).FillWidth().Padding(4, 12).Label(locales.SectionBatchActions(label))
 		}
 	})
 }
 
 func (app *nativeApp) stashPanel(c *ui.Context) {
 	ui.Column(c).Padding(12).Gap(8).FillWidth().Children(func() {
-		ui.Text(c, "储藏").FontSize(18).Bold()
-		if ui.Button(c, "新建储藏").FillWidth().Disabled(!app.writable || len(app.repository.snapshot.Files) == 0 || app.repository.snapshot.Operation.Kind != "").Clicked() {
+		ui.Text(c, locales.Stash()).FontSize(18).Bold()
+		if ui.Button(c, locales.NewStash()).FillWidth().Disabled(!app.writable || len(app.repository.snapshot.Files) == 0 || app.repository.snapshot.Operation.Kind != "").Clicked() {
 			app.stashDialog()
 		}
 	})
 	ui.Scroll(c).Grow(1).MinHeight(0).FillWidth().Padding(12).Children(func() {
 		if len(app.repository.stashes) == 0 {
-			ui.Text(c, "暂无储藏").TextColor(c.Theme().TextMuted)
+			ui.Text(c, locales.EmptyStashes()).TextColor(c.Theme().TextMuted)
 		}
 		for _, stash := range app.repository.stashes {
 			stash := stash
@@ -559,13 +563,13 @@ func (app *nativeApp) stashPanel(c *ui.Context) {
 	})
 	if app.stashHash != "" {
 		ui.Row(c).Padding(12).Gap(6).Disabled(!app.writable || app.readTask != nil).Children(func() {
-			if ui.Button(c, "应用").Clicked() {
+			if ui.Button(c, locales.Apply()).Clicked() {
 				app.applyStash(false)
 			}
-			if ui.Button(c, "应用并删除").Clicked() {
+			if ui.Button(c, locales.ApplyAndDrop()).Clicked() {
 				app.applyStash(true)
 			}
-			if ui.Button(c, "删除").Clicked() {
+			if ui.Button(c, locales.Delete()).Clicked() {
 				app.dropStash()
 			}
 		})
@@ -586,7 +590,7 @@ func (app *nativeApp) diffPanel(c *ui.Context) {
 					title = shortHash(app.commitHash)
 				}
 			} else if app.screen == "stash" {
-				title = "储藏差异"
+				title = locales.StashDiff()
 			}
 			if app.readTask != nil && app.readTask.kind != nativeReadHistory {
 				ui.Spinner(c).Size(14, 14)
@@ -597,17 +601,17 @@ func (app *nativeApp) diffPanel(c *ui.Context) {
 			if app.prefs.Split {
 				layout = 1
 			}
-			if ui.Segmented(c, &layout, "统一", "并排").Label("差异布局").Changed() {
+			if ui.Segmented(c, &layout, locales.UnifiedDiff(), locales.SplitDiff()).Label(locales.DiffLayout()).Changed() {
 				app.prefs.Split = layout == 1
 			}
-			ui.Checkbox(c, &app.prefs.Wrap, "换行")
+			ui.Checkbox(c, &app.prefs.Wrap, locales.Wrap())
 		})
 		if app.screen == "changes" && app.selectedFile != "" {
 			app.patchToolbar(c)
 		}
 		ui.Divider(c)
 		if app.diff.Truncated {
-			ui.Text(c, "预览已截断，请使用整文件操作").Padding(10).TextColor(c.Theme().Warning)
+			ui.Text(c, locales.TruncatedPreview()).Padding(10).TextColor(c.Theme().Warning)
 		}
 		if len(app.diffViews) == 1 {
 			app.configureDiff(app.diffViews[0])
@@ -628,11 +632,11 @@ func (app *nativeApp) diffPanel(c *ui.Context) {
 			editor.View(c, &app.rawDiff).Grow(1).FillWidth().MinHeight(0)
 		} else {
 			ui.Column(c).Grow(1).FillWidth().Center().Gap(8).Children(func() {
-				message := "选择文件或提交查看差异"
+				message := locales.SelectFileOrCommit()
 				if app.screen == "stash" {
-					message = "选择储藏查看差异"
+					message = locales.SelectStash()
 					if len(app.repository.stashes) == 0 {
-						message = "暂无储藏差异"
+						message = locales.EmptyStashDiff()
 					}
 				}
 				ui.Text(c, message).TextColor(c.Theme().TextMuted)
@@ -651,45 +655,45 @@ func (app *nativeApp) configureDiff(state *editor.DiffState) {
 
 func (app *nativeApp) patchToolbar(c *ui.Context) {
 	ui.Toolbar(c, func() {
-		action := "暂存文件"
+		action := locales.StageFile()
 		if app.staged {
-			action = "取消暂存文件"
+			action = locales.UnstageFile()
 		}
 		if ui.Button(c, action).Clicked() {
 			app.stageSelectedFile()
 		}
 		if !app.staged {
-			if ui.Button(c, "丢弃修改…").Clicked() {
+			if ui.Button(c, locales.DiscardChangesMenu()).Clicked() {
 				app.discardFile()
 			}
 		}
-		if ui.Button(c, "文件历史").Clicked() {
+		if ui.Button(c, locales.FileHistory()).Clicked() {
 			app.historyFile, app.historyQuery, app.screen = app.selectedFile, "", "history"
 			app.searchHistory(false)
 		}
 		if !app.patch.Supported || len(app.patch.Hunks) == 0 {
 			return
 		}
-		if ui.Button(c, "‹").Label("上一区块").Tooltip("上一区块").Disabled(app.hunk == 0).Clicked() {
+		if ui.Button(c, "‹").Label(locales.PreviousHunk()).Tooltip(locales.PreviousHunk()).Disabled(app.hunk == 0).Clicked() {
 			app.hunk--
 			app.goToPatchHunk()
 		}
 		ui.Text(c, fmt.Sprintf("%d/%d", app.hunk+1, len(app.patch.Hunks))).FontSize(12)
-		if ui.Button(c, "›").Label("下一区块").Tooltip("下一区块").Disabled(app.hunk+1 >= len(app.patch.Hunks)).Clicked() {
+		if ui.Button(c, "›").Label(locales.NextHunk()).Tooltip(locales.NextHunk()).Disabled(app.hunk+1 >= len(app.patch.Hunks)).Clicked() {
 			app.hunk++
 			app.goToPatchHunk()
 		}
-		label := "暂存此区块"
+		label := locales.StageHunk()
 		if app.staged {
-			label = "取消此区块暂存"
+			label = locales.UnstageHunk()
 		}
 		if ui.Button(c, label).Clicked() {
 			app.applyHunk()
 		}
-		if ui.Button(c, "选择行…").Clicked() {
+		if ui.Button(c, locales.SelectLinesMenu()).Clicked() {
 			app.linesDialog()
 		}
-	}).Label("差异操作").FillWidth().Padding(2, 10, 8).Disabled(!app.writable)
+	}).Label(locales.DiffActions()).FillWidth().Padding(2, 10, 8).Disabled(!app.writable)
 }
 
 func (app *nativeApp) conflictPanel(c *ui.Context) {
@@ -704,24 +708,24 @@ func (app *nativeApp) conflictPanel(c *ui.Context) {
 			ui.Text(c, title).Bold().MinWidth(0).Grow(1).MaxLines(1)
 		})
 		ui.Row(c).Gap(6).Wrap().Disabled(!app.writable).Children(func() {
-			if ui.Button(c, "使用当前版本").Clicked() {
+			if ui.Button(c, locales.UseOurs()).Clicked() {
 				app.resolveConflict("ours")
 			}
-			if ui.Button(c, "使用传入版本").Clicked() {
+			if ui.Button(c, locales.UseTheirs()).Clicked() {
 				app.resolveConflict("theirs")
 			}
-			if ui.Button(c, "删除文件").Clicked() {
+			if ui.Button(c, locales.DeleteFile()).Clicked() {
 				app.resolveConflict("delete")
 			}
-			if ui.PrimaryButton(c, "保存结果并暂存").Disabled(!conflict.Editable).Clicked() {
+			if ui.PrimaryButton(c, locales.SaveAndStage()).Disabled(!conflict.Editable).Clicked() {
 				app.resolveConflict("result")
 			}
 		})
 	})
 	if conflict.Editable {
 		ui.Row(c).FillWidth().Height(190).Children(func() {
-			for index, name := range []string{"基础版本", "当前版本", "传入版本"} {
-				ui.Column(c).Key(name).Grow(1).MinWidth(0).FillHeight().Children(func() {
+			for index, name := range []string{locales.BaseVersion(), locales.CurrentVersionLabel(), locales.IncomingVersion()} {
+				ui.Column(c).Key(index).Grow(1).MinWidth(0).FillHeight().Children(func() {
 					ui.Text(c, name).FontSize(12).Padding(8)
 					editor.View(c, &app.conflictBase[index]).Grow(1).FillWidth().MinHeight(0)
 				})
@@ -730,6 +734,6 @@ func (app *nativeApp) conflictPanel(c *ui.Context) {
 		ui.Divider(c)
 		editor.View(c, &app.conflictEdit).Grow(1).FillWidth().MinHeight(0)
 	} else {
-		ui.Text(c, "此冲突无法进行文本编辑，请选择完整版本或删除文件。").Padding(20)
+		ui.Text(c, locales.NonTextConflict()).Padding(20)
 	}
 }

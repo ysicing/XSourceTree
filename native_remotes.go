@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/ysicing/XSourceTree/internal/gitrepo"
+	"github.com/ysicing/XSourceTree/locales"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -51,7 +52,7 @@ func (app *nativeApp) remoteSidebar(c *ui.Context) {
 	app.referenceSidebar(c, "远端", "远端分支树", nativeIcons["cloud"], nodes, func(reference string, item ui.Element) {
 		_, name := remoteBranchParts(reference, app.repository.remotes)
 		if name == "HEAD" {
-			item.Tooltip(reference + " · 远端默认分支引用")
+			item.Tooltip(reference + " · " + locales.RemoteHead())
 		} else if item.Clicked() && app.writable {
 			app.checkoutDialog(reference)
 		}

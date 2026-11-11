@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ysicing/XSourceTree/internal/gitrepo"
+	"github.com/ysicing/XSourceTree/locales"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -188,17 +189,17 @@ func (app *nativeApp) historyWorkspace(c *ui.Context) {
 
 func (app *nativeApp) historyPanel(c *ui.Context) {
 	ui.Row(c).FillWidth().Padding(8, 10).Gap(8).AlignItems(ui.Center).Children(func() {
-		submitted := ui.TextInput(c, &app.historyQuery).Search().Placeholder("搜索提交、作者或 ID").Grow(1).MinWidth(100).Submitted()
-		submitted = ui.TextInput(c, &app.historyFile).Placeholder("文件路径（可选）").Width(160).Submitted() || submitted
-		if ui.Button(c, "搜索").Clicked() || submitted {
+		submitted := ui.TextInput(c, &app.historyQuery).Search().Placeholder(locales.SearchHistory()).Grow(1).MinWidth(100).Submitted()
+		submitted = ui.TextInput(c, &app.historyFile).Placeholder(locales.OptionalFilePath()).Width(160).Submitted() || submitted
+		if ui.Button(c, locales.Search()).Clicked() || submitted {
 			app.searchHistory(false)
 		}
-		if ui.Button(c, "新建标签").Disabled(!app.writable || app.readTask != nil).Clicked() {
+		if ui.Button(c, locales.NewTag()).Disabled(!app.writable || app.readTask != nil).Clicked() {
 			app.tagDialog()
 		}
 		if app.readTask != nil && app.readTask.kind == nativeReadHistory {
-			ui.Spinner(c).Size(14, 14).Label("正在搜索历史…")
-			if ui.Button(c, "取消搜索").Clicked() {
+			ui.Spinner(c).Size(14, 14).Label(locales.SearchingHistory())
+			if ui.Button(c, locales.CancelSearch()).Clicked() {
 				app.readTask.cancel()
 			}
 		}
@@ -207,7 +208,7 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 	if len(app.history) == 0 {
 		app.historyGraph, app.historyGraphSource = nil, nil
 		ui.Column(c).Key("empty-history").Grow(1).FillWidth().Center().Children(func() {
-			ui.Text(c, "没有匹配的提交").TextColor(c.Theme().TextMuted)
+			ui.Text(c, locales.NoMatchingCommits()).TextColor(c.Theme().TextMuted)
 		})
 		return
 	}
@@ -231,11 +232,11 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 	tableTheme.InactiveAccent, tableTheme.AccentText = tableTheme.Accent, theme.Text
 	ui.Themed(c, &tableTheme).Key(app.historyList).FillWidth().Grow(1).MinHeight(0).Children(func() {
 		columns := []ui.TableColumn{
-			{Title: "图谱", Width: graphWidth, Fixed: true},
-			{Title: "提交说明", MinWidth: 200},
-			{Title: "作者", Width: 110, MinWidth: 70},
-			{Title: "时间", Width: 138, MinWidth: 138},
-			{Title: "提交 ID", Width: 88, MinWidth: 88},
+			{Title: locales.Graph(), Width: graphWidth, Fixed: true},
+			{Title: locales.CommitMessage(), MinWidth: 200},
+			{Title: locales.Author(), Width: 110, MinWidth: 70},
+			{Title: locales.Date(), Width: 138, MinWidth: 138},
+			{Title: locales.CommitID(), Width: 88, MinWidth: 88},
 		}
 		if ui.Table(c, app.historyList, columns, len(app.history), func(index, column int) {
 			commit := app.history[index]
@@ -264,7 +265,7 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 			case 4:
 				ui.Text(c, shortHash(commit.Hash)).Font("monospace").FontSize(12).TextColor(theme.TextMuted).SingleLine()
 			}
-		}).Fill().Label("提交历史表格").Changed() && app.historySelected >= 0 && app.historySelected < len(app.history) {
+		}).Fill().Label(locales.HistoryTable()).Changed() && app.historySelected >= 0 && app.historySelected < len(app.history) {
 			hash := app.history[app.historySelected].Hash
 			if hash != app.commitHash || app.readTask != nil || app.problem != "" {
 				app.selectCommit(hash)
@@ -272,7 +273,7 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 		}
 	})
 	if app.historyMore {
-		if ui.Button(c, "加载更多").FillWidth().Clicked() {
+		if ui.Button(c, locales.LoadMore()).FillWidth().Clicked() {
 			app.searchHistory(true)
 		}
 	}
@@ -281,7 +282,7 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 func (app *nativeApp) historyDetails(c *ui.Context) {
 	ui.Column(c).FillWidth().Padding(9, 14).Gap(5).Children(func() {
 		if app.commitHash == "" {
-			ui.Text(c, "选择提交查看变更").TextColor(c.Theme().TextMuted)
+			ui.Text(c, locales.SelectCommit()).TextColor(c.Theme().TextMuted)
 			return
 		}
 		var selected *gitrepo.Commit
@@ -299,7 +300,7 @@ func (app *nativeApp) historyDetails(c *ui.Context) {
 				ui.Text(c, selected.Author).FontSize(11).MaxWidth(120).SingleLine().Selectable()
 				ui.Text(c, historyDate(selected.Date)).FontSize(11).TextColor(c.Theme().TextMuted).SingleLine()
 			}
-			ui.Text(c, app.commitHash).Font("monospace").FontSize(11).MinWidth(0).Grow(1).SingleLine().Selectable().Label("完整提交 ID")
+			ui.Text(c, app.commitHash).Font("monospace").FontSize(11).MinWidth(0).Grow(1).SingleLine().Selectable().Label(locales.FullCommitID())
 		})
 		if selected != nil && selected.Refs != "" {
 			ui.Text(c, selected.Refs).FontSize(11).TextColor(c.Theme().TextMuted).MaxLines(1).Selectable().Tooltip(selected.Refs)
@@ -313,12 +314,12 @@ func (app *nativeApp) historyFiles(c *ui.Context) {
 	theme.InactiveAccent, theme.AccentText = theme.Accent, theme.Text
 	ui.Themed(c, &theme).Fill().MinWidth(0).Children(func() {
 		ui.Row(c).FillWidth().Height(49).Padding(0, 12).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, fmt.Sprintf("已修改的文件（%d）", len(app.commitFiles))).FontSize(12).Bold()
+			ui.Text(c, locales.ChangedFiles(fmt.Sprint(len(app.commitFiles)))).FontSize(12).Bold()
 		})
 		ui.Divider(c)
 		if len(app.commitFiles) == 0 {
 			if app.commitHash != "" {
-				ui.Text(c, "此提交没有文件变更").Padding(12).FontSize(12).TextColor(c.Theme().TextMuted)
+				ui.Text(c, locales.EmptyCommit()).Padding(12).FontSize(12).TextColor(c.Theme().TextMuted)
 			}
 			return
 		}
@@ -333,7 +334,7 @@ func (app *nativeApp) historyFiles(c *ui.Context) {
 				ui.Text(c, file.Path).FontSize(12).Grow(1).MinWidth(0).SingleLine().Tooltip(file.Path)
 				ui.Text(c, file.Status).FontSize(10).TextColor(c.Theme().TextMuted)
 			})
-		}).FillWidth().Grow(1).MinHeight(0).Disabled(app.readTask != nil && app.readTask.kind != nativeReadDiff).Label("提交文件列表").Changed() && app.commitSelected >= 0 && app.commitSelected < len(app.commitFiles) {
+		}).FillWidth().Grow(1).MinHeight(0).Disabled(app.readTask != nil && app.readTask.kind != nativeReadDiff).Label(locales.CommitFileList()).Changed() && app.commitSelected >= 0 && app.commitSelected < len(app.commitFiles) {
 			file := app.commitFiles[app.commitSelected].Path
 			if file != app.commitFile || app.readTask != nil || app.problem != "" {
 				app.selectCommitFile(file)

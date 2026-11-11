@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"github.com/ysicing/XSourceTree/internal/commitai"
 	"github.com/ysicing/XSourceTree/internal/gitrepo"
 	"github.com/ysicing/XSourceTree/internal/workspace"
+	"github.com/ysicing/XSourceTree/locales"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/updater"
@@ -57,6 +57,7 @@ type nativeApp struct {
 	post                  func(func())
 	closed                bool
 	busy                  bool
+	scanning              bool
 	readTask              *nativeRead
 	readDone              <-chan struct{}
 	writable              bool
@@ -104,6 +105,9 @@ type nativeApp struct {
 	settingsAutoDownloads bool
 	availableVersion      string
 	stopUpdater           func()
+	stopLocale            func()
+	chosenLanguage        string
+	chooseLanguage        func(string)
 	ai                    *nativeCommitAI
 	draftRevision         uint64
 
@@ -128,6 +132,7 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 		historySelected: -1, commitSelected: -1,
 		historyList: &ui.ListState{}, commitList: &ui.ListState{},
 		refCollapsed: make(map[nativeRefKey]bool), fileCollapsed: make(map[string]bool),
+		chooseLanguage: mygo.App.SetLocale,
 	}
 	if data, err := os.ReadFile(stateFile); err == nil {
 		stored := struct {
@@ -135,7 +140,7 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 			ByName bool `json:"byName"`
 		}{nativePreferences: &app.prefs}
 		if err := json.Unmarshal(data, &stored); err != nil {
-			app.problem = "无法读取界面偏好，将使用默认布局"
+			app.problem = locales.LoadPreferencesFailed()
 		}
 		if app.prefs.FileSort == "" && stored.ByName {
 			app.prefs.FileSort = "name"
@@ -169,6 +174,7 @@ func clampSize(value, fallback, minimum, maximum float32) float32 {
 }
 
 func (app *nativeApp) open() {
+	app.chosenLanguage = mygo.App.ChosenLocale()
 	app.win = mygo.NewWindow(mygo.WindowOptions{
 		Title: "XSourceTree", Width: 1320, Height: 860, MinWidth: 1024, MinHeight: 680,
 		TitleBarStyle: mygo.TitleBarHiddenInset, TitleBarHeight: 52,
@@ -177,6 +183,13 @@ func (app *nativeApp) open() {
 	})
 	app.win.SetWindowButtonsTheme(appearanceThemeSource(app.prefs.Appearance))
 	app.post = app.win.Update
+	app.stopLocale = mygo.App.OnLocaleChanged(func(_ string) {
+		app.post(func() {
+			if !app.closed {
+				app.chosenLanguage = mygo.App.ChosenLocale()
+			}
+		})
+	})
 	app.availableVersion = updater.AvailableVersion()
 	app.stopUpdater = updater.OnChange(func() {
 		app.post(func() {
@@ -194,6 +207,10 @@ func (app *nativeApp) open() {
 		if app.stopUpdater != nil {
 			app.stopUpdater()
 			app.stopUpdater = nil
+		}
+		if app.stopLocale != nil {
+			app.stopLocale()
+			app.stopLocale = nil
 		}
 	})
 	app.win.OnFocus(func() {
@@ -302,7 +319,7 @@ func (app *nativeApp) openRepository(path string) {
 		if !app.busy {
 			app.stopCommitAI()
 		}
-		app.run("正在打开仓库…", func(ctx context.Context) (func(), error) {
+		app.run(locales.OpeningRepository(), func(ctx context.Context) (func(), error) {
 			result, err := app.readRepository(ctx, path, true)
 			if err != nil {
 				return nil, err
@@ -327,13 +344,13 @@ func (app *nativeApp) refresh() {
 		return
 	}
 	if app.screen == "library" || app.repository == nil {
-		app.run("正在刷新仓库列表…", func(ctx context.Context) (func(), error) {
+		app.run(locales.RefreshingLibrary(), func(ctx context.Context) (func(), error) {
 			library, err := app.service.RefreshLibrary(ctx)
 			return func() { app.library = library }, err
 		})
 		return
 	}
-	app.leaveConflict(func() { app.mutate("正在刷新…", nil) })
+	app.leaveConflict(func() { app.mutate(locales.Refreshing(), nil) })
 }
 
 func (app *nativeApp) mutate(label string, operation func(context.Context, string) error) {
@@ -432,27 +449,27 @@ func (app *nativeApp) commit() {
 	path := app.repository.snapshot.Path
 	message := app.prefs.Drafts[path]
 	if app.repository.snapshot.Operation.Kind != "" {
-		app.problem = "请先完成当前 Git 操作"
+		app.problem = locales.FinishOperationFirst()
 		return
 	}
 	if strings.TrimSpace(message) == "" {
-		app.problem = "请填写提交说明"
+		app.problem = locales.EnterCommitMessage()
 		return
 	}
 	staged := false
 	for _, file := range app.repository.snapshot.Files {
 		if file.Conflict {
-			app.problem = "请先解决并暂存所有冲突"
+			app.problem = locales.ResolveAllConflicts()
 			return
 		}
 		staged = staged || isStaged(file)
 	}
 	if !staged {
-		app.problem = "没有已暂存的变更"
+		app.problem = locales.NoStagedChanges()
 		return
 	}
 	app.stopCommitAI()
-	app.run("正在提交…", func(ctx context.Context) (func(), error) {
+	app.run(locales.Committing(), func(ctx context.Context) (func(), error) {
 		commitErr := app.service.Commit(ctx, path, message)
 		result, refreshErr := app.readRepository(ctx, path, false)
 		return func() {
@@ -463,7 +480,7 @@ func (app *nativeApp) commit() {
 			if commitErr == nil {
 				delete(app.prefs.Drafts, path)
 				if err := app.savePreferences(); err != nil {
-					app.problem = fmt.Sprintf("提交成功，但无法保存草稿状态：%v", err)
+					app.problem = locales.CommitSavedDraftFailed(err.Error())
 				}
 			}
 		}, errors.Join(commitErr, refreshErr)
@@ -479,7 +496,7 @@ func (app *nativeApp) leaveConflict(action func()) {
 		return
 	}
 	if app.conflictDirty() {
-		app.confirm("放弃冲突编辑？", "尚未保存的合并结果将丢失，磁盘文件不会改变。", "放弃编辑", func() {
+		app.confirm(locales.DiscardConflictTitle(), locales.DiscardConflictDetail(), locales.DiscardConflictEdits(), func() {
 			app.cancelRead()
 			app.clearDiff()
 			action()
@@ -493,16 +510,16 @@ func (app *nativeApp) leaveConflict(action func()) {
 func (app *nativeApp) prepareClose() bool {
 	if app.busy {
 		_, _ = mygo.Dialog.Message(mygo.MessageOptions{
-			Parent: app.win, Message: "当前操作尚未完成", Detail: "请等待操作结束，或先取消扫描、历史搜索。",
-			Buttons: []string{"好"},
+			Parent: app.win, Message: locales.OperationBusyTitle(), Detail: locales.OperationBusyDetail(),
+			Buttons: []string{locales.Ok()},
 		})
 		return false
 	}
 	if app.conflictDirty() {
 		result, err := mygo.Dialog.Message(mygo.MessageOptions{
-			Parent: app.win, Type: mygo.MessageWarning, Message: "要丢弃冲突编辑并退出吗？",
-			Detail:  "提交说明会保存；未保存的冲突编辑将丢失。",
-			Buttons: []string{"取消", "丢弃编辑并退出"}, CancelButton: 0, DestructiveButtons: []int{1},
+			Parent: app.win, Type: mygo.MessageWarning, Message: locales.QuitWithConflictTitle(),
+			Detail:  locales.QuitWithConflictDetail(),
+			Buttons: []string{locales.Cancel(), locales.DiscardAndQuit()}, CancelButton: 0, DestructiveButtons: []int{1},
 		})
 		if err != nil || result.Button != 1 {
 			return false
@@ -510,8 +527,8 @@ func (app *nativeApp) prepareClose() bool {
 	}
 	if err := app.savePreferences(); err != nil {
 		_, _ = mygo.Dialog.Message(mygo.MessageOptions{
-			Parent: app.win, Type: mygo.MessageWarning, Message: "无法保存草稿和界面状态",
-			Detail: err.Error(), Buttons: []string{"好"},
+			Parent: app.win, Type: mygo.MessageWarning, Message: locales.SaveStateFailed(),
+			Detail: err.Error(), Buttons: []string{locales.Ok()},
 		})
 		return false
 	}

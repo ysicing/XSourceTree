@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/ysicing/XSourceTree/internal/workspace"
+	"github.com/ysicing/XSourceTree/locales"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/sfsymbols"
@@ -26,6 +27,7 @@ type nativeField struct {
 type nativeDialog struct {
 	parent     *nativeDialog
 	title      string
+	titleText  func() string
 	width      float32
 	height     float32
 	detail     string
@@ -90,9 +92,13 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 				if dialog.onClose != nil {
 					fontSize = 16
 				}
-				ui.Text(c, dialog.title).FontSize(fontSize).Bold().Grow(1).MinWidth(0)
+				title := dialog.title
+				if dialog.titleText != nil {
+					title = dialog.titleText()
+				}
+				ui.Text(c, title).FontSize(fontSize).Bold().Grow(1).MinWidth(0)
 				if dialog.onClose != nil {
-					closeButton := ui.Button(c, "").Label("关闭设置").Tooltip("关闭设置").
+					closeButton := ui.Button(c, "").Label(locales.CloseSettings()).Tooltip(locales.CloseSettings()).
 						Size(28, 28).Padding(4).Disabled(app.busy)
 					closeButton.Children(func() {
 						sfsymbols.Symbol(c, "xmark.circle.fill").Size(18).Color(c.Theme().TextMuted).Fallback(nativeIcons["close"])
@@ -103,7 +109,7 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 				}
 			}
 			if dialog.onClose != nil {
-				ui.Toolbar(c, header).Label("设置操作").FillWidth().Padding(0)
+				ui.Toolbar(c, header).Label(locales.SettingsActions()).FillWidth().Padding(0)
 			} else {
 				ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(12).Children(header)
 			}
@@ -146,7 +152,7 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 			ui.Row(c).FillWidth().Gap(8).Justify(ui.End).Children(func() {
 				dismiss := dialog.dismiss
 				if dismiss == "" {
-					dismiss = "取消"
+					dismiss = locales.Cancel()
 				}
 				if ui.Button(c, dismiss).Disabled(app.busy).Clicked() {
 					app.dialog = dialog.parent
@@ -208,14 +214,14 @@ func (app *nativeApp) chooseLocal() {
 	if app.busy {
 		return
 	}
-	paths, err := app.chooseDirectories("添加已有的本地仓库", "添加", true)
+	paths, err := app.chooseDirectories(locales.AddExistingRepository(), locales.Add(), true)
 	if err != nil {
 		app.problem = err.Error()
 		return
 	}
 	if len(paths) > 0 {
 		group := app.group
-		app.libraryChange("正在添加仓库…", func(ctx context.Context) (workspace.Library, error) {
+		app.libraryChange(locales.AddingRepositories(), func(ctx context.Context) (workspace.Library, error) {
 			return app.service.AddRepositories(ctx, paths, group)
 		})
 	}
@@ -223,10 +229,10 @@ func (app *nativeApp) chooseLocal() {
 
 func (app *nativeApp) pathDialog() {
 	app.dialog = &nativeDialog{
-		title: "添加本地仓库", action: "添加", fields: []nativeField{{label: "仓库完整路径"}},
+		title: locales.AddLocalRepository(), action: locales.Add(), fields: []nativeField{{label: locales.FullRepositoryPath()}},
 		submit: func(dialog *nativeDialog) {
 			path, group := dialog.fields[0].value, app.group
-			app.libraryChange("正在添加仓库…", func(ctx context.Context) (workspace.Library, error) {
+			app.libraryChange(locales.AddingRepositories(), func(ctx context.Context) (workspace.Library, error) {
 				return app.service.AddRepositories(ctx, []string{path}, group)
 			})
 		},
@@ -234,17 +240,17 @@ func (app *nativeApp) pathDialog() {
 }
 
 func (app *nativeApp) groupDialog(id string) {
-	value, title := "", "新建仓库组"
+	value, title := "", locales.NewGroup()
 	for _, group := range app.library.Groups {
 		if group.ID == id {
-			value, title = group.Name, "重命名仓库组"
+			value, title = group.Name, locales.RenameGroup()
 		}
 	}
 	app.dialog = &nativeDialog{
-		title: title, action: "保存", fields: []nativeField{{label: "组名", value: value}},
+		title: title, action: locales.Save(), fields: []nativeField{{label: locales.GroupName(), value: value}},
 		submit: func(dialog *nativeDialog) {
 			name := dialog.fields[0].value
-			app.libraryChange("正在保存分组…", func(_ context.Context) (workspace.Library, error) {
+			app.libraryChange(locales.SavingGroup(), func(_ context.Context) (workspace.Library, error) {
 				if id == "" {
 					return app.service.CreateGroup(name)
 				}
@@ -255,8 +261,8 @@ func (app *nativeApp) groupDialog(id string) {
 }
 
 func (app *nativeApp) removeGroup(group workspace.Group) {
-	app.confirm("移除仓库组？", "仓库将保留在本地列表中，不会删除磁盘文件。", "移除", func() {
-		app.libraryChange("正在移除分组…", func(_ context.Context) (workspace.Library, error) {
+	app.confirm(locales.RemoveGroupTitle(), locales.RemoveGroupDetail(), locales.Remove(), func() {
+		app.libraryChange(locales.RemovingGroup(), func(_ context.Context) (workspace.Library, error) {
 			return app.service.RemoveGroup(group.ID)
 		})
 		app.group = ""
@@ -267,10 +273,10 @@ func (app *nativeApp) groupActions(group workspace.Group) {
 	app.dialog = &nativeDialog{
 		title: group.Name,
 		body: func(c *ui.Context) {
-			if ui.Button(c, "重命名").FillWidth().Clicked() {
+			if ui.Button(c, locales.Rename()).FillWidth().Clicked() {
 				app.groupDialog(group.ID)
 			}
-			if ui.Button(c, "移除仓库组…").FillWidth().Clicked() {
+			if ui.Button(c, locales.RemoveGroupMenu()).FillWidth().Clicked() {
 				app.removeGroup(group)
 			}
 		},
@@ -278,7 +284,7 @@ func (app *nativeApp) groupActions(group workspace.Group) {
 }
 
 func (app *nativeApp) groupChoices() ([]string, map[string]string) {
-	options, ids := []string{"未分组"}, map[string]string{"未分组": ""}
+	options, ids := []string{locales.Ungrouped()}, map[string]string{locales.Ungrouped(): ""}
 	for _, group := range app.library.Groups {
 		label := group.Name
 		if _, exists := ids[label]; exists {
@@ -298,22 +304,22 @@ func (app *nativeApp) repositoryEntryDialog(entry workspace.LocalRepository) {
 		}
 	}
 	app.dialog = &nativeDialog{
-		title: entry.Name, detail: entry.Path, options: options, choice: choice, action: "移动到分组",
+		title: entry.Name, detail: entry.Path, options: options, choice: choice, action: locales.MoveToGroup(),
 		submit: func(dialog *nativeDialog) {
 			group := ids[dialog.choice]
-			app.libraryChange("正在移动仓库…", func(_ context.Context) (workspace.Library, error) {
+			app.libraryChange(locales.MovingRepository(), func(_ context.Context) (workspace.Library, error) {
 				return app.service.MoveRepository(entry.Path, group)
 			})
 		},
 		body: func(c *ui.Context) {
-			if ui.Button(c, "在 Finder 中显示").FillWidth().Clicked() {
+			if ui.Button(c, locales.RevealFinder()).FillWidth().Clicked() {
 				if err := app.service.RevealRepository(entry.Path); err != nil {
 					app.problem = err.Error()
 				}
 			}
-			if ui.Button(c, "从列表移除…").FillWidth().Clicked() {
-				app.confirm("移除仓库记录？", entry.Path+"\n磁盘文件不会删除。", "移除", func() {
-					app.libraryChange("正在移除记录…", func(_ context.Context) (workspace.Library, error) {
+			if ui.Button(c, locales.RemoveFromListMenu()).FillWidth().Clicked() {
+				app.confirm(locales.RemoveRepositoryTitle(), entry.Path+"\n"+locales.KeepDiskFiles(), locales.Remove(), func() {
+					app.libraryChange(locales.RemovingRecord(), func(_ context.Context) (workspace.Library, error) {
 						return app.service.RemoveRepository(entry.Path)
 					})
 				})
@@ -323,7 +329,10 @@ func (app *nativeApp) repositoryEntryDialog(entry workspace.LocalRepository) {
 }
 
 func (app *nativeApp) chooseScan() {
-	paths, err := app.chooseDirectories("扫描文件夹", "扫描", false)
+	if app.busy || app.closed {
+		return
+	}
+	paths, err := app.chooseDirectories(locales.ScanFolders(), locales.Scan(), false)
 	if err != nil {
 		app.problem = err.Error()
 		return
@@ -331,9 +340,11 @@ func (app *nativeApp) chooseScan() {
 	if len(paths) == 0 {
 		return
 	}
-	app.run("正在扫描文件夹…", func(ctx context.Context) (func(), error) {
+	app.scanning = true
+	app.run(locales.ScanningFolders(), func(ctx context.Context) (func(), error) {
 		result, err := app.service.Scan(ctx, paths[0])
 		return func() {
+			app.scanning = false
 			if err == nil {
 				app.scanResult = &result
 				app.scanSelected = map[string]bool{}
@@ -354,11 +365,11 @@ func (app *nativeApp) scanDialog() {
 	}
 	var notices []string
 	if result.Truncated {
-		notices = append(notices, "扫描已达到上限")
+		notices = append(notices, locales.ScanLimit())
 	}
 	notices = append(notices, result.Warnings...)
 	app.dialog = &nativeDialog{
-		title: "选择要添加的仓库", detail: strings.Join(notices, "\n"), choice: choice, action: "添加所选仓库",
+		title: locales.SelectRepositories(), detail: strings.Join(notices, "\n"), choice: choice, action: locales.AddSelectedRepositories(),
 		canSubmit: func() bool {
 			for _, entry := range result.Repositories {
 				if app.scanSelected[entry.Path] {
@@ -376,24 +387,24 @@ func (app *nativeApp) scanDialog() {
 			}
 			ui.Column(c).FillWidth().Gap(12).Children(func() {
 				ui.Row(c).FillWidth().Gap(12).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, "添加到").FontSize(13).TextColor(c.Theme().TextMuted)
-					ui.Select(c, &app.dialog.choice, options).Label("仓库组").Grow(1).MinWidth(0)
+					ui.Text(c, locales.AddTo()).FontSize(13).TextColor(c.Theme().TextMuted)
+					ui.Select(c, &app.dialog.choice, options).Label(locales.RepositoryGroups()).Grow(1).MinWidth(0)
 				})
 				ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, fmt.Sprintf("已选 %d / %d 个仓库", selected, len(result.Repositories))).FontSize(12).TextColor(c.Theme().TextMuted).Grow(1)
-					if ui.Button(c, "全选").FontSize(12).Disabled(selected == len(result.Repositories)).Clicked() {
+					ui.Text(c, locales.SelectedRepositories(fmt.Sprint(selected), fmt.Sprint(len(result.Repositories)))).FontSize(12).TextColor(c.Theme().TextMuted).Grow(1)
+					if ui.Button(c, locales.SelectAll()).FontSize(12).Disabled(selected == len(result.Repositories)).Clicked() {
 						for _, entry := range result.Repositories {
 							app.scanSelected[entry.Path] = true
 						}
 					}
-					if ui.Button(c, "清空选择").FontSize(12).Disabled(selected == 0).Clicked() {
+					if ui.Button(c, locales.ClearSelection()).FontSize(12).Disabled(selected == 0).Clicked() {
 						app.scanSelected = map[string]bool{}
 					}
 				})
 				ui.Scroll(c).Height(320).FillWidth().Border(1, c.Theme().Border).Radius(c.Theme().Radius).Children(func() {
 					ui.Column(c).FillWidth().Padding(4).Gap(2).Children(func() {
 						if len(result.Repositories) == 0 {
-							ui.Text(c, "未找到可添加的仓库").FillWidth().Padding(24).TextColor(c.Theme().TextMuted)
+							ui.Text(c, locales.NoRepositoriesFound()).FillWidth().Padding(24).TextColor(c.Theme().TextMuted)
 						}
 						for _, entry := range result.Repositories {
 							ui.Column(c).Key(entry.Path).FillWidth().Children(func() {
@@ -433,11 +444,11 @@ func (app *nativeApp) scanDialog() {
 				}
 			}
 			if len(paths) == 0 {
-				app.problem = "请先选择仓库"
+				app.problem = locales.SelectRepositoryFirst()
 				return
 			}
 			group := ids[dialog.choice]
-			app.libraryChange("正在添加仓库…", func(ctx context.Context) (workspace.Library, error) {
+			app.libraryChange(locales.AddingRepositories(), func(ctx context.Context) (workspace.Library, error) {
 				return app.service.AddRepositories(ctx, paths, group)
 			})
 		},
@@ -446,8 +457,8 @@ func (app *nativeApp) scanDialog() {
 
 func (app *nativeApp) linesDialog() {
 	app.dialog = &nativeDialog{
-		title: "选择变更行", action: "应用所选行",
-		detail: "删除行与新增行可独立选择；仅修改暂存区。",
+		title: locales.SelectChangedLines(), action: locales.ApplySelectedLines(),
+		detail: locales.SelectLinesDetail(),
 		canSubmit: func() bool {
 			for _, line := range app.lineChoices {
 				if line.Checked {

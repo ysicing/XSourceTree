@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/ysicing/XSourceTree/internal/gitrepo"
+	"github.com/ysicing/XSourceTree/locales"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -53,7 +54,7 @@ func (editor *nativeIdentityEditor) dirty() bool {
 
 func (editor *nativeIdentityEditor) load(app *nativeApp, dialog *nativeDialog) {
 	dialog.problem = ""
-	app.run("正在读取 Git 身份…", func(ctx context.Context) (func(), error) {
+	app.run(locales.ReadingIdentity(), func(ctx context.Context) (func(), error) {
 		settings, err := app.service.Identity(ctx, editor.path)
 		return func() {
 			if err == nil && app.dialog == dialog {
@@ -71,13 +72,13 @@ func (editor *nativeIdentityEditor) save(app *nativeApp, dialog *nativeDialog) {
 		Name: editor.name, Email: editor.email, Token: editor.settings.Token,
 		Inherit: editor.path != "" && !editor.override,
 	}
-	app.run("正在保存 Git 身份…", func(ctx context.Context) (func(), error) {
+	app.run(locales.SavingIdentity(), func(ctx context.Context) (func(), error) {
 		if err := app.service.SaveIdentity(ctx, editor.path, request); err != nil {
 			return nil, err
 		}
 		settings, err := app.service.Identity(ctx, editor.path)
 		if err != nil {
-			return func() { editor.ready = false }, fmt.Errorf("配置已保存，但无法重新读取，请重试：%w", err)
+			return func() { editor.ready = false }, fmt.Errorf("%s%w", locales.ReloadIdentityFailed(""), err)
 		}
 		return func() {
 			if app.dialog == dialog {
@@ -91,21 +92,21 @@ func (editor *nativeIdentityEditor) save(app *nativeApp, dialog *nativeDialog) {
 func (editor *nativeIdentityEditor) view(app *nativeApp, dialog *nativeDialog, c *ui.Context) {
 	if !editor.ready {
 		if app.busy {
-			ui.Text(c, "正在读取 Git 配置…").TextColor(c.Theme().TextMuted)
-		} else if ui.Button(c, "重新读取").Clicked() {
+			ui.Text(c, locales.ReadingGitConfig()).TextColor(c.Theme().TextMuted)
+		} else if ui.Button(c, locales.Reload()).Clicked() {
 			editor.load(app, dialog)
 		}
 		return
 	}
 	if editor.path != "" {
-		if ui.Checkbox(c, &editor.override, "为此仓库单独设置").Disabled(!app.writable).Changed() {
+		if ui.Checkbox(c, &editor.override, locales.OverrideIdentity()).Disabled(!app.writable).Changed() {
 			editor.saved = false
 		}
 		if !editor.override {
-			ui.Text(c, "使用继承的 Git 配置。").FontSize(12).TextColor(c.Theme().TextMuted)
+			ui.Text(c, locales.InheritedGitConfig()).FontSize(12).TextColor(c.Theme().TextMuted)
 		}
 		if editor.settings.Name.Scope == "worktree" || editor.settings.Email.Scope == "worktree" {
-			ui.Text(c, "工作树身份优先；此处修改仓库级默认值。").FontSize(12).TextColor(c.Theme().TextMuted)
+			ui.Text(c, locales.WorktreeIdentityNotice()).FontSize(12).TextColor(c.Theme().TextMuted)
 		}
 	}
 	if editor.path == "" || editor.override {
@@ -113,7 +114,7 @@ func (editor *nativeIdentityEditor) view(app *nativeApp, dialog *nativeDialog, c
 			for _, field := range []struct {
 				label string
 				value *string
-			}{{"姓名", &editor.name}, {"邮箱", &editor.email}} {
+			}{{locales.Name(), &editor.name}, {locales.Email(), &editor.email}} {
 				ui.Column(c).FillWidth().Gap(4).Children(func() {
 					ui.Text(c, field.label).FontSize(12)
 					if ui.TextInput(c, field.value).Label(field.label).FillWidth().Changed() {
@@ -124,17 +125,17 @@ func (editor *nativeIdentityEditor) view(app *nativeApp, dialog *nativeDialog, c
 		})
 	}
 	ui.Divider(c)
-	ui.Text(c, "当前生效").FontSize(12).Bold()
+	ui.Text(c, locales.EffectiveIdentity()).FontSize(12).Bold()
 	for _, field := range []struct {
 		label string
 		value gitrepo.IdentityValue
-	}{{"姓名", editor.settings.Name}, {"邮箱", editor.settings.Email}} {
+	}{{locales.Name(), editor.settings.Name}, {locales.Email(), editor.settings.Email}} {
 		value := field.value.Value
 		if value == "" {
-			value = "未配置"
+			value = locales.Unconfigured()
 		}
 		ui.Row(c).FillWidth().Gap(12).Children(func() {
-			ui.Text(c, field.label).FontSize(12).TextColor(c.Theme().TextMuted).Width(40)
+			ui.Text(c, field.label).FontSize(12).TextColor(c.Theme().TextMuted).Width(50)
 			ui.Column(c).FillWidth().MinWidth(0).Gap(3).Children(func() {
 				ui.Text(c, value).FontSize(13).MaxLines(1).Selectable().Tooltip(value)
 				if field.value.Origin != "" {
@@ -145,15 +146,15 @@ func (editor *nativeIdentityEditor) view(app *nativeApp, dialog *nativeDialog, c
 		})
 	}
 	if editor.saved {
-		ui.Text(c, "已保存").FontSize(12).TextColor(c.Theme().TextMuted)
+		ui.Text(c, locales.Saved()).FontSize(12).TextColor(c.Theme().TextMuted)
 	} else if editor.dirty() {
-		ui.Text(c, "保存后生效").FontSize(12).TextColor(c.Theme().TextMuted)
+		ui.Text(c, locales.SaveToApply()).FontSize(12).TextColor(c.Theme().TextMuted)
 	}
 }
 
 func identitySource(value gitrepo.IdentityValue) string {
 	scope := map[string]string{
-		"system": "系统", "global": "全局", "local": "仓库", "worktree": "工作树", "command": "命令",
+		"system": locales.SystemScope(), "global": locales.GlobalScope(), "local": locales.Repository(), "worktree": locales.WorktreeScope(), "command": locales.CommandScope(),
 	}[value.Scope]
 	if scope == "" {
 		scope = value.Scope
@@ -170,7 +171,7 @@ func (editor *nativeIdentityEditor) close(app *nativeApp, dialog *nativeDialog) 
 		app.dialog = dialog.parent
 		return
 	}
-	app.confirm("放弃未保存的修改？", "尚未保存的 Git 身份修改将丢失。", "放弃修改", func() {
+	app.confirm(locales.DiscardUnsavedTitle(), locales.DiscardIdentityDetail(), locales.DiscardEdits(), func() {
 		app.dialog = dialog.parent
 	})
 	app.dialog.parent = dialog
@@ -181,25 +182,25 @@ func (app *nativeApp) repositorySettingsDialog() {
 		return
 	}
 	if app.repository == nil || app.screen == "library" {
-		app.problem = "请先打开仓库，再修改仓库设置"
+		app.problem = locales.OpenRepositoryFirst()
 		return
 	}
 	identity := &nativeIdentityEditor{path: app.repository.snapshot.Path}
 	app.settingsError = ""
 	tab := 0
 	dialog := &nativeDialog{
-		title:  "仓库设置 — " + app.repository.snapshot.Name,
-		detail: app.repository.snapshot.Path, dismiss: "取消",
+		title:  locales.RepositorySettingsTitle(app.repository.snapshot.Name),
+		detail: app.repository.snapshot.Path, dismiss: locales.Cancel(),
 	}
 	dialog.onClose = func() { identity.close(app, dialog) }
 	dialog.submit = func(dialog *nativeDialog) { identity.save(app, dialog) }
 	dialog.canSubmit = func() bool { return tab == 0 && app.writable && identity.dirty() }
 	dialog.body = func(c *ui.Context) {
 		ui.Column(c).FillWidth().Gap(12).Children(func() {
-			ui.Segmented(c, &tab, "提交身份", "远程", "AI").Label("仓库设置分类")
+			ui.Segmented(c, &tab, locales.CommitIdentity(), locales.Remotes(), "AI").Label(locales.RepositorySettingsCategories())
 			dialog.action = ""
 			if tab == 0 {
-				dialog.action = "保存"
+				dialog.action = locales.Save()
 			}
 			_, height := c.Size()
 			contentHeight := min(390, max(120, height-280))

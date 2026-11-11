@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/ysicing/XSourceTree/internal/gitrepo"
+	"github.com/ysicing/XSourceTree/locales"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -72,15 +73,16 @@ func (app *nativeApp) referenceSidebar(c *ui.Context, title, label string, icon 
 	if !known && title == "标签" {
 		expanded = false
 	}
+	label = locales.ReferenceTree(nativeReferenceLabel(title))
+	if title == "远端" {
+		label = locales.RemoteBranchTree()
+	}
 	ui.Column(c).Key(title+":"+app.repository.snapshot.Path).FillWidth().Margin(16, 0, 0, 0).Children(func() {
 		tree := ui.TreeBase(c)
 		tree.Root.FillWidth().Label(label).Children(func() {
 			section := tree.Item(&expanded)
-			visibleTitle := title
-			if title == "本地分支" {
-				visibleTitle = "分支"
-			}
-			header := section.Row.Label(title).Height(30).FillWidth().Padding(0, 8).Gap(8).AlignItems(ui.Center).Radius(5)
+			visibleTitle := nativeReferenceTitle(title)
+			header := section.Row.Label(nativeReferenceLabel(title)).Height(30).FillWidth().Padding(0, 8).Gap(8).AlignItems(ui.Center).Radius(5)
 			header.FocusRing(header.FocusVisible())
 			if header.Hovered() || header.Pressed() {
 				header.Background(c.Theme().SurfaceHover)
@@ -99,6 +101,26 @@ func (app *nativeApp) referenceSidebar(c *ui.Context, title, label string, icon 
 			})
 		})
 	})
+}
+
+func nativeReferenceTitle(kind string) string {
+	if kind == "本地分支" {
+		return locales.Branch()
+	}
+	return nativeReferenceLabel(kind)
+}
+
+func nativeReferenceLabel(kind string) string {
+	switch kind {
+	case "本地分支":
+		return locales.LocalBranches()
+	case "标签":
+		return locales.Tags()
+	case "远端":
+		return locales.Remote()
+	default:
+		return kind
+	}
 }
 
 func nativeDisclosure(c *ui.Context, expanded bool, color ui.Color) {
@@ -127,9 +149,9 @@ func (app *nativeApp) referenceItems(c *ui.Context, tree ui.TreeParts, nodes []*
 			label := node.reference
 			switch {
 			case node.remote:
-				label = "远端 " + node.reference
+				label = nativeReferenceLabel("远端") + " " + node.reference
 			case open != nil:
-				label = kind + "目录 " + node.reference
+				label = locales.ReferenceDirectory(nativeReferenceLabel(kind), node.reference)
 			}
 			row := item.Row.Label(label).Tooltip(node.reference).FillWidth().MinWidth(0).
 				Height(26).Gap(4).AlignItems(ui.Center).Padding(0, 8).
@@ -199,22 +221,22 @@ func (app *nativeApp) localBranchSidebar(c *ui.Context) {
 	app.referenceSidebar(c, "本地分支", "本地分支树", nativeIcons["branch"], nativeReferenceNodes(names, "", current), func(name string, item ui.Element) {
 		branch := branches[name]
 		if branch.Current {
-			item.Tooltip(name + " · 当前分支")
+			item.Tooltip(name + " · " + locales.CurrentBranch())
 		}
 		item.ContextMenu(func(menu *ui.Menu) {
-			if menu.Item("重命名分支…").Disabled(!app.writable).Chosen() {
+			if menu.Item(locales.RenameBranchMenu()).Disabled(!app.writable).Chosen() {
 				app.renameBranchDialog(name)
 			}
-			if menu.Item("删除分支…").Disabled(branch.Current || !app.writable).Chosen() {
+			if menu.Item(locales.DeleteBranchMenu()).Disabled(branch.Current || !app.writable).Chosen() {
 				app.deleteBranch(name, false)
 			}
-			if menu.Item("强制删除分支…").Disabled(branch.Current || !app.writable).Chosen() {
+			if menu.Item(locales.ForceDeleteBranchMenu()).Disabled(branch.Current || !app.writable).Chosen() {
 				app.deleteBranch(name, true)
 			}
 		})
 		if item.Clicked() && app.writable && !branch.Current {
 			app.leaveConflict(func() {
-				app.mutate("正在切换分支…", func(ctx context.Context, path string) error {
+				app.mutate(locales.SwitchingBranch(), func(ctx context.Context, path string) error {
 					return app.service.SwitchBranch(ctx, path, name)
 				})
 			})
@@ -232,7 +254,7 @@ func (app *nativeApp) tagSidebar(c *ui.Context) {
 	app.referenceSidebar(c, "标签", "标签树", nativeIcons["tag"], nativeReferenceNodes(names, "", ""), func(name string, item ui.Element) {
 		tag := tags[name]
 		item.ContextMenu(func(menu *ui.Menu) {
-			if menu.Item("删除标签…").Disabled(!app.writable).Chosen() {
+			if menu.Item(locales.DeleteTagMenu()).Disabled(!app.writable).Chosen() {
 				app.deleteTag(name)
 			}
 		})

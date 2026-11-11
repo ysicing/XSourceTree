@@ -410,9 +410,16 @@ func (app *nativeApp) operationBar(c *ui.Context) {
 func (app *nativeApp) changesPanel(c *ui.Context) {
 	ui.Row(c).FillWidth().Padding(12).Gap(6).AlignItems(ui.Center).Children(func() {
 		ui.TextInput(c, &app.fileQuery).Label("筛选文件").Search().Placeholder("筛选文件").Grow(1).MinWidth(0)
-		iconButton(c, "文件选项", nativeIcons["more"]).Menu(func(menu *ui.Menu) {
+		order := "按路径"
+		if app.prefs.ByName {
+			order = "按文件名"
+		}
+		ui.Button(c, order).Label("文件选项").FontSize(12).Menu(func(menu *ui.Menu) {
+			if menu.Item("按路径排序").Checked(!app.prefs.ByName).Chosen() {
+				app.prefs.ByName = false
+			}
 			if menu.Item("按文件名排序").Checked(app.prefs.ByName).Chosen() {
-				app.prefs.ByName = !app.prefs.ByName
+				app.prefs.ByName = true
 			}
 			menu.Separator()
 			if menu.Item("储藏修改…").Disabled(!app.writable || len(app.repository.snapshot.Files) == 0 || app.repository.snapshot.Operation.Kind != "").Chosen() {
@@ -420,90 +427,11 @@ func (app *nativeApp) changesPanel(c *ui.Context) {
 			}
 		})
 	})
-	ui.Scroll(c).Grow(1).MinHeight(0).FillWidth().Padding(0, 6, 8).Children(func() {
-		for _, staged := range []bool{false, true} {
-			staged := staged
-			label := "工作区"
+	ui.Column(c).Grow(1).MinHeight(0).FillWidth().Children(func() {
+		for _, staged := range []bool{true, false} {
+			app.changesSection(c, staged)
 			if staged {
-				label = "暂存区"
-			}
-			files := app.visibleFiles(staged)
-			slices.SortFunc(files, func(first, second gitrepo.File) int {
-				if app.prefs.ByName {
-					if order := strings.Compare(filepath.Base(first.Path), filepath.Base(second.Path)); order != 0 {
-						return order
-					}
-				}
-				return strings.Compare(first.Path, second.Path)
-			})
-			ui.Toolbar(c, func() {
-				ui.Text(c, label).FontSize(12).Bold().TextColor(c.Theme().TextMuted)
-				ui.Badge(c, fmt.Sprint(len(files)))
-				ui.Spacer(c)
-				action := "全部暂存"
-				if staged {
-					action = "全部取消"
-				}
-				count := 0
-				for _, file := range files {
-					if !file.Conflict {
-						count++
-					}
-				}
-				if app.fileQuery != "" {
-					action = fmt.Sprintf("暂存筛选结果 (%d)", count)
-					if staged {
-						action = fmt.Sprintf("取消筛选结果暂存 (%d)", count)
-					}
-				}
-				if ui.Button(c, action).FontSize(12).Disabled(!app.writable || count == 0).Clicked() {
-					app.stageFiles(staged, true)
-				}
-			}).Label(label+"操作").FillWidth().Padding(4, 6).Margin(4, 0, 2)
-			for _, file := range files {
-				file := file
-				ui.Row(c).Key(fmt.Sprintf("%t:%s", staged, file.Path)).FillWidth().Gap(2).AlignItems(ui.Center).Children(func() {
-					key := fmt.Sprintf("%t:%s", staged, file.Path)
-					checked := app.selectedFiles[key]
-					if ui.Checkbox(c, &checked, "").Label("选择 " + label + " " + file.Path).Disabled(file.Conflict || !app.writable).Changed() {
-						app.selectedFiles[key] = checked
-					}
-					status := file.Working
-					if staged {
-						status = file.Index
-					}
-					if file.Conflict {
-						status = "!"
-					}
-					color := c.Theme().Warning
-					switch status {
-					case "A", "?":
-						color = c.Theme().Success
-					case "D", "!":
-						color = c.Theme().Danger
-					}
-					if listRow(c, file.Path, app.selectedFile == file.Path && app.staged == staged).Grow(1).Tooltip(file.Path).Children(func() {
-						nativeFileIcon(c, file.Path)
-						ui.Text(c, filepath.Base(file.Path)).Grow(1).MinWidth(0).MaxLines(1)
-						if directory := filepath.Dir(file.Path); directory != "." {
-							ui.Text(c, directory).FontSize(11).MaxWidth(90).MaxLines(1).TextColor(c.Theme().TextMuted)
-						}
-						ui.Text(c, status).Font("monospace").FontSize(11).TextColor(color)
-					}).Clicked() {
-						app.selectFile(file.Path, staged)
-					}
-				})
-			}
-			action := "暂存所选文件"
-			if staged {
-				action = "取消暂存所选文件"
-			}
-			if count := len(app.checkedFiles(staged)); count > 0 {
-				ui.Toolbar(c, func() {
-					if ui.Button(c, fmt.Sprintf("%s (%d)", action, count)).Label(action).Disabled(!app.writable).Clicked() {
-						app.stageFiles(staged, false)
-					}
-				}).FillWidth().Label(label + "批量操作")
+				ui.Divider(c)
 			}
 		}
 	})
@@ -523,6 +451,108 @@ func (app *nativeApp) changesPanel(c *ui.Context) {
 		}
 		if ui.PrimaryButton(c, fmt.Sprintf("提交 %d 个文件", count)).FillWidth().Disabled(count == 0 || conflicts || app.repository.snapshot.Operation.Kind != "" || strings.TrimSpace(draft) == "").Clicked() {
 			app.commit()
+		}
+	})
+}
+
+func (app *nativeApp) changesSection(c *ui.Context, staged bool) {
+	label, action, selectedAction := "未暂存文件", "全部暂存", "暂存所选文件"
+	if staged {
+		label, action, selectedAction = "已暂存文件", "全部取消暂存", "取消暂存所选文件"
+	}
+	files := app.visibleFiles(staged)
+	slices.SortFunc(files, func(first, second gitrepo.File) int {
+		if app.prefs.ByName {
+			if order := strings.Compare(filepath.Base(first.Path), filepath.Base(second.Path)); order != 0 {
+				return order
+			}
+		}
+		return strings.Compare(first.Path, second.Path)
+	})
+	count := 0
+	var pathWidth float32
+	for _, file := range files {
+		if !file.Conflict {
+			count++
+		}
+		width, _ := c.MeasureText(0, ui.Span{Text: file.Path, Font: c.Theme().Font, Size: 12})
+		pathWidth = max(pathWidth, width)
+	}
+	if app.fileQuery != "" {
+		action = fmt.Sprintf("暂存筛选结果 (%d)", count)
+		if staged {
+			action = fmt.Sprintf("取消筛选结果暂存 (%d)", count)
+		}
+	}
+	section := ui.Column(c).Key(label).FillWidth().MinHeight(0)
+	if len(files) == 0 {
+		section.Height(72)
+	} else {
+		height := 44 + float32(len(files))*28
+		if len(app.checkedFiles(staged)) > 0 {
+			height += 40
+		}
+		section.Grow(1).MaxHeight(height)
+	}
+	section.Children(func() {
+		ui.Toolbar(c, func() {
+			ui.Text(c, label).FontSize(12).Bold()
+			ui.Badge(c, fmt.Sprint(len(files)))
+			ui.Spacer(c)
+			if ui.Button(c, action).FontSize(12).Disabled(!app.writable || count == 0).Clicked() {
+				app.stageFiles(staged, true)
+			}
+		}).Label(label+"操作").FillWidth().Padding(4, 12)
+		if len(files) == 0 {
+			message := "暂无" + label
+			if app.fileQuery != "" {
+				message = "无匹配文件"
+			}
+			ui.Text(c, message).FontSize(12).TextColor(c.Theme().TextMuted).Padding(6, 12)
+			return
+		}
+		ui.ScrollBoth(c).Label(label+"列表").Grow(1).MinHeight(0).FillWidth().Padding(0, 6, 6).Children(func() {
+			ui.Column(c).FillWidth().MinWidth(pathWidth + 88).Children(func() {
+				for _, file := range files {
+					file := file
+					key := fmt.Sprintf("%t:%s", staged, file.Path)
+					ui.Row(c).Key(key).FillWidth().Gap(2).AlignItems(ui.Center).Children(func() {
+						checked := app.selectedFiles[key]
+						if ui.Checkbox(c, &checked, "").Label("选择 " + label + " " + file.Path).Disabled(file.Conflict || !app.writable).Changed() {
+							app.selectedFiles[key] = checked
+						}
+						status := file.Working
+						if staged {
+							status = file.Index
+						}
+						if file.Conflict {
+							status = "!"
+						}
+						color := c.Theme().Warning
+						switch status {
+						case "A", "?":
+							color = c.Theme().Success
+						case "D", "!":
+							color = c.Theme().Danger
+						}
+						if listRow(c, file.Path, app.selectedFile == file.Path && app.staged == staged).
+							Grow(1).Padding(4, 6).Gap(6).Tooltip(file.Path).Children(func() {
+							ui.Text(c, status).Width(12).Font("monospace").FontSize(11).TextColor(color)
+							nativeFileIcon(c, file.Path)
+							ui.Text(c, file.Path).FontSize(12).Grow(1).MinWidth(0).SingleLine()
+						}).Clicked() {
+							app.selectFile(file.Path, staged)
+						}
+					})
+				}
+			})
+		})
+		if count := len(app.checkedFiles(staged)); count > 0 {
+			ui.Toolbar(c, func() {
+				if ui.Button(c, fmt.Sprintf("%s (%d)", selectedAction, count)).Label(selectedAction).Disabled(!app.writable).Clicked() {
+					app.stageFiles(staged, false)
+				}
+			}).FillWidth().Padding(4, 12).Label(label + "批量操作")
 		}
 	})
 }

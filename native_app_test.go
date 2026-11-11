@@ -334,6 +334,15 @@ func TestNativeOfficialSidebarAndFileMenu(t *testing.T) {
 	if !app.prefs.ByName {
 		t.Fatal("文件选项没有保存排序偏好")
 	}
+	if err := tester.Click("文件选项"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tester.ChooseMenuItem("按路径排序"); err != nil {
+		t.Fatal(err)
+	}
+	if app.prefs.ByName {
+		t.Fatal("文件选项没有切换回路径排序")
+	}
 	if err := tester.Click("返回仓库"); err != nil {
 		t.Fatal(err)
 	}
@@ -405,7 +414,7 @@ func TestNativeFileSelectionStagesOnlyCheckedFiles(t *testing.T) {
 	app.refresh()
 	finish()
 	tester := ui.NewTester(app.view, 1320, 860)
-	for _, label := range []string{"选择 工作区 hello.txt", "暂存所选文件"} {
+	for _, label := range []string{"选择 未暂存文件 hello.txt", "暂存所选文件"} {
 		if err := tester.Click(label); err != nil {
 			t.Fatal(err)
 		}
@@ -415,7 +424,7 @@ func TestNativeFileSelectionStagesOnlyCheckedFiles(t *testing.T) {
 	if got := nativeGit(t, path, "diff", "--cached", "--name-only"); got != "hello.txt" {
 		t.Fatalf("批量暂存包含未选择的文件: %s", got)
 	}
-	for _, label := range []string{"选择 暂存区 hello.txt", "取消暂存所选文件"} {
+	for _, label := range []string{"选择 已暂存文件 hello.txt", "取消暂存所选文件"} {
 		if err := tester.Click(label); err != nil {
 			t.Fatal(err)
 		}

@@ -304,6 +304,74 @@ func TestNativeUIChineseDraftAndDiffLayouts(t *testing.T) {
 	}
 }
 
+func TestNativeRepositoryActionsMenu(t *testing.T) {
+	app, path, finish := nativeFixture(t)
+	tester := ui.NewTester(app.view, 1320, 860)
+	if err := tester.Click("更多"); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"新建标签…", "-", "在 Finder 中显示", "打开恢复副本文件夹"}
+	if got := tester.Menu(); !slices.Equal(got, want) || app.dialog != nil {
+		t.Fatalf("应直接展开仓库菜单，菜单=%v，弹窗=%v", got, app.dialog)
+	}
+	tester.CloseMenu()
+	if !tester.Focused("更多") || app.dialog != nil {
+		t.Fatal("关闭菜单后应保留按钮焦点且不打开弹窗")
+	}
+	for _, key := range []ui.Key{ui.KeyEnter, ui.KeySpace, ui.KeyDown} {
+		tester.Key(0, key)
+		if got := tester.Menu(); !slices.Equal(got, want) {
+			t.Fatalf("按键 %v 未展开菜单: %v", key, got)
+		}
+		tester.CloseMenu()
+	}
+	tester.Key(0, ui.KeyEnter)
+	if err := tester.ChooseMenuItem("新建标签…"); err != nil {
+		t.Fatal(err)
+	}
+	if app.dialog == nil || app.dialog.title != "新建本地标签" {
+		t.Fatal("菜单未直接打开标签表单")
+	}
+	if err := tester.Click("标签名称"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Type("menu-tag")
+	if err := tester.Click("创建"); err != nil {
+		t.Fatal(err)
+	}
+	finish()
+	if app.problem != "" || app.dialog != nil {
+		t.Fatalf("创建标签失败: %s", app.problem)
+	}
+	if got := nativeGit(t, path, "rev-parse", "menu-tag"); got != nativeGit(t, path, "rev-parse", "HEAD") {
+		t.Fatal("菜单创建的标签未指向当前提交")
+	}
+}
+
+func TestNativeRepositoryActionsUnavailable(t *testing.T) {
+	app, _, _ := nativeFixture(t)
+	app.writable = false
+	tester := ui.NewTester(app.view, 1320, 860)
+	if err := tester.Click("更多"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tester.ChooseMenuItem("新建标签…"); err == nil || !strings.Contains(err.Error(), "disabled") {
+		t.Fatalf("仓库不可写时应禁用新建标签: %v", err)
+	}
+	if app.dialog != nil {
+		t.Fatal("禁用菜单项不应打开表单")
+	}
+	tester.CloseMenu()
+	app.busy = true
+	tester.Frame()
+	if err := tester.Click("更多"); err != nil {
+		t.Fatal(err)
+	}
+	if tester.Menu() != nil || app.dialog != nil {
+		t.Fatal("后台操作期间不应打开仓库菜单")
+	}
+}
+
 func TestNativeOfficialSidebarAndFileMenu(t *testing.T) {
 	app, _, finish := nativeFixture(t)
 	app.library.Groups = []workspace.Group{{ID: "daily", Name: "日常开发"}}

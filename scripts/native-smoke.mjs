@@ -98,7 +98,7 @@ async function ready() {
   // 弹窗会隐藏底部状态文字；其关闭按钮在后台任务执行期间同样被禁用。
   await waitFor((nodes) => !nodes.some((node) =>
     (node.role === "text" && node.label?.startsWith("正在") && !node.label.startsWith("正在进行")) ||
-    (node.role === "button" && ["取消", "完成"].includes(node.label) && node.states?.includes("disabled"))), "后台任务");
+    (node.role === "button" && ["取消", "关闭设置"].includes(node.label) && node.states?.includes("disabled"))), "后台任务");
 }
 async function act(label, action, text) {
   const nodes = await waitFor((entries) => entries.some((entry) =>
@@ -152,12 +152,11 @@ try {
   assert.equal(git("branch", "--show-current"), "native-topic");
   await press("main");
   assert.equal(git("branch", "--show-current"), "main");
-  await press("更多");
+  await press("提交历史");
   await press("新建标签");
   await fill("标签名称", "native-smoke");
   await press("创建");
   assert.equal(git("tag", "--list"), "native-smoke");
-  await press("提交历史");
   await fill("搜索提交、作者或 ID", "使用原生 UI");
   await press("搜索");
   await waitFor((nodes) => nodes.some((node) => node.label?.includes("使用原生 UI 提交")), "历史结果");
@@ -176,7 +175,7 @@ try {
   await fill("获取地址", remote);
   await press("保存");
   assert.equal(git("remote", "get-url", "origin"), remote);
-  await press("完成");
+  await press("关闭设置");
   await press("推送");
   await shown("发布当前分支");
   await press("发布");

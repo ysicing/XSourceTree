@@ -28,6 +28,7 @@ var nativeIcons = map[string]*ui.SVG{
 	"cloud":    nativeSymbol(`<path d="M6 17a4 4 0 0 1-.6-8A6 6 0 0 1 17 9h1a4 4 0 0 1 0 8Z"/>`),
 	"settings": nativeSymbol(`<path d="M10 3h4l.6 3 1.4.8 2.9-1 2 3.4-2.3 2v1.6l2.3 2-2 3.4-2.9-1-1.4.8L14 21h-4l-.6-3-1.4-.8-2.9 1-2-3.4 2.3-2v-1.6l-2.3-2 2-3.4 2.9 1 1.4-.8Z"/><circle cx="12" cy="12" r="3"/>`),
 	"check":    nativeSymbol(`<path d="m5 12 4 4L19 6"/>`),
+	"close":    nativeSymbol(`<path d="m6 6 12 12M6 18 18 6"/>`),
 	"chevron":  nativeSymbol(`<path d="m9 5 7 7-7 7"/>`),
 	"plus":     nativeSymbol(`<path d="M12 5v14M5 12h14"/>`),
 	"more":     nativeSymbol(`<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>`),
@@ -292,9 +293,7 @@ func (app *nativeApp) toolbar(c *ui.Context) {
 			if toolButton(c, "仓库设置", nativeIcons["settings"]).Clicked() {
 				app.repositorySettingsDialog()
 			}
-			if iconButton(c, "更多", nativeIcons["more"]).Clicked() {
-				app.repositoryActions()
-			}
+			iconButton(c, "更多", nativeIcons["more"]).Menu(app.repositoryActions)
 		}
 		ui.Spacer(c)
 		if iconButton(c, "刷新", nativeIcons["refresh"]).Clicked() {

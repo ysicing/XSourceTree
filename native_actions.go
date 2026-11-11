@@ -437,25 +437,20 @@ func operationName(kind string) string {
 	}
 }
 
-func (app *nativeApp) repositoryActions() {
-	app.dialog = &nativeDialog{
-		title: "仓库操作",
-		body: func(c *ui.Context) {
-			if ui.Button(c, "新建标签").Disabled(!app.writable).FillWidth().Clicked() {
-				app.tagDialog()
-			}
-			if ui.Button(c, "在 Finder 中显示").FillWidth().Clicked() {
-				if err := app.service.RevealRepository(app.repository.snapshot.Path); err != nil {
-					app.problem = err.Error()
-				}
-				app.dialog = nil
-			}
-			if ui.Button(c, "打开恢复副本").FillWidth().Clicked() {
-				if err := app.service.RevealDiscardBackups(); err != nil {
-					app.problem = err.Error()
-				}
-				app.dialog = nil
-			}
-		},
+func (app *nativeApp) repositoryActions(menu *ui.Menu) {
+	unavailable := app.busy || app.repository == nil
+	if menu.Item("新建标签…").Disabled(unavailable || !app.writable).Chosen() {
+		app.tagDialog()
+	}
+	menu.Separator()
+	if menu.Item("在 Finder 中显示").Disabled(unavailable).Chosen() {
+		if err := app.service.RevealRepository(app.repository.snapshot.Path); err != nil {
+			app.problem = err.Error()
+		}
+	}
+	if menu.Item("打开恢复副本文件夹").Disabled(unavailable).Chosen() {
+		if err := app.service.RevealDiscardBackups(); err != nil {
+			app.problem = err.Error()
+		}
 	}
 }

@@ -50,6 +50,12 @@ func TestNativeApplicationSettingsCategories(t *testing.T) {
 	})
 	app.settingsDialog()
 	tester := ui.NewTester(app.view, 1024, 680)
+	if _, found := tester.AccessByRole(ui.RoleButton, "关闭设置"); !found {
+		t.Fatal("设置缺少可访问的标题栏关闭按钮")
+	}
+	if _, found := tester.Find("完成"); found {
+		t.Fatal("自动保存的设置不应显示完成按钮")
+	}
 	for _, label := range []string{"通用", "Git", "快捷键", "更新"} {
 		if _, found := tester.Find(label); !found {
 			t.Fatalf("缺少设置分类: %s", label)
@@ -127,6 +133,125 @@ func TestNativeApplicationSettingsCategories(t *testing.T) {
 	}
 	if updater.AutomaticChecks() {
 		t.Fatal("自动检查开关未同步到更新插件")
+	}
+	tester.SetSize(780, 480)
+	tester.SetDark(false)
+	for _, label := range []string{"关闭设置", "检查频率", "立即检查更新"} {
+		if bounds, found := tester.Find(label); !found || bounds.W <= 0 || bounds.H <= 0 || bounds.Y+bounds.H > 480 {
+			t.Fatalf("小窗口中的设置控件不可见: %s", label)
+		}
+	}
+	if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+		saveNativeScreenshot(t, tester, directory, "settings-updates-small.png")
+	}
+	if err := tester.Click("关闭设置"); err != nil {
+		t.Fatal(err)
+	}
+	if app.dialog != nil {
+		t.Fatal("关闭设置未退出面板")
+	}
+}
+
+func TestNativeSettingsCloseProtectsIdentityDraft(t *testing.T) {
+	mygo.App.SetPath(mygo.PathUserData, t.TempDir())
+	t.Cleanup(func() { mygo.App.SetPath(mygo.PathUserData, "") })
+	settingsTestUpdater.Do(func() {
+		mygo.Use(native.New(updater.Options{DisableAutomaticChecks: true, Language: "zh-Hans"}))
+	})
+	for _, scope := range []string{"global", "repository"} {
+		for _, method := range []string{"button", "escape", "backdrop"} {
+			t.Run(scope+"/"+method, func(t *testing.T) {
+				app, path, finish := nativeIdentityFixture(t)
+				if scope == "global" {
+					app.settingsDialog()
+				} else {
+					app.repositorySettingsDialog()
+					finish()
+				}
+				tester := ui.NewTester(app.view, 1024, 680)
+				name := "Native Test"
+				if scope == "global" {
+					if err := tester.Click("Git"); err != nil {
+						t.Fatal(err)
+					}
+					finish()
+					tester.Frame()
+					name = "Default User"
+				}
+				settings := app.dialog
+				field, found := tester.AccessByRole(ui.RoleTextField, "姓名")
+				if !found || field.Disabled {
+					t.Fatal("姓名输入框不可编辑")
+				}
+				tester.ClickAt(field.Bounds.X+field.Bounds.W/2, field.Bounds.Y+field.Bounds.H/2)
+				tester.Key(ui.Cmd, ui.KeyA)
+				tester.Type("Pending Name")
+				tester.Frame()
+				if button, found := tester.AccessByRole(ui.RoleButton, "保存"); !found || button.Disabled {
+					t.Fatal("编辑姓名后未产生可保存的草稿")
+				}
+				if method == "backdrop" {
+					tab := "更新"
+					if scope == "repository" {
+						tab = "远程"
+					}
+					if err := tester.Click(tab); err != nil {
+						t.Fatal(err)
+					}
+				}
+				switch method {
+				case "button":
+					if err := tester.Click("关闭设置"); err != nil {
+						t.Fatal(err)
+					}
+				case "escape":
+					tester.Key(0, ui.KeyEscape)
+				case "backdrop":
+					tester.ClickAt(2, 2)
+				}
+				tester.Frame()
+				if app.dialog == nil || app.dialog == settings || app.dialog.parent != settings {
+					t.Fatal("关闭设置未确认尚未保存的修改")
+				}
+				if err := tester.Click("取消"); err != nil {
+					t.Fatal(err)
+				}
+				tester.Frame()
+				if app.dialog != settings {
+					t.Fatal("取消放弃修改未返回设置")
+				}
+				if method == "backdrop" {
+					tab := "Git"
+					if scope == "repository" {
+						tab = "提交身份"
+					}
+					if err := tester.Click(tab); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if field, found := tester.AccessByRole(ui.RoleTextField, "姓名"); !found || field.Value != "Pending Name" {
+					t.Fatalf("取消关闭丢失了身份草稿: %+v", field)
+				}
+				if err := tester.Click("关闭设置"); err != nil {
+					t.Fatal(err)
+				}
+				tester.Frame()
+				if err := tester.Click("放弃修改"); err != nil {
+					t.Fatal(err)
+				}
+				if app.dialog != nil {
+					t.Fatal("确认放弃修改后未关闭设置")
+				}
+				configPath := path
+				if scope == "global" {
+					configPath = ""
+				}
+				identity, err := app.service.Identity(context.Background(), configPath)
+				if err != nil || identity.Name.Value != name {
+					t.Fatalf("关闭设置写入了未保存的草稿: %+v %v", identity, err)
+				}
+			})
+		}
 	}
 }
 

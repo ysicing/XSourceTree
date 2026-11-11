@@ -165,6 +165,17 @@ func identitySource(value gitrepo.IdentityValue) string {
 	return scope + " · " + origin
 }
 
+func (editor *nativeIdentityEditor) close(app *nativeApp, dialog *nativeDialog) {
+	if !editor.dirty() {
+		app.dialog = dialog.parent
+		return
+	}
+	app.confirm("放弃未保存的修改？", "尚未保存的 Git 身份修改将丢失。", "放弃修改", func() {
+		app.dialog = dialog.parent
+	})
+	app.dialog.parent = dialog
+}
+
 func (app *nativeApp) repositorySettingsDialog() {
 	if app.busy || app.dialog != nil {
 		return
@@ -177,23 +188,21 @@ func (app *nativeApp) repositorySettingsDialog() {
 	tab := 0
 	dialog := &nativeDialog{
 		title:  "仓库设置 — " + app.repository.snapshot.Name,
-		detail: app.repository.snapshot.Path, dismiss: "完成",
+		detail: app.repository.snapshot.Path, dismiss: "取消",
 	}
+	dialog.onClose = func() { identity.close(app, dialog) }
 	dialog.submit = func(dialog *nativeDialog) { identity.save(app, dialog) }
 	dialog.canSubmit = func() bool { return tab == 0 && app.writable && identity.dirty() }
 	dialog.body = func(c *ui.Context) {
 		ui.Column(c).FillWidth().Gap(12).Children(func() {
 			ui.Segmented(c, &tab, "提交身份", "远程").Label("仓库设置分类")
 			dialog.action = ""
-			dialog.dismiss = "完成"
 			if tab == 0 {
 				dialog.action = "保存"
 			}
-			if identity.dirty() {
-				dialog.dismiss = "取消"
-			}
 			_, height := c.Size()
-			ui.Scroll(c).Height(min(390, max(120, height-280))).FillWidth().Children(func() {
+			contentHeight := min(390, max(120, height-280))
+			ui.Scroll(c).Key(tab).MinHeight(min(240, contentHeight)).MaxHeight(contentHeight).FillWidth().Children(func() {
 				ui.Column(c).FillWidth().Gap(12).Children(func() {
 					if tab == 0 {
 						identity.view(app, dialog, c)

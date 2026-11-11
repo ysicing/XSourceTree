@@ -39,6 +39,7 @@ type nativeDialog struct {
 	problem    string
 	canSubmit  func() bool
 	blocked    bool
+	onClose    func()
 }
 
 func (dialog *nativeDialog) valid() bool {
@@ -53,6 +54,17 @@ func (dialog *nativeDialog) valid() bool {
 	return dialog.canSubmit == nil || dialog.canSubmit()
 }
 
+func (app *nativeApp) closeDialog(dialog *nativeDialog) {
+	if app.busy || app.dialog != dialog {
+		return
+	}
+	if dialog.onClose != nil {
+		dialog.onClose()
+	} else {
+		app.dialog = dialog.parent
+	}
+}
+
 func (app *nativeApp) dialogView(c *ui.Context) {
 	dialog := app.dialog
 	if dialog == nil {
@@ -62,7 +74,14 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 	width, _ := c.Size()
 	ui.Modal(c, &open, func() {
 		ui.Column(c).Key(dialog).Width(580).MaxWidth(max(0, width-c.Theme().Space(20))).Gap(12).Children(func() {
-			ui.Text(c, dialog.title).FontSize(20).Bold()
+			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(12).Children(func() {
+				ui.Text(c, dialog.title).FontSize(20).Bold().Grow(1).MinWidth(0)
+				if dialog.onClose != nil {
+					if iconButton(c, "关闭设置", nativeIcons["close"]).Disabled(app.busy).Clicked() {
+						app.closeDialog(dialog)
+					}
+				}
+			})
 			if dialog.detail != "" {
 				ui.Text(c, dialog.detail).MaxLines(5).Selectable()
 			}
@@ -92,6 +111,9 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 			if dialog.problem != "" {
 				ui.Text(c, dialog.problem).TextColor(c.Theme().Danger).MaxLines(4).Selectable().Tooltip(dialog.problem)
 			}
+			if dialog.onClose != nil && dialog.action == "" {
+				return
+			}
 			ui.Row(c).FillWidth().Gap(8).Justify(ui.End).Children(func() {
 				dismiss := dialog.dismiss
 				if dismiss == "" {
@@ -114,7 +136,7 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 		})
 	})
 	if !open && !app.busy {
-		app.dialog = dialog.parent
+		app.closeDialog(dialog)
 	}
 }
 

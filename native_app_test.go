@@ -310,7 +310,7 @@ func TestNativeRepositoryActionsMenu(t *testing.T) {
 	if err := tester.Click("更多"); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"新建标签…", "-", "在 Finder 中显示", "打开恢复副本文件夹"}
+	want := []string{"新建标签…", "储藏修改…", "-", "在 Finder 中显示", "打开恢复副本文件夹"}
 	if got := tester.Menu(); !slices.Equal(got, want) || app.dialog != nil {
 		t.Fatalf("应直接展开仓库菜单，菜单=%v，弹窗=%v", got, app.dialog)
 	}
@@ -393,22 +393,22 @@ func TestNativeOfficialSidebarAndFileMenu(t *testing.T) {
 	if err := tester.Click("文件变更"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tester.Click("文件选项"); err != nil {
+	if err := tester.Click("文件排序"); err != nil {
 		t.Fatal(err)
 	}
 	if err := tester.ChooseMenuItem("按文件名排序"); err != nil {
 		t.Fatal(err)
 	}
-	if !app.prefs.ByName {
+	if app.prefs.FileSort != "name" {
 		t.Fatal("文件选项没有保存排序偏好")
 	}
-	if err := tester.Click("文件选项"); err != nil {
+	if err := tester.Click("文件排序"); err != nil {
 		t.Fatal(err)
 	}
 	if err := tester.ChooseMenuItem("按路径排序"); err != nil {
 		t.Fatal(err)
 	}
-	if app.prefs.ByName {
+	if app.prefs.FileSort != "path" {
 		t.Fatal("文件选项没有切换回路径排序")
 	}
 	if err := tester.Click("返回仓库"); err != nil {

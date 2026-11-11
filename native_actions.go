@@ -20,7 +20,8 @@ func (app *nativeApp) visibleFiles(staged bool) []gitrepo.File {
 	}
 	query := strings.ToLower(app.fileQuery)
 	for _, file := range app.repository.snapshot.Files {
-		if (staged && isStaged(file) || !staged && isWorking(file)) && strings.Contains(strings.ToLower(file.Path), query) {
+		if (staged && isStaged(file) || !staged && isWorking(file)) &&
+			strings.Contains(strings.ToLower(file.Path), query) && matchesNativeFileFilter(file, app.fileFilter) {
 			files = append(files, file)
 		}
 	}
@@ -441,6 +442,10 @@ func (app *nativeApp) repositoryActions(menu *ui.Menu) {
 	unavailable := app.busy || app.repository == nil
 	if menu.Item("新建标签…").Disabled(unavailable || !app.writable).Chosen() {
 		app.tagDialog()
+	}
+	if menu.Item("储藏修改…").Disabled(unavailable || !app.writable ||
+		len(app.repository.snapshot.Files) == 0 || app.repository.snapshot.Operation.Kind != "").Chosen() {
+		app.stashDialog()
 	}
 	menu.Separator()
 	if menu.Item("在 Finder 中显示").Disabled(unavailable).Chosen() {

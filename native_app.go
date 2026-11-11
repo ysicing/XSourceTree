@@ -28,7 +28,9 @@ type nativePreferences struct {
 	HistoryFiles         float32           `json:"historyFiles"`
 	Split                bool              `json:"split"`
 	Wrap                 bool              `json:"wrap"`
-	ByName               bool              `json:"byName"`
+	FileSort             string            `json:"fileSort"`
+	FileDescending       bool              `json:"fileDescending"`
+	FileTree             bool              `json:"fileTree"`
 	Drafts               map[string]string `json:"drafts"`
 	Appearance           string            `json:"appearance"`
 	Shortcuts            nativeShortcuts   `json:"shortcuts"`
@@ -62,6 +64,8 @@ type nativeApp struct {
 	selectedFile          string
 	staged                bool
 	fileQuery             string
+	fileFilter            string
+	fileCollapsed         map[string]bool
 	selectedFiles         map[string]bool
 	history               []gitrepo.Commit
 	historyQuery          string
@@ -114,12 +118,24 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 		},
 		historySelected: -1, commitSelected: -1,
 		historyList: &ui.ListState{}, commitList: &ui.ListState{},
-		refCollapsed: make(map[nativeRefKey]bool),
+		refCollapsed: make(map[nativeRefKey]bool), fileCollapsed: make(map[string]bool),
 	}
 	if data, err := os.ReadFile(stateFile); err == nil {
-		if err := json.Unmarshal(data, &app.prefs); err != nil {
+		stored := struct {
+			*nativePreferences
+			ByName bool `json:"byName"`
+		}{nativePreferences: &app.prefs}
+		if err := json.Unmarshal(data, &stored); err != nil {
 			app.problem = "无法读取界面偏好，将使用默认布局"
 		}
+		if app.prefs.FileSort == "" && stored.ByName {
+			app.prefs.FileSort = "name"
+		}
+	}
+	switch app.prefs.FileSort {
+	case "path", "name", "status":
+	default:
+		app.prefs.FileSort = "path"
 	}
 	app.prefs.Sidebar = clampSize(app.prefs.Sidebar, 226, 180, 400)
 	app.prefs.Files = clampSize(app.prefs.Files, 360, 260, 640)
@@ -261,6 +277,10 @@ func (app *nativeApp) openRepository(path string) {
 				return nil, err
 			}
 			return func() {
+				if app.repository == nil || app.repository.snapshot.Path != result.snapshot.Path {
+					app.fileQuery, app.fileFilter = "", ""
+					clear(app.fileCollapsed)
+				}
 				app.adopt(result)
 				app.screen, app.selectedFile = "changes", ""
 				app.history, app.commitHash, app.commitFiles, app.stashHash = nil, "", nil, ""

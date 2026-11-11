@@ -18,23 +18,24 @@ import (
 )
 
 var nativeIcons = map[string]*ui.SVG{
-	"back":    nativeSymbol(`<path d="m12 5-7 7 7 7M5 12h14"/>`),
-	"folder":  nativeSymbol(`<path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>`),
-	"file":    nativeSymbol(`<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h5"/>`),
-	"branch":  nativeSymbol(`<circle cx="6" cy="5" r="3"/><circle cx="6" cy="19" r="3"/><circle cx="18" cy="5" r="3"/><path d="M6 8v8M18 8a10 10 0 0 1-12 8"/>`),
-	"merge":   nativeSymbol(`<circle cx="6" cy="5" r="3"/><circle cx="6" cy="19" r="3"/><circle cx="18" cy="5" r="3"/><path d="M6 8v8M18 8c0 6-12 2-12 8"/>`),
-	"history": nativeSymbol(`<path d="M3 11a9 9 0 1 1 2.5 7M3 4v7h7M12 7v5l3 2"/>`),
-	"stash":   nativeSymbol(`<path d="M3 3h18v5H3ZM5 8v13h14V8M10 12h4"/>`),
-	"tag":     nativeSymbol(`<path d="m20 13-7 7a2 2 0 0 1-3 0l-8-8V2h10l8 8a2 2 0 0 1 0 3Z"/><circle cx="7" cy="7" r="1"/>`),
-	"cloud":   nativeSymbol(`<path d="M6 19a5 5 0 1 1 1-10 7 7 0 0 1 13 2 4 4 0 0 1-1 8Z"/>`),
-	"check":   nativeSymbol(`<path d="m5 12 4 4L19 6"/>`),
-	"chevron": nativeSymbol(`<path d="m9 5 7 7-7 7"/>`),
-	"plus":    nativeSymbol(`<path d="M12 5v14M5 12h14"/>`),
-	"more":    nativeSymbol(`<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>`),
-	"refresh": nativeSymbol(`<path d="M20 7a9 9 0 0 0-15-2L2 8m0-6v6h6M4 17a9 9 0 0 0 15 2l3-3m0 6v-6h-6"/>`),
-	"fetch":   nativeSymbol(`<path d="M8 3v12m-4-4 4 4 4-4M16 21V9m-4 4 4-4 4 4"/>`),
-	"pull":    nativeSymbol(`<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>`),
-	"push":    nativeSymbol(`<path d="M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5"/>`),
+	"back":     nativeSymbol(`<path d="m12 5-7 7 7 7M5 12h14"/>`),
+	"folder":   nativeSymbol(`<path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>`),
+	"file":     nativeSymbol(`<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h5"/>`),
+	"branch":   nativeSymbol(`<circle cx="6" cy="5" r="3"/><circle cx="6" cy="19" r="3"/><circle cx="18" cy="5" r="3"/><path d="M6 8v8M18 8a10 10 0 0 1-12 8"/>`),
+	"merge":    nativeSymbol(`<circle cx="12" cy="5" r="3"/><circle cx="6" cy="19" r="3"/><circle cx="18" cy="19" r="3"/><path d="M6 16v-1c0-4 6-2 6-7M18 16v-1c0-4-6-2-6-7"/>`),
+	"history":  nativeSymbol(`<path d="M3 11a9 9 0 1 1 2.5 7M3 4v7h7M12 7v5l3 2"/>`),
+	"stash":    nativeSymbol(`<path d="M3 3h18v5H3ZM5 8v13h14V8M10 12h4"/>`),
+	"tag":      nativeSymbol(`<path d="m20 13-7 7a2 2 0 0 1-3 0l-8-8V2h10l8 8a2 2 0 0 1 0 3Z"/><circle cx="7" cy="7" r="1"/>`),
+	"cloud":    nativeSymbol(`<path d="M6 17a4 4 0 0 1-.6-8A6 6 0 0 1 17 9h1a4 4 0 0 1 0 8Z"/>`),
+	"settings": nativeSymbol(`<path d="M10 3h4l.6 3 1.4.8 2.9-1 2 3.4-2.3 2v1.6l2.3 2-2 3.4-2.9-1-1.4.8L14 21h-4l-.6-3-1.4-.8-2.9 1-2-3.4 2.3-2v-1.6l-2.3-2 2-3.4 2.9 1 1.4-.8Z"/><circle cx="12" cy="12" r="3"/>`),
+	"check":    nativeSymbol(`<path d="m5 12 4 4L19 6"/>`),
+	"chevron":  nativeSymbol(`<path d="m9 5 7 7-7 7"/>`),
+	"plus":     nativeSymbol(`<path d="M12 5v14M5 12h14"/>`),
+	"more":     nativeSymbol(`<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>`),
+	"refresh":  nativeSymbol(`<path d="M20 7a9 9 0 0 0-15-2L2 8m0-6v6h6M4 17a9 9 0 0 0 15 2l3-3m0 6v-6h-6"/>`),
+	"fetch":    nativeSymbol(`<path d="M7 17H6a4 4 0 0 1-.6-8A6 6 0 0 1 17 9h1a4 4 0 0 1 0 8h-1M12 12v9m-3-3 3 3 3-3"/>`),
+	"pull":     nativeSymbol(`<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>`),
+	"push":     nativeSymbol(`<path d="M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5"/>`),
 }
 
 func nativeSymbol(paths string) *ui.SVG {
@@ -274,7 +275,7 @@ func (app *nativeApp) toolbar(c *ui.Context) {
 			if toolButton(c, "合并", nativeIcons["merge"]).Disabled(!app.writable).Clicked() {
 				app.mergeDialog()
 			}
-			if toolButton(c, "远程设置", nativeIcons["cloud"]).Clicked() {
+			if toolButton(c, "远程设置", nativeIcons["settings"]).Clicked() {
 				app.remoteDialog()
 			}
 			if iconButton(c, "更多", nativeIcons["more"]).Clicked() {

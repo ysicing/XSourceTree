@@ -27,6 +27,7 @@ type nativeDialog struct {
 	parent     *nativeDialog
 	title      string
 	width      float32
+	height     float32
 	detail     string
 	action     string
 	dismiss    string
@@ -73,13 +74,17 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 		return
 	}
 	open := true
-	width, _ := c.Size()
+	width, height := c.Size()
 	panelWidth := dialog.width
 	if panelWidth == 0 {
 		panelWidth = 580
 	}
 	ui.Modal(c, &open, func() {
-		ui.Column(c).Key(dialog).Width(panelWidth).MaxWidth(max(0, width-c.Theme().Space(20))).Gap(12).Children(func() {
+		panel := ui.Column(c).Key(dialog).Width(panelWidth).MaxWidth(max(0, width-c.Theme().Space(20))).Gap(12)
+		if dialog.height > 0 {
+			panel.Height(min(dialog.height, max(0, height-c.Theme().Space(20))))
+		}
+		panel.Children(func() {
 			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(12).Children(func() {
 				ui.Text(c, dialog.title).FontSize(20).Bold().Grow(1).MinWidth(0)
 				if dialog.onClose != nil {
@@ -125,7 +130,11 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 				ui.Checkbox(c, &dialog.check, dialog.checkLabel).Disabled(app.busy)
 			}
 			if dialog.body != nil {
-				ui.Column(c).FillWidth().Disabled(app.busy).Children(func() { dialog.body(c) })
+				body := ui.Column(c).FillWidth().Disabled(app.busy)
+				if dialog.height > 0 {
+					body.Grow(1).MinHeight(0)
+				}
+				body.Children(func() { dialog.body(c) })
 			}
 			if dialog.problem != "" {
 				ui.Text(c, dialog.problem).TextColor(c.Theme().Danger).MaxLines(4).Selectable().Tooltip(dialog.problem)

@@ -193,7 +193,7 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 	app.settingsAutoDownloads = updater.AutomaticDownloads()
 	app.shortcutDraft = app.prefs.Shortcuts
 	app.settingsError = ""
-	dialog := &nativeDialog{title: "应用设置", width: 740, dismiss: "取消"}
+	dialog := &nativeDialog{title: "应用设置", width: 740, height: 560, dismiss: "取消"}
 	tab := initialTab
 	identity := &nativeIdentityEditor{}
 	ai := &nativeAISettings{}
@@ -205,21 +205,8 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 	dialog.canSubmit = func() bool { return tab == 1 && identity.dirty() }
 	dialog.body = func(c *ui.Context) {
 		categories := []string{"外观", "Git", "快捷键", "更新", "AI"}
-		ui.Row(c).FillWidth().Gap(24).AlignItems(ui.Stretch).Children(func() {
-			tabs := ui.TabsBase(c, &tab, len(categories))
-			tabs.List.Column().Label("应用设置分类").Width(140).Shrink(0).
-				Gap(4).Padding(8).Radius(10).Background(c.Theme().Surface).Children(func() {
-				for index, category := range categories {
-					item := tabs.Tab(index).FillWidth().Padding(10, 12).Radius(7)
-					if index == tab {
-						item.Background(c.Theme().Accent.Alpha(0.12)).TextColor(c.Theme().Accent).FontWeight(600)
-					} else if item.Hovered() {
-						item.Background(c.Theme().SurfaceHover)
-					}
-					item.Children(func() { ui.Text(c, category).SingleLine() })
-				}
-			})
-			if tabs.List.Changed() {
+		ui.Column(c).Fill().MinHeight(0).Gap(16).Children(func() {
+			if ui.Tabs(c, &tab, categories...).Label("应用设置分类").Changed() {
 				dialog.problem = ""
 				if tab != 4 {
 					ai.stop()
@@ -232,11 +219,9 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 			if tab == 1 {
 				dialog.action = "保存"
 			}
-			_, height := c.Size()
-			contentHeight := min(400, max(100, height-240))
-			ui.Column(c).Grow(1).MinWidth(0).Gap(20).Padding(4, 0).Children(func() {
+			ui.Column(c).Grow(1).MinHeight(0).MinWidth(0).Gap(20).Padding(4, 0).Children(func() {
 				ui.Text(c, categories[tab]).FontSize(18).Bold()
-				ui.Scroll(c).Key(tab).MaxHeight(contentHeight).FillWidth().Children(func() {
+				ui.Scroll(c).Key(tab).Grow(1).MinHeight(0).FillWidth().Children(func() {
 					ui.Column(c).FillWidth().Gap(16).Padding(2, 4, 6).Children(func() {
 						switch tab {
 						case 0:
@@ -305,47 +290,14 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 }
 
 func (app *nativeApp) appearancePreferences(c *ui.Context) {
-	ui.RadioGroup(c, func() {
-		for _, appearance := range []string{appearanceSystem, appearanceLight, appearanceDark} {
-			selected := app.prefs.Appearance == appearance
-			option := ui.RadioBase(c, &app.prefs.Appearance, appearance).Label(appearance).
-				Column().Grow(1).Shrink(1).MinWidth(0).Padding(8).Gap(10).Radius(10).
-				Border(2, ui.Transparent)
-			switch {
-			case selected:
-				option.BorderColor(c.Theme().Accent).Background(c.Theme().Accent.Alpha(0.06))
-			case option.Hovered():
-				option.Background(c.Theme().SurfaceHover)
-			}
-			option.Children(func() {
-				themes := []*ui.Theme{ui.LightTheme(), ui.DarkTheme()}
-				if appearance == appearanceLight {
-					themes = themes[:1]
-				} else if appearance == appearanceDark {
-					themes = themes[1:]
-				}
-				ui.Row(c).FillWidth().Height(80).Radius(6).Clip().Border(1, c.Theme().Border).AccessHidden(true).Children(func() {
-					for _, theme := range themes {
-						ui.Themed(c, theme).Grow(1).FillHeight().Center().Children(func() {
-							ui.Text(c, "Aa").FontSize(26).Bold()
-						})
-					}
-				})
-				ui.Row(c).FillWidth().Gap(4).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, appearance).FontSize(13).Grow(1).SingleLine()
-					mark := ui.Icon(c, nativeIcons["check"]).FontSize(14).AccessHidden(true)
-					if !selected {
-						mark.Opacity(0)
-					}
-				})
-			})
-			if option.Changed() {
-				app.settingsError = ""
-				app.applyAppearance()
-				app.saveSettings()
-			}
-		}
-	}).Row().FillWidth().Gap(8).Label("外观模式")
+	appearances := []string{appearanceSystem, appearanceLight, appearanceDark}
+	selected := slices.Index(appearances, app.prefs.Appearance)
+	if ui.Segmented(c, &selected, appearances...).Label("外观模式").AlignSelf(ui.Start).Changed() {
+		app.prefs.Appearance = appearances[selected]
+		app.settingsError = ""
+		app.applyAppearance()
+		app.saveSettings()
+	}
 }
 
 func (app *nativeApp) applyAppearance() {

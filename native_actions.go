@@ -302,34 +302,44 @@ func (app *nativeApp) remoteAction(action string) {
 func (app *nativeApp) remoteDialog() {
 	app.dialog = &nativeDialog{
 		title: "远程仓库",
-		body: func(c *ui.Context) {
-			if len(app.repository.remotes) == 0 {
-				ui.Text(c, "尚未配置远程仓库").TextColor(c.Theme().TextMuted)
-			}
-			for _, remote := range app.repository.remotes {
-				remote := remote
-				ui.Column(c).Key(remote.Name).Gap(6).FillWidth().Children(func() {
-					ui.Text(c, remote.Name).Bold()
-					ui.Text(c, strings.Join(remote.URLs, "\n")).FontSize(12).Selectable()
-					ui.Row(c).Gap(8).Disabled(!app.writable).Children(func() {
-						if ui.Button(c, "编辑").Clicked() {
-							app.editRemoteDialog(&remote)
-						}
-						if ui.Button(c, "移除…").Clicked() {
-							app.confirm("移除远程仓库？", remote.Name+"\n仅移除此仓库的远程配置，不会删除服务器上的仓库。", "移除", func() {
-								app.mutate("正在移除远程…", func(ctx context.Context, path string) error {
-									return app.service.RemoveRemote(ctx, path, remote.Name, remote.Token)
-								})
+		body:  app.remoteSettingsView,
+	}
+}
+
+func (app *nativeApp) remoteSettingsView(c *ui.Context) {
+	parent := app.dialog
+	if len(app.repository.remotes) == 0 {
+		ui.Text(c, "尚未配置远程仓库").TextColor(c.Theme().TextMuted)
+	}
+	for _, remote := range app.repository.remotes {
+		remote := remote
+		ui.Column(c).Key(remote.Name).Gap(6).FillWidth().Children(func() {
+			ui.Text(c, remote.Name).Bold()
+			ui.Text(c, strings.Join(remote.URLs, "\n")).FontSize(12).MaxLines(2).Selectable()
+			ui.Row(c).Gap(8).Disabled(!app.writable).Children(func() {
+				if ui.Button(c, "编辑").Label("编辑远程 " + remote.Name).Clicked() {
+					app.editRemoteDialog(&remote)
+					app.dialog.parent = parent
+				}
+				if ui.Button(c, "移除…").Label("移除远程 " + remote.Name).Clicked() {
+					app.dialog = &nativeDialog{
+						parent: parent, title: "移除远程仓库？",
+						detail: remote.Name + "\n仅移除此仓库的远程配置，不会删除服务器上的仓库。",
+						action: "移除", danger: true,
+						submit: func(dialog *nativeDialog) {
+							app.mutateForm(dialog, "正在移除远程…", func(ctx context.Context, path string) error {
+								return app.service.RemoveRemote(ctx, path, remote.Name, remote.Token)
 							})
-						}
-					})
-				})
-				ui.Divider(c)
-			}
-			if ui.Button(c, "添加远程").Disabled(!app.writable).FillWidth().Clicked() {
-				app.editRemoteDialog(nil)
-			}
-		},
+						},
+					}
+				}
+			})
+		})
+		ui.Divider(c)
+	}
+	if ui.Button(c, "添加远程").Disabled(!app.writable).FillWidth().Clicked() {
+		app.editRemoteDialog(nil)
+		app.dialog.parent = parent
 	}
 }
 

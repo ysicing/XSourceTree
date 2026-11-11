@@ -23,6 +23,7 @@ type nativeField struct {
 }
 
 type nativeDialog struct {
+	parent     *nativeDialog
 	title      string
 	detail     string
 	action     string
@@ -97,7 +98,7 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 					dismiss = "取消"
 				}
 				if ui.Button(c, dismiss).Disabled(app.busy).Clicked() {
-					app.dialog = nil
+					app.dialog = dialog.parent
 				}
 				if dialog.action != "" {
 					button := ui.PrimaryButton(c, dialog.action).Disabled(app.busy || !dialog.valid())
@@ -112,8 +113,8 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 			})
 		})
 	})
-	if !open {
-		app.dialog = nil
+	if !open && !app.busy {
+		app.dialog = dialog.parent
 	}
 }
 

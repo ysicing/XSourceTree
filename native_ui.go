@@ -289,8 +289,8 @@ func (app *nativeApp) toolbar(c *ui.Context) {
 			if toolButton(c, "合并", nativeIcons["merge"]).Disabled(!app.writable).Clicked() {
 				app.mergeDialog()
 			}
-			if toolButton(c, "远程设置", nativeIcons["settings"]).Clicked() {
-				app.remoteDialog()
+			if toolButton(c, "仓库设置", nativeIcons["settings"]).Clicked() {
+				app.repositorySettingsDialog()
 			}
 			if iconButton(c, "更多", nativeIcons["more"]).Clicked() {
 				app.repositoryActions()

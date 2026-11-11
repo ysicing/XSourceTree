@@ -22,16 +22,17 @@ import (
 )
 
 type nativePreferences struct {
-	Sidebar      float32           `json:"sidebar"`
-	Files        float32           `json:"files"`
-	History      float32           `json:"history"`
-	HistoryFiles float32           `json:"historyFiles"`
-	Split        bool              `json:"split"`
-	Wrap         bool              `json:"wrap"`
-	ByName       bool              `json:"byName"`
-	Drafts       map[string]string `json:"drafts"`
-	Appearance   string            `json:"appearance"`
-	Shortcuts    nativeShortcuts   `json:"shortcuts"`
+	Sidebar              float32           `json:"sidebar"`
+	Files                float32           `json:"files"`
+	History              float32           `json:"history"`
+	HistoryFiles         float32           `json:"historyFiles"`
+	Split                bool              `json:"split"`
+	Wrap                 bool              `json:"wrap"`
+	ByName               bool              `json:"byName"`
+	Drafts               map[string]string `json:"drafts"`
+	Appearance           string            `json:"appearance"`
+	Shortcuts            nativeShortcuts   `json:"shortcuts"`
+	UpdateCheckFrequency string            `json:"updateCheckFrequency"`
 }
 
 type repositoryView struct {
@@ -339,7 +340,10 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 			if dialog != nil && app.dialog == dialog {
 				dialog.blocked = refreshErr != nil
 				if operationErr == nil {
-					app.dialog = nil
+					app.dialog = dialog.parent
+					if app.dialog != nil && refreshErr != nil {
+						app.dialog.problem = refreshErr.Error()
+					}
 				}
 			}
 		}, errors.Join(operationErr, refreshErr)

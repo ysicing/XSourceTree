@@ -95,10 +95,10 @@ async function waitFor(predicate, label) {
 }
 async function ready() {
   await frame();
-  // 弹窗会隐藏底部状态文字；其取消按钮在后台任务执行期间同样被禁用。
+  // 弹窗会隐藏底部状态文字；其关闭按钮在后台任务执行期间同样被禁用。
   await waitFor((nodes) => !nodes.some((node) =>
     (node.role === "text" && node.label?.startsWith("正在") && !node.label.startsWith("正在进行")) ||
-    (node.role === "button" && node.label === "取消" && node.states?.includes("disabled"))), "后台任务");
+    (node.role === "button" && ["取消", "完成"].includes(node.label) && node.states?.includes("disabled"))), "后台任务");
 }
 async function act(label, action, text) {
   const nodes = await waitFor((entries) => entries.some((entry) =>
@@ -165,12 +165,18 @@ try {
   console.log("✓ 分支创建与切换、标签创建、历史搜索");
 
   await press("文件变更");
-  await press("远程设置");
+  await press("仓库设置");
+  await fill("姓名", "Native Settings");
+  await press("保存");
+  assert.equal(git("config", "--local", "user.name"), "Native Settings");
+  await capture("native-desktop-repository-settings.png");
+  await press("远程");
   await press("添加远程");
   await fill("名称", "origin");
   await fill("获取地址", remote);
   await press("保存");
   assert.equal(git("remote", "get-url", "origin"), remote);
+  await press("完成");
   await press("推送");
   await shown("发布当前分支");
   await press("发布");

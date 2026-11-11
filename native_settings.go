@@ -5,7 +5,9 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/updater"
@@ -44,6 +46,21 @@ var nativeShortcutChoices = []string{
 	"⌥⌘R",
 }
 
+var nativeUpdateCheckFrequencies = []string{"每小时", "每 6 小时", "每天", "每周"}
+
+func nativeUpdateCheckInterval(frequency string) time.Duration {
+	switch frequency {
+	case "每小时":
+		return time.Hour
+	case "每 6 小时":
+		return 6 * time.Hour
+	case "每周":
+		return 7 * 24 * time.Hour
+	default:
+		return 24 * time.Hour
+	}
+}
+
 func defaultNativeShortcuts() nativeShortcuts {
 	return nativeShortcuts{
 		Library: "⌘⇧L", AddRepository: "⌘O", Scan: "⌘⇧O", Refresh: "⌘R", Commit: "⌘↩",
@@ -73,6 +90,9 @@ func appearanceThemeSource(appearance string) mygo.ThemeSource {
 }
 
 func normalizeNativePreferences(prefs *nativePreferences) {
+	if !slices.Contains(nativeUpdateCheckFrequencies, prefs.UpdateCheckFrequency) {
+		prefs.UpdateCheckFrequency = "每天"
+	}
 	if prefs.Appearance != appearanceSystem && prefs.Appearance != appearanceLight && prefs.Appearance != appearanceDark {
 		prefs.Appearance = appearanceSystem
 	}
@@ -165,55 +185,96 @@ func (app *nativeApp) settingsDialog() {
 	app.settingsAutoDownloads = updater.AutomaticDownloads()
 	app.shortcutDraft = app.prefs.Shortcuts
 	app.settingsError = ""
-	dialog := &nativeDialog{title: "设置", dismiss: "完成"}
+	dialog := &nativeDialog{title: "应用设置", dismiss: "完成"}
+	tab := 0
+	identity := &nativeIdentityEditor{}
+	dialog.submit = func(dialog *nativeDialog) { identity.save(app, dialog) }
+	dialog.canSubmit = func() bool { return tab == 1 && identity.dirty() }
 	dialog.body = func(c *ui.Context) {
-		_, height := c.Size()
-		ui.Scroll(c).Height(min(490, max(120, height-180))).FillWidth().Children(func() {
-			ui.Column(c).FillWidth().Gap(18).Children(func() {
-				settingsSection(c, "外观", func() {
-					ui.Row(c).FillWidth().Gap(12).AlignItems(ui.Center).Children(func() {
-						ui.Text(c, "外观模式").FontSize(13).Grow(1)
-						choice := ui.Select(c, &app.prefs.Appearance, []string{appearanceSystem, appearanceLight, appearanceDark}).Label("外观模式").Width(180)
-						if choice.Changed() {
-							app.applyAppearance()
-							app.saveSettings()
-						}
-					})
-				})
-				settingsSection(c, "快捷键", func() {
-					shortcutPreference(app, c, "本地仓库", &app.shortcutDraft.Library)
-					shortcutPreference(app, c, "添加本地仓库", &app.shortcutDraft.AddRepository)
-					shortcutPreference(app, c, "扫描文件夹", &app.shortcutDraft.Scan)
-					shortcutPreference(app, c, "刷新", &app.shortcutDraft.Refresh)
-					shortcutPreference(app, c, "提交", &app.shortcutDraft.Commit)
-					if ui.Button(c, "恢复默认快捷键").FontSize(12).Clicked() {
-						app.shortcutDraft = defaultNativeShortcuts()
-						app.applyShortcutDraft()
-					}
-				})
-				settingsSection(c, "更新", func() {
-					if ui.Checkbox(c, &app.settingsAutoChecks, "自动检查更新").Changed() {
-						updater.SetAutomaticChecks(app.settingsAutoChecks)
-					}
-					if ui.Checkbox(c, &app.settingsAutoDownloads, "自动下载更新（下次启动时安装）").Changed() {
-						updater.SetAutomaticDownloads(app.settingsAutoDownloads)
-					}
-					lastCheck := updater.LastCheck()
-					lastCheckLabel := "尚未检查"
-					if !lastCheck.IsZero() {
-						lastCheckLabel = lastCheck.Local().Format("2006-01-02 15:04")
-					}
-					ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
-						ui.Text(c, "上次检查").FontSize(12).TextColor(c.Theme().TextMuted).Grow(1)
-						ui.Text(c, lastCheckLabel).FontSize(12).TextColor(c.Theme().TextMuted)
-					})
-					if ui.Button(c, "立即检查更新").Clicked() {
-						updater.CheckForUpdates()
+		ui.Column(c).FillWidth().Gap(12).Children(func() {
+			if ui.Segmented(c, &tab, "通用", "Git", "快捷键", "更新").Label("应用设置分类").Changed() {
+				dialog.problem = ""
+				if tab == 1 && !identity.ready {
+					identity.load(app, dialog)
+				}
+			}
+			dialog.action = ""
+			dialog.dismiss = "完成"
+			if tab == 1 {
+				dialog.action = "保存"
+			}
+			if identity.dirty() {
+				dialog.dismiss = "取消"
+			}
+			_, height := c.Size()
+			ui.Scroll(c).Height(min(350, max(120, height-240))).FillWidth().Children(func() {
+				ui.Column(c).FillWidth().Gap(18).Children(func() {
+					switch tab {
+					case 0:
+						settingsSection(c, "外观", func() {
+							ui.Row(c).FillWidth().Gap(12).AlignItems(ui.Center).Children(func() {
+								ui.Text(c, "外观模式").FontSize(13).Grow(1)
+								choice := ui.Select(c, &app.prefs.Appearance, []string{appearanceSystem, appearanceLight, appearanceDark}).Label("外观模式").Width(180)
+								if choice.Changed() {
+									app.applyAppearance()
+									app.saveSettings()
+								}
+							})
+						})
+					case 1:
+						ui.Text(c, "默认提交身份").FontSize(14).Bold()
+						ui.Text(c, "保存到全局 Git 配置，也会影响其他 Git 工具。").FontSize(12).TextColor(c.Theme().TextMuted)
+						identity.view(app, dialog, c)
+					case 2:
+						settingsSection(c, "快捷键", func() {
+							shortcutPreference(app, c, "本地仓库", &app.shortcutDraft.Library)
+							shortcutPreference(app, c, "添加本地仓库", &app.shortcutDraft.AddRepository)
+							shortcutPreference(app, c, "扫描文件夹", &app.shortcutDraft.Scan)
+							shortcutPreference(app, c, "刷新", &app.shortcutDraft.Refresh)
+							shortcutPreference(app, c, "提交", &app.shortcutDraft.Commit)
+							if ui.Button(c, "恢复默认快捷键").FontSize(12).Clicked() {
+								app.shortcutDraft = defaultNativeShortcuts()
+								app.applyShortcutDraft()
+							}
+						})
+					case 3:
+						settingsSection(c, "更新", func() {
+							if ui.Checkbox(c, &app.settingsAutoChecks, "自动检查更新").Changed() {
+								updater.SetAutomaticChecks(app.settingsAutoChecks)
+							}
+							ui.Row(c).FillWidth().Gap(12).AlignItems(ui.Center).Children(func() {
+								ui.Text(c, "检查频率").FontSize(13).Grow(1)
+								choice := ui.Select(c, &app.prefs.UpdateCheckFrequency, nativeUpdateCheckFrequencies).
+									Label("检查频率").Width(180).Disabled(!app.settingsAutoChecks)
+								if choice.Changed() {
+									app.settingsError = ""
+									app.saveSettings()
+								}
+							})
+							ui.Text(c, "检查频率更改将在下次启动后生效。").FontSize(12).TextColor(c.Theme().TextMuted)
+							if ui.Checkbox(c, &app.settingsAutoDownloads, "自动下载更新（下次启动时安装）").Changed() {
+								updater.SetAutomaticDownloads(app.settingsAutoDownloads)
+							}
+							lastCheck := updater.LastCheck()
+							lastCheckLabel := "尚未检查"
+							if !lastCheck.IsZero() {
+								lastCheckLabel = lastCheck.Local().Format("2006-01-02 15:04")
+							}
+							ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
+								ui.Text(c, "上次检查").FontSize(12).TextColor(c.Theme().TextMuted).Grow(1)
+								ui.Text(c, lastCheckLabel).FontSize(12).TextColor(c.Theme().TextMuted)
+							})
+							if ui.Button(c, "立即检查更新").Clicked() {
+								updater.CheckForUpdates()
+							}
+						})
 					}
 				})
 			})
+			if tab != 1 {
+				dialog.problem = app.settingsError
+			}
 		})
-		dialog.problem = app.settingsError
 	}
 	app.dialog = dialog
 }

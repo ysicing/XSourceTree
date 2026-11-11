@@ -19,7 +19,6 @@ func main() {
 	if !app.RequestSingleInstanceLock() {
 		return
 	}
-	mygo.Use(native.New(updater.Options{Language: "zh-Hans"}))
 	dir, err := app.Path(mygo.PathUserData)
 	if err != nil {
 		log.Fatal(err)
@@ -29,10 +28,16 @@ func main() {
 		log.Fatal(err)
 	}
 	service := &RepositoryService{manager: manager}
-	var desktop *nativeApp
+	desktop := newNativeApp(service, filepath.Join(dir, "native-state.json"))
+	mygo.Use(native.New(updater.Options{
+		Language: "zh-Hans",
+		Interval: nativeUpdateCheckInterval(desktop.prefs.UpdateCheckFrequency),
+	}))
 	open := func() {
 		if desktop == nil {
 			desktop = newNativeApp(service, filepath.Join(dir, "native-state.json"))
+		}
+		if desktop.win == nil {
 			desktop.open()
 			applyNativeShortcuts(desktop.prefs.Shortcuts)
 			desktop.win.OnClosed(func() { desktop = nil })
@@ -84,6 +89,8 @@ func main() {
 			{Label: "仓库", Submenu: []*mygo.MenuItem{
 				{ID: shortcutRefresh, Label: "刷新", Accelerator: shortcutAccelerator(defaultNativeShortcuts().Refresh), Click: command(func(desktop *nativeApp) { desktop.refresh() })},
 				{ID: shortcutCommit, Label: "提交", Accelerator: shortcutAccelerator(defaultNativeShortcuts().Commit), Click: command(func(desktop *nativeApp) { desktop.commit() })},
+				mygo.Separator(),
+				{Label: "仓库设置…", Click: command(func(desktop *nativeApp) { desktop.repositorySettingsDialog() })},
 			}},
 			{Role: mygo.RoleViewMenu},
 			{Role: mygo.RoleWindowMenu},

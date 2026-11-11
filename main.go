@@ -34,6 +34,7 @@ func main() {
 		if desktop == nil {
 			desktop = newNativeApp(service, filepath.Join(dir, "native-state.json"))
 			desktop.open()
+			applyNativeShortcuts(desktop.prefs.Shortcuts)
 			desktop.win.OnClosed(func() { desktop = nil })
 		} else {
 			desktop.win.Show()
@@ -58,13 +59,10 @@ func main() {
 		app.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
 			{Label: "XSourceTree", Submenu: []*mygo.MenuItem{
 				{Label: "关于 XSourceTree", Click: func(_ *mygo.MenuItem, _ *mygo.Window) {
-					app.ShowAboutPanel(mygo.AboutPanelOptions{
-						ApplicationVersion: app.Version(),
-						Version:            buildNumber,
-						Credits:            buildDetails(),
-					})
+					showNativeAbout()
 				}},
 				updater.MenuItem(),
+				{ID: "settings", Label: "设置…", Accelerator: "CmdOrCtrl+,", Click: command(func(desktop *nativeApp) { desktop.settingsDialog() })},
 				mygo.Separator(),
 				{Role: mygo.RoleServices},
 				mygo.Separator(),
@@ -75,17 +73,17 @@ func main() {
 				{Role: mygo.RoleQuit},
 			}},
 			{Label: "文件", Submenu: []*mygo.MenuItem{
-				{Label: "本地仓库", Accelerator: "CmdOrCtrl+Shift+L", Click: command(func(desktop *nativeApp) { desktop.showLibrary() })},
-				{Label: "添加已有的本地仓库…", Accelerator: "CmdOrCtrl+O", Click: command(func(desktop *nativeApp) { desktop.chooseLocal() })},
-				{Label: "扫描文件夹…", Accelerator: "CmdOrCtrl+Shift+O", Click: command(func(desktop *nativeApp) { desktop.chooseScan() })},
+				{ID: shortcutLibrary, Label: "本地仓库", Accelerator: shortcutAccelerator(defaultNativeShortcuts().Library), Click: command(func(desktop *nativeApp) { desktop.showLibrary() })},
+				{ID: shortcutAddRepo, Label: "添加已有的本地仓库…", Accelerator: shortcutAccelerator(defaultNativeShortcuts().AddRepository), Click: command(func(desktop *nativeApp) { desktop.chooseLocal() })},
+				{ID: shortcutScan, Label: "扫描文件夹…", Accelerator: shortcutAccelerator(defaultNativeShortcuts().Scan), Click: command(func(desktop *nativeApp) { desktop.chooseScan() })},
 				{Label: "新建仓库组…", Click: command(func(desktop *nativeApp) { desktop.groupDialog("") })},
 				mygo.Separator(),
 				{Role: mygo.RoleClose},
 			}},
 			{Role: mygo.RoleEditMenu},
 			{Label: "仓库", Submenu: []*mygo.MenuItem{
-				{Label: "刷新", Accelerator: "CmdOrCtrl+R", Click: command(func(desktop *nativeApp) { desktop.refresh() })},
-				{Label: "提交", Accelerator: "CmdOrCtrl+Enter", Click: command(func(desktop *nativeApp) { desktop.commit() })},
+				{ID: shortcutRefresh, Label: "刷新", Accelerator: shortcutAccelerator(defaultNativeShortcuts().Refresh), Click: command(func(desktop *nativeApp) { desktop.refresh() })},
+				{ID: shortcutCommit, Label: "提交", Accelerator: shortcutAccelerator(defaultNativeShortcuts().Commit), Click: command(func(desktop *nativeApp) { desktop.commit() })},
 			}},
 			{Role: mygo.RoleViewMenu},
 			{Role: mygo.RoleWindowMenu},

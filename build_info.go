@@ -19,13 +19,21 @@ var (
 func buildVersionLabel() string {
 	version := mygo.App.Version()
 	if version == "" {
-		return "检查更新"
+		return "关于"
 	}
 	label := "v" + version
 	if buildNumber != "" {
 		label += " (" + buildNumber + ")"
 	}
 	return label
+}
+
+func showNativeAbout() {
+	mygo.App.ShowAboutPanel(mygo.AboutPanelOptions{
+		ApplicationVersion: mygo.App.Version(),
+		Version:            buildNumber,
+		Credits:            buildDetails(),
+	})
 }
 
 func buildDetails() string {

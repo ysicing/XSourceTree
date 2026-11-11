@@ -16,6 +16,7 @@ import (
 	"github.com/ysicing/XSourceTree/internal/workspace"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/updater"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 )
@@ -29,6 +30,8 @@ type nativePreferences struct {
 	Wrap         bool              `json:"wrap"`
 	ByName       bool              `json:"byName"`
 	Drafts       map[string]string `json:"drafts"`
+	Appearance   string            `json:"appearance"`
+	Shortcuts    nativeShortcuts   `json:"shortcuts"`
 }
 
 type repositoryView struct {
@@ -40,50 +43,55 @@ type repositoryView struct {
 }
 
 type nativeApp struct {
-	service       *RepositoryService
-	win           *mygo.Window
-	ctx           context.Context
-	cancel        context.CancelFunc
-	post          func(func())
-	closed        bool
-	busy          bool
-	writable      bool
-	status        string
-	problem       string
-	library       workspace.Library
-	group         string
-	query         string
-	screen        string
-	repository    *repositoryView
-	selectedFile  string
-	staged        bool
-	fileQuery     string
-	selectedFiles map[string]bool
-	history       []gitrepo.Commit
-	historyQuery  string
-	historyFile   string
-	historyMore   bool
-	commitHash    string
-	commitFiles   []gitrepo.CommitFile
-	commitFile    string
-	stashHash     string
-	diff          gitrepo.Diff
-	patch         gitrepo.Patch
-	diffViews     []*editor.DiffState
-	diffNames     []string
-	hunkOffsets   []int
-	rawDiff       editor.State
-	lineChoices   []nativeLine
-	conflict      *gitrepo.Conflict
-	conflictEdit  editor.State
-	conflictBase  [3]editor.State
-	hunk          int
-	dialog        *nativeDialog
-	scanResult    *workspace.ScanResult
-	scanSelected  map[string]bool
-	prefs         nativePreferences
-	stateFile     string
-	historyList   *ui.ListState
+	service               *RepositoryService
+	win                   *mygo.Window
+	ctx                   context.Context
+	cancel                context.CancelFunc
+	post                  func(func())
+	closed                bool
+	busy                  bool
+	writable              bool
+	status                string
+	problem               string
+	library               workspace.Library
+	group                 string
+	query                 string
+	screen                string
+	repository            *repositoryView
+	selectedFile          string
+	staged                bool
+	fileQuery             string
+	selectedFiles         map[string]bool
+	history               []gitrepo.Commit
+	historyQuery          string
+	historyFile           string
+	historyMore           bool
+	commitHash            string
+	commitFiles           []gitrepo.CommitFile
+	commitFile            string
+	stashHash             string
+	diff                  gitrepo.Diff
+	patch                 gitrepo.Patch
+	diffViews             []*editor.DiffState
+	diffNames             []string
+	hunkOffsets           []int
+	rawDiff               editor.State
+	lineChoices           []nativeLine
+	conflict              *gitrepo.Conflict
+	conflictEdit          editor.State
+	conflictBase          [3]editor.State
+	hunk                  int
+	dialog                *nativeDialog
+	scanResult            *workspace.ScanResult
+	scanSelected          map[string]bool
+	prefs                 nativePreferences
+	stateFile             string
+	historyList           *ui.ListState
+	settingsError         string
+	shortcutDraft         nativeShortcuts
+	settingsAutoChecks    bool
+	settingsAutoDownloads bool
+	stopUpdater           func()
 
 	historySelected    int
 	historyGraph       []historyGraphRow
@@ -99,7 +107,10 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 	app := &nativeApp{
 		service: service, ctx: ctx, cancel: cancel, stateFile: stateFile,
 		screen: "library", library: service.Library(), selectedFiles: map[string]bool{},
-		prefs:           nativePreferences{Sidebar: 226, Files: 360, History: 56, HistoryFiles: 280, Wrap: true, Drafts: map[string]string{}},
+		prefs: nativePreferences{
+			Sidebar: 226, Files: 360, History: 56, HistoryFiles: 280, Wrap: true, Drafts: map[string]string{},
+			Appearance: appearanceSystem, Shortcuts: defaultNativeShortcuts(),
+		},
 		historySelected: -1, commitSelected: -1,
 		historyList: &ui.ListState{}, commitList: &ui.ListState{},
 		refCollapsed: make(map[nativeRefKey]bool),
@@ -116,6 +127,7 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 	if app.prefs.Drafts == nil {
 		app.prefs.Drafts = map[string]string{}
 	}
+	normalizeNativePreferences(&app.prefs)
 	return app
 }
 
@@ -130,14 +142,22 @@ func (app *nativeApp) open() {
 	app.win = mygo.NewWindow(mygo.WindowOptions{
 		Title: "XSourceTree", Width: 1320, Height: 860, MinWidth: 1024, MinHeight: 680,
 		TitleBarStyle: mygo.TitleBarHiddenInset, TitleBarHeight: 52,
-		BackgroundColor: "light-dark(#ffffff, #191b20)", StateKey: "main",
+		BackgroundColor: appearanceBackground(app.prefs.Appearance), StateKey: "main",
 		Content: ui.View(app.view),
 	})
+	app.win.SetWindowButtonsTheme(appearanceThemeSource(app.prefs.Appearance))
 	app.post = app.win.Update
+	app.stopUpdater = updater.OnChange(func() {
+		app.post(func() {})
+	})
 	protectWindowClose(app.win, app)
 	app.win.OnClosed(func() {
 		app.closed = true
 		app.cancel()
+		if app.stopUpdater != nil {
+			app.stopUpdater()
+			app.stopUpdater = nil
+		}
 	})
 	app.win.OnFocus(func() {
 		if !app.busy && app.dialog == nil && !app.conflictDirty() {

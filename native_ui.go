@@ -12,7 +12,6 @@ import (
 	"github.com/ysicing/XSourceTree/internal/gitrepo"
 	"github.com/ysicing/XSourceTree/internal/workspace"
 
-	"github.com/egoist/mygo/plugins/updater"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 )
@@ -70,6 +69,12 @@ func listRow(c *ui.Context, label string, selected bool) ui.Element {
 }
 
 func (app *nativeApp) view(c *ui.Context) {
+	switch app.prefs.Appearance {
+	case appearanceLight:
+		c.SetTheme(ui.LightTheme())
+	case appearanceDark:
+		c.SetTheme(ui.DarkTheme())
+	}
 	ui.Column(c).Fill().Background(c.Theme().Background).Children(func() {
 		ui.Row(c).Height(52).Padding(0, 18, 0, 100).AlignItems(ui.Center).Gap(12).DragWindow().Children(func() {
 			title := "本地仓库"
@@ -79,12 +84,8 @@ func (app *nativeApp) view(c *ui.Context) {
 			ui.Text(c, title).Bold().FontSize(14)
 			ui.Spacer(c)
 			ui.Toolbar(c, func() {
-				tooltip := buildDetails()
-				if tooltip != "" {
-					tooltip += "\n"
-				}
-				if ui.Button(c, buildVersionLabel()).Label("检查更新").Tooltip(tooltip + "检查更新").FontSize(12).Clicked() {
-					updater.CheckForUpdates()
+				if iconButton(c, "设置", nativeIcons["settings"]).Tooltip("设置（⌘,）").Disabled(app.busy || app.dialog != nil).Clicked() {
+					app.settingsDialog()
 				}
 			}).Label("应用操作").Padding(0)
 		})
@@ -109,7 +110,7 @@ func (app *nativeApp) view(c *ui.Context) {
 		ui.Row(c).Height(34).Padding(0, 14).AlignItems(ui.Center).Gap(10).Children(func() {
 			if app.busy {
 				ui.Spinner(c).Size(14, 14)
-				ui.Text(c, app.status).FontSize(12).TextColor(c.Theme().TextMuted)
+				ui.Text(c, app.status).FontSize(12).TextColor(c.Theme().TextMuted).MinWidth(0).MaxLines(1).Shrink(1)
 				if strings.Contains(app.status, "扫描") || strings.Contains(app.status, "搜索") {
 					if ui.Button(c, "取消").Clicked() {
 						app.service.CancelScan()
@@ -137,9 +138,22 @@ func (app *nativeApp) view(c *ui.Context) {
 					app.problem = ""
 				}
 			} else if app.repository != nil && app.screen != "library" {
-				ui.Text(c, app.repository.snapshot.Path).FontSize(12).TextColor(c.Theme().TextMuted).MaxLines(1).Selectable()
+				ui.Text(c, app.repository.snapshot.Path).FontSize(12).TextColor(c.Theme().TextMuted).MinWidth(0).MaxLines(1).Shrink(1).Selectable()
 			} else {
 				ui.Text(c, fmt.Sprintf("%d 个本地仓库", len(app.library.Repositories))).FontSize(12).TextColor(c.Theme().TextMuted)
+			}
+			ui.Spacer(c)
+			version := ui.ButtonBase(c).Label("关于 XSourceTree").Tooltip(strings.TrimSpace("关于 XSourceTree\n"+buildDetails())).
+				Padding(4, 6).Radius(c.Theme().Radius).Shrink(0).TextColor(c.Theme().TextMuted)
+			if version.Pressed() {
+				version.Background(c.Theme().SurfacePressed)
+			} else if version.Hovered() {
+				version.Background(c.Theme().SurfaceHover)
+			}
+			if version.Children(func() {
+				ui.Text(c, buildVersionLabel()).FontSize(11).SingleLine()
+			}).Clicked() {
+				showNativeAbout()
 			}
 		})
 	})

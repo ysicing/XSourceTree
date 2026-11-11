@@ -26,6 +26,7 @@ type nativeDialog struct {
 	title      string
 	detail     string
 	action     string
+	dismiss    string
 	fields     []nativeField
 	check      bool
 	checkLabel string
@@ -91,7 +92,11 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 				ui.Text(c, dialog.problem).TextColor(c.Theme().Danger).MaxLines(4).Selectable().Tooltip(dialog.problem)
 			}
 			ui.Row(c).FillWidth().Gap(8).Justify(ui.End).Children(func() {
-				if ui.Button(c, "取消").Disabled(app.busy).Clicked() {
+				dismiss := dialog.dismiss
+				if dismiss == "" {
+					dismiss = "取消"
+				}
+				if ui.Button(c, dismiss).Disabled(app.busy).Clicked() {
 					app.dialog = nil
 				}
 				if dialog.action != "" {

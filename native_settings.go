@@ -1,0 +1,269 @@
+// Copyright 2026 ysicing
+// SPDX-License-Identifier: AGPL-3.0-only
+
+package main
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/updater"
+	"github.com/egoist/mygo/ui"
+)
+
+const (
+	appearanceSystem = "跟随系统"
+	appearanceLight  = "浅色"
+	appearanceDark   = "深色"
+
+	shortcutLibrary = "shortcut-library"
+	shortcutAddRepo = "shortcut-add-repository"
+	shortcutScan    = "shortcut-scan"
+	shortcutRefresh = "shortcut-refresh"
+	shortcutCommit  = "shortcut-commit"
+)
+
+type nativeShortcuts struct {
+	Library       string `json:"library"`
+	AddRepository string `json:"addRepository"`
+	Scan          string `json:"scan"`
+	Refresh       string `json:"refresh"`
+	Commit        string `json:"commit"`
+}
+
+var nativeShortcutChoices = []string{
+	"⌘⇧L",
+	"⌘O",
+	"⌘⇧O",
+	"⌘R",
+	"⌘↩",
+	"⌘⇧R",
+	"⌘⇧↩",
+	"⌥⌘L",
+	"⌥⌘R",
+}
+
+func defaultNativeShortcuts() nativeShortcuts {
+	return nativeShortcuts{
+		Library: "⌘⇧L", AddRepository: "⌘O", Scan: "⌘⇧O", Refresh: "⌘R", Commit: "⌘↩",
+	}
+}
+
+func appearanceBackground(appearance string) string {
+	switch appearance {
+	case appearanceLight:
+		return "#ffffff"
+	case appearanceDark:
+		return "#191b20"
+	default:
+		return "light-dark(#ffffff, #191b20)"
+	}
+}
+
+func appearanceThemeSource(appearance string) mygo.ThemeSource {
+	switch appearance {
+	case appearanceLight:
+		return mygo.ThemeLight
+	case appearanceDark:
+		return mygo.ThemeDark
+	default:
+		return mygo.ThemeSystem
+	}
+}
+
+func normalizeNativePreferences(prefs *nativePreferences) {
+	if prefs.Appearance != appearanceSystem && prefs.Appearance != appearanceLight && prefs.Appearance != appearanceDark {
+		prefs.Appearance = appearanceSystem
+	}
+	defaults := defaultNativeShortcuts()
+	if prefs.Shortcuts.Library == "" {
+		prefs.Shortcuts.Library = defaults.Library
+	}
+	if prefs.Shortcuts.AddRepository == "" {
+		prefs.Shortcuts.AddRepository = defaults.AddRepository
+	}
+	if prefs.Shortcuts.Scan == "" {
+		prefs.Shortcuts.Scan = defaults.Scan
+	}
+	if prefs.Shortcuts.Refresh == "" {
+		prefs.Shortcuts.Refresh = defaults.Refresh
+	}
+	if prefs.Shortcuts.Commit == "" {
+		prefs.Shortcuts.Commit = defaults.Commit
+	}
+	if !shortcutsAvailable(prefs.Shortcuts) || !shortcutsUnique(prefs.Shortcuts) {
+		prefs.Shortcuts = defaults
+	}
+}
+
+func shortcutAccelerator(shortcut string) string {
+	return strings.NewReplacer(
+		"⌘", "CmdOrCtrl+",
+		"⇧", "Shift+",
+		"⌥", "Alt+",
+		"↩", "Enter",
+	).Replace(shortcut)
+}
+
+func shortcutsUnique(shortcuts nativeShortcuts) bool {
+	values := []string{
+		shortcuts.Library, shortcuts.AddRepository, shortcuts.Scan, shortcuts.Refresh, shortcuts.Commit,
+	}
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			return false
+		}
+		seen[value] = struct{}{}
+	}
+	return true
+}
+
+func shortcutsAvailable(shortcuts nativeShortcuts) bool {
+	available := make(map[string]struct{}, len(nativeShortcutChoices))
+	for _, choice := range nativeShortcutChoices {
+		available[choice] = struct{}{}
+	}
+	for _, value := range []string{
+		shortcuts.Library, shortcuts.AddRepository, shortcuts.Scan, shortcuts.Refresh, shortcuts.Commit,
+	} {
+		if _, exists := available[value]; !exists {
+			return false
+		}
+	}
+	return true
+}
+
+func applyNativeShortcuts(shortcuts nativeShortcuts) {
+	menu := mygo.App.Menu()
+	if menu == nil {
+		return
+	}
+	values := map[string]string{
+		shortcutLibrary: shortcutAccelerator(shortcuts.Library),
+		shortcutAddRepo: shortcutAccelerator(shortcuts.AddRepository),
+		shortcutScan:    shortcutAccelerator(shortcuts.Scan),
+		shortcutRefresh: shortcutAccelerator(shortcuts.Refresh),
+		shortcutCommit:  shortcutAccelerator(shortcuts.Commit),
+	}
+	for id, accelerator := range values {
+		if item := menu.ItemByID(id); item != nil {
+			item.SetAccelerator(accelerator)
+		}
+	}
+}
+
+func (app *nativeApp) settingsDialog() {
+	if app.busy || app.dialog != nil {
+		return
+	}
+	app.settingsAutoChecks = updater.AutomaticChecks()
+	app.settingsAutoDownloads = updater.AutomaticDownloads()
+	app.shortcutDraft = app.prefs.Shortcuts
+	app.settingsError = ""
+	dialog := &nativeDialog{title: "设置", dismiss: "完成"}
+	dialog.body = func(c *ui.Context) {
+		_, height := c.Size()
+		ui.Scroll(c).Height(min(490, max(120, height-180))).FillWidth().Children(func() {
+			ui.Column(c).FillWidth().Gap(18).Children(func() {
+				settingsSection(c, "外观", func() {
+					ui.Row(c).FillWidth().Gap(12).AlignItems(ui.Center).Children(func() {
+						ui.Text(c, "外观模式").FontSize(13).Grow(1)
+						choice := ui.Select(c, &app.prefs.Appearance, []string{appearanceSystem, appearanceLight, appearanceDark}).Label("外观模式").Width(180)
+						if choice.Changed() {
+							app.applyAppearance()
+							app.saveSettings()
+						}
+					})
+				})
+				settingsSection(c, "快捷键", func() {
+					shortcutPreference(app, c, "本地仓库", &app.shortcutDraft.Library)
+					shortcutPreference(app, c, "添加本地仓库", &app.shortcutDraft.AddRepository)
+					shortcutPreference(app, c, "扫描文件夹", &app.shortcutDraft.Scan)
+					shortcutPreference(app, c, "刷新", &app.shortcutDraft.Refresh)
+					shortcutPreference(app, c, "提交", &app.shortcutDraft.Commit)
+					if ui.Button(c, "恢复默认快捷键").FontSize(12).Clicked() {
+						app.shortcutDraft = defaultNativeShortcuts()
+						app.applyShortcutDraft()
+					}
+				})
+				settingsSection(c, "更新", func() {
+					if ui.Checkbox(c, &app.settingsAutoChecks, "自动检查更新").Changed() {
+						updater.SetAutomaticChecks(app.settingsAutoChecks)
+					}
+					if ui.Checkbox(c, &app.settingsAutoDownloads, "自动下载更新（下次启动时安装）").Changed() {
+						updater.SetAutomaticDownloads(app.settingsAutoDownloads)
+					}
+					lastCheck := updater.LastCheck()
+					lastCheckLabel := "尚未检查"
+					if !lastCheck.IsZero() {
+						lastCheckLabel = lastCheck.Local().Format("2006-01-02 15:04")
+					}
+					ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
+						ui.Text(c, "上次检查").FontSize(12).TextColor(c.Theme().TextMuted).Grow(1)
+						ui.Text(c, lastCheckLabel).FontSize(12).TextColor(c.Theme().TextMuted)
+					})
+					if ui.Button(c, "立即检查更新").Clicked() {
+						updater.CheckForUpdates()
+					}
+				})
+			})
+		})
+		dialog.problem = app.settingsError
+	}
+	app.dialog = dialog
+}
+
+func (app *nativeApp) applyAppearance() {
+	if app.win == nil {
+		return
+	}
+	if err := app.win.SetBackgroundColor(appearanceBackground(app.prefs.Appearance)); err != nil {
+		app.settingsError = fmt.Sprintf("无法应用外观：%v", err)
+		return
+	}
+	app.win.SetWindowButtonsTheme(appearanceThemeSource(app.prefs.Appearance))
+}
+
+func settingsSection(c *ui.Context, title string, content func()) {
+	ui.Column(c).FillWidth().Gap(8).Children(func() {
+		ui.Text(c, title).FontSize(14).Bold()
+		content()
+		ui.Divider(c)
+	})
+}
+
+func (app *nativeApp) shortcutDraftChanged() {
+	if !shortcutsUnique(app.shortcutDraft) {
+		app.settingsError = "快捷键不能重复，请为每项选择不同组合。"
+		return
+	}
+	app.prefs.Shortcuts = app.shortcutDraft
+	app.settingsError = ""
+	applyNativeShortcuts(app.prefs.Shortcuts)
+	app.saveSettings()
+}
+
+func (app *nativeApp) applyShortcutDraft() {
+	app.shortcutDraftChanged()
+}
+
+func (app *nativeApp) saveSettings() {
+	if err := app.savePreferences(); err != nil {
+		app.settingsError = fmt.Sprintf("无法保存设置：%v", err)
+	}
+}
+
+func shortcutPreference(app *nativeApp, c *ui.Context, label string, value *string) {
+	ui.Row(c).FillWidth().Gap(12).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, label).FontSize(13).Grow(1)
+		choice := ui.Select(c, value, nativeShortcutChoices).Label(label + "快捷键").Width(180)
+		if choice.Changed() {
+			app.shortcutDraftChanged()
+		}
+	})
+}

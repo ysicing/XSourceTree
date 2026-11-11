@@ -23,7 +23,7 @@ task build
 
 `task build`、`bun run build` 和正式发布统一经过 `scripts/build.mjs`。每次成功构建，构建号递增 1，同次双架构构建共用一个号；失败不会消耗构建号。计数及最近一次成功构建的信息保存在当前工作区的 `.mygo/build-info.json`，不提交 Git；删除该文件或换用新工作区会从 1 开始，正式发布应沿用发布工作区的记录。
 
-正式版本仍由 `package.json` 的 `version` 控制，不随本地构建自动修改。顶部显示例如 `v0.0.1 (12)`，悬停和“关于”窗口可查看构建号、Git short commit 和构建时间。未提交修改的构建附加 `-dirty`。时间以 UTC 写入构建，界面按本地时区显示；macOS 安装包同时写入 `CFBundleVersion`、`XSourceTreeCommit` 和 `XSourceTreeBuildTime`。更新清单、下载文件名和版本 tag 继续使用正式版本号。`task dev` 和直接 `go build` 不递增打包构建号。
+正式版本仍由 `package.json` 的 `version` 控制，不随本地构建自动修改。右下角状态栏显示例如 `v0.0.1 (12)`，点击打开“关于”窗口；悬停和“关于”窗口可查看构建号、Git short commit 和构建时间。未提交修改的构建附加 `-dirty`。时间以 UTC 写入构建，界面按本地时区显示；macOS 安装包同时写入 `CFBundleVersion`、`XSourceTreeCommit` 和 `XSourceTreeBuildTime`。更新清单、下载文件名和版本 tag 继续使用正式版本号。`task dev` 和直接 `go build` 不递增打包构建号。
 
 本地构建产物与已安装应用共用单实例锁。再次启动时，新进程退出并激活已有窗口，因此已有应用运行时，打开新产物不会切换到新代码。预览新构建前，应先通过应用菜单正常退出已有版本，再直接打开构建目录中的 `.app`，无需覆盖 `/Applications/XSourceTree.app`。代理不得擅自退出用户启动的进程；需要切换时先说明并取得授权。普通预览不得修改 `XDG_RUNTIME_DIR`、`TMPDIR` 或应用标识来绕过单实例锁；独立数据的 `e2e` 测试仍按下文流程执行。
 

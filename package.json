@@ -13,6 +13,6 @@
     "test:ui": "GOMAXPROCS=2 go test -p=1 -parallel=2 ."
   },
   "devDependencies": {
-    "mygo-cli": "0.8.3"
+    "mygo-cli": "0.9.0"
   }
 }

@@ -95,7 +95,10 @@ async function waitFor(predicate, label) {
 }
 async function ready() {
   await frame();
-  await waitFor((nodes) => !nodes.some((node) => node.role === "text" && node.label?.startsWith("正在") && !node.label.startsWith("正在进行")), "后台任务");
+  // 弹窗会隐藏底部状态文字；其取消按钮在后台任务执行期间同样被禁用。
+  await waitFor((nodes) => !nodes.some((node) =>
+    (node.role === "text" && node.label?.startsWith("正在") && !node.label.startsWith("正在进行")) ||
+    (node.role === "button" && node.label === "取消" && node.states?.includes("disabled"))), "后台任务");
 }
 async function act(label, action, text) {
   const nodes = await waitFor((entries) => entries.some((entry) =>
@@ -187,7 +190,8 @@ try {
   assert(stashNode, "未显示储藏记录");
   await press(stashNode.label);
   await press("应用并删除");
-  await press("应用");
+  await shown("应用并删除储藏？");
+  await press("应用并删除");
   assert.equal(readFileSync(join(fixture, "hello.txt"), "utf8"), "储藏修改\n");
   assert.equal(git("stash", "list"), "");
   await press("文件变更");

@@ -83,7 +83,16 @@ func TestNativeApplicationSettingsCategories(t *testing.T) {
 	if err := tester.Click("更新"); err != nil {
 		t.Fatal(err)
 	}
+	app.availableVersion = "0.0.6"
 	tester.Frame()
+	if _, found := tester.Find("新版本 v0.0.6"); !found {
+		t.Fatal("更新页未展示可用版本")
+	}
+	app.availableVersion = ""
+	tester.Frame()
+	if _, found := tester.Find("新版本 v0.0.6"); found {
+		t.Fatal("更新页保留了过期的新版本提示")
+	}
 	if _, found := tester.Find("自动检查更新"); !found {
 		t.Fatal("更新页缺少已有设置")
 	}

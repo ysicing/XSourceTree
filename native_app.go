@@ -96,6 +96,7 @@ type nativeApp struct {
 	shortcutDraft         nativeShortcuts
 	settingsAutoChecks    bool
 	settingsAutoDownloads bool
+	availableVersion      string
 	stopUpdater           func()
 
 	historySelected    int
@@ -164,8 +165,13 @@ func (app *nativeApp) open() {
 	})
 	app.win.SetWindowButtonsTheme(appearanceThemeSource(app.prefs.Appearance))
 	app.post = app.win.Update
+	app.availableVersion = updater.AvailableVersion()
 	app.stopUpdater = updater.OnChange(func() {
-		app.post(func() {})
+		app.post(func() {
+			if !app.closed {
+				app.availableVersion = updater.AvailableVersion()
+			}
+		})
 	})
 	protectWindowClose(app.win, app)
 	app.win.OnClosed(func() {

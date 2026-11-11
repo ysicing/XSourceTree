@@ -19,7 +19,7 @@ var (
 func buildVersionLabel() string {
 	version := mygo.App.Version()
 	if version == "" {
-		return "关于"
+		return "开发版"
 	}
 	label := "v" + version
 	if buildNumber != "" {

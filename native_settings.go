@@ -262,6 +262,9 @@ func (app *nativeApp) settingsDialog() {
 								ui.Text(c, "上次检查").FontSize(12).TextColor(c.Theme().TextMuted).Grow(1)
 								ui.Text(c, lastCheckLabel).FontSize(12).TextColor(c.Theme().TextMuted)
 							})
+							if app.availableVersion != "" {
+								ui.Text(c, "新版本 v"+app.availableVersion).FontSize(13).TextColor(c.Theme().Accent)
+							}
 							if ui.Button(c, "立即检查更新").Clicked() {
 								updater.CheckForUpdates()
 							}

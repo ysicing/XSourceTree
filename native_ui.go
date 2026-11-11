@@ -11,6 +11,7 @@ import (
 	"github.com/ysicing/XSourceTree/internal/gitrepo"
 	"github.com/ysicing/XSourceTree/internal/workspace"
 
+	"github.com/egoist/mygo/plugins/updater"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 )
@@ -143,17 +144,8 @@ func (app *nativeApp) view(c *ui.Context) {
 				ui.Text(c, fmt.Sprintf("%d 个本地仓库", len(app.library.Repositories))).FontSize(12).TextColor(c.Theme().TextMuted)
 			}
 			ui.Spacer(c)
-			version := ui.ButtonBase(c).Label("关于 XSourceTree").Tooltip(strings.TrimSpace("关于 XSourceTree\n"+buildDetails())).
-				Padding(4, 6).Radius(c.Theme().Radius).Shrink(0).TextColor(c.Theme().TextMuted)
-			if version.Pressed() {
-				version.Background(c.Theme().SurfacePressed)
-			} else if version.Hovered() {
-				version.Background(c.Theme().SurfaceHover)
-			}
-			if version.Children(func() {
-				ui.Text(c, buildVersionLabel()).FontSize(11).SingleLine()
-			}).Clicked() {
-				showNativeAbout()
+			if app.versionButton(c) {
+				updater.CheckForUpdates()
 			}
 		})
 	})

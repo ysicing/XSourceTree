@@ -113,6 +113,9 @@ func (app *nativeApp) deleteBranch(name string, force bool) {
 }
 
 func (app *nativeApp) tagDialog() {
+	if app.repository == nil || app.busy || !app.writable || app.readTask != nil {
+		return
+	}
 	hash := app.commitHash
 	if hash == "" {
 		hash = app.repository.snapshot.Head
@@ -187,6 +190,9 @@ func (app *nativeApp) stashDialog() {
 }
 
 func (app *nativeApp) applyStash(pop bool) {
+	if app.repository == nil || app.busy || !app.writable || app.readTask != nil || app.stashHash == "" {
+		return
+	}
 	hash := app.stashHash
 	title, detail, action := "应用储藏？", "应用到 "+app.repository.snapshot.Path+"\n保留储藏记录。", "应用"
 	if pop {
@@ -201,6 +207,9 @@ func (app *nativeApp) applyStash(pop bool) {
 }
 
 func (app *nativeApp) dropStash() {
+	if app.repository == nil || app.busy || !app.writable || app.readTask != nil || app.stashHash == "" {
+		return
+	}
 	hash := app.stashHash
 	app.confirm("删除储藏？", shortHash(hash)+"\n此操作不能直接撤销。", "删除", func() {
 		app.mutate("正在删除储藏…", func(ctx context.Context, path string) error {
@@ -440,7 +449,7 @@ func operationName(kind string) string {
 
 func (app *nativeApp) repositoryActions(menu *ui.Menu) {
 	unavailable := app.busy || app.repository == nil
-	if menu.Item("新建标签…").Disabled(unavailable || !app.writable).Chosen() {
+	if menu.Item("新建标签…").Disabled(unavailable || !app.writable || app.readTask != nil).Chosen() {
 		app.tagDialog()
 	}
 	if menu.Item("储藏修改…").Disabled(unavailable || !app.writable ||

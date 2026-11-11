@@ -29,6 +29,67 @@ type nativeLine struct {
 	Checked bool
 }
 
+type nativeReadKind uint8
+
+const (
+	nativeReadDiff nativeReadKind = iota
+	nativeReadHistory
+	nativeReadCommit
+)
+
+type nativeRead struct {
+	label  string
+	kind   nativeReadKind
+	cancel context.CancelFunc
+}
+
+func (app *nativeApp) cancelRead() {
+	if app.readTask != nil {
+		app.readTask.cancel()
+		app.readTask = nil
+	}
+}
+
+func (app *nativeApp) load(label string, kind nativeReadKind, task func(context.Context) (func(), error)) {
+	if app.repository == nil || app.busy || app.closed {
+		return
+	}
+	app.cancelRead()
+	ctx, cancel := context.WithCancel(app.ctx)
+	request := &nativeRead{label: label, kind: kind, cancel: cancel}
+	previous, done := app.readDone, make(chan struct{})
+	repository, screen := app.repository, app.screen
+	app.readTask, app.readDone, app.problem = request, done, ""
+	go func() {
+		// 等待已取消的读取退出，避免历史搜索注册与 Git 写操作重叠。
+		if previous != nil {
+			<-previous
+		}
+		var apply func()
+		err := ctx.Err()
+		if err == nil {
+			apply, err = task(ctx)
+		}
+		cancel()
+		close(done)
+		app.post(func() {
+			if app.closed || app.readTask != request {
+				return
+			}
+			app.readTask = nil
+			if app.repository != repository || app.screen != screen {
+				return
+			}
+			if apply != nil {
+				apply()
+			}
+			if err != nil {
+				app.problem = err.Error()
+			}
+		})
+	}()
+}
+
 func (app *nativeApp) readSelection(ctx context.Context, path, file string, staged bool, files []gitrepo.File) (*nativeSelection, error) {
 	result := &nativeSelection{file: file, staged: staged}
 	for _, entry := range files {
@@ -54,7 +115,7 @@ func (app *nativeApp) selectFile(file string, staged bool) {
 	path := app.repository.snapshot.Path
 	files := app.repository.snapshot.Files
 	app.leaveConflict(func() {
-		app.run("正在读取差异…", func(ctx context.Context) (func(), error) {
+		app.load("正在读取差异…", nativeReadDiff, func(ctx context.Context) (func(), error) {
 			selection, err := app.readSelection(ctx, path, file, staged, files)
 			return func() {
 				app.clearDiff()
@@ -182,7 +243,7 @@ func (app *nativeApp) searchHistory(more bool) {
 	if more {
 		skip = len(app.history)
 	}
-	app.run("正在搜索历史…", func(ctx context.Context) (func(), error) {
+	app.load("正在搜索历史…", nativeReadHistory, func(ctx context.Context) (func(), error) {
 		commits, err := app.service.SearchHistory(ctx, path, query, file, skip)
 		return func() {
 			// 搜索取消或超时时保留已读取结果。
@@ -206,7 +267,7 @@ func (app *nativeApp) selectCommit(hash string) {
 		return
 	}
 	path := app.repository.snapshot.Path
-	app.run("正在读取提交…", func(ctx context.Context) (func(), error) {
+	app.load("正在读取提交…", nativeReadCommit, func(ctx context.Context) (func(), error) {
 		files, err := app.service.CommitFiles(ctx, path, hash)
 		if err != nil {
 			return func() {
@@ -243,8 +304,11 @@ func (app *nativeApp) selectCommit(hash string) {
 }
 
 func (app *nativeApp) selectCommitFile(file string) {
+	if app.repository == nil || app.readTask != nil && app.readTask.kind != nativeReadDiff {
+		return
+	}
 	path, hash := app.repository.snapshot.Path, app.commitHash
-	app.run("正在读取文件差异…", func(ctx context.Context) (func(), error) {
+	app.load("正在读取文件差异…", nativeReadDiff, func(ctx context.Context) (func(), error) {
 		diff, err := app.service.CommitFileDiff(ctx, path, hash, file)
 		return func() {
 			app.clearDiff()
@@ -263,8 +327,11 @@ func (app *nativeApp) selectCommitFile(file string) {
 }
 
 func (app *nativeApp) selectStash(hash string) {
+	if app.repository == nil {
+		return
+	}
 	path := app.repository.snapshot.Path
-	app.run("正在读取储藏…", func(ctx context.Context) (func(), error) {
+	app.load("正在读取储藏…", nativeReadDiff, func(ctx context.Context) (func(), error) {
 		diff, err := app.service.StashDiff(ctx, path, hash)
 		return func() {
 			app.clearDiff()

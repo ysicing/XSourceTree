@@ -193,8 +193,14 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 		if ui.Button(c, "搜索").Clicked() || submitted {
 			app.searchHistory(false)
 		}
-		if ui.Button(c, "新建标签").Disabled(!app.writable).Clicked() {
+		if ui.Button(c, "新建标签").Disabled(!app.writable || app.readTask != nil).Clicked() {
 			app.tagDialog()
+		}
+		if app.readTask != nil && app.readTask.kind == nativeReadHistory {
+			ui.Spinner(c).Size(14, 14).Label("正在搜索历史…")
+			if ui.Button(c, "取消搜索").Clicked() {
+				app.readTask.cancel()
+			}
 		}
 	})
 	ui.Divider(c)
@@ -260,7 +266,7 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 			}
 		}).Fill().Label("提交历史表格").Changed() && app.historySelected >= 0 && app.historySelected < len(app.history) {
 			hash := app.history[app.historySelected].Hash
-			if hash != app.commitHash {
+			if hash != app.commitHash || app.readTask != nil || app.problem != "" {
 				app.selectCommit(hash)
 			}
 		}
@@ -327,8 +333,11 @@ func (app *nativeApp) historyFiles(c *ui.Context) {
 				ui.Text(c, file.Path).FontSize(12).Grow(1).MinWidth(0).SingleLine().Tooltip(file.Path)
 				ui.Text(c, file.Status).FontSize(10).TextColor(c.Theme().TextMuted)
 			})
-		}).FillWidth().Grow(1).MinHeight(0).Label("提交文件列表").Changed() && app.commitSelected >= 0 && app.commitSelected < len(app.commitFiles) {
-			app.selectCommitFile(app.commitFiles[app.commitSelected].Path)
+		}).FillWidth().Grow(1).MinHeight(0).Disabled(app.readTask != nil && app.readTask.kind != nativeReadDiff).Label("提交文件列表").Changed() && app.commitSelected >= 0 && app.commitSelected < len(app.commitFiles) {
+			file := app.commitFiles[app.commitSelected].Path
+			if file != app.commitFile || app.readTask != nil || app.problem != "" {
+				app.selectCommitFile(file)
+			}
 		}
 	})
 }

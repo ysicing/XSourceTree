@@ -97,6 +97,7 @@ async function ready() {
   await frame();
   // 弹窗会隐藏底部状态文字；其关闭按钮在后台任务执行期间同样被禁用。
   await waitFor((nodes) => !nodes.some((node) =>
+    (node.label === "正在搜索历史…") ||
     (node.role === "text" && node.label?.startsWith("正在") && !node.label.startsWith("正在进行")) ||
     (node.role === "button" && ["取消", "关闭设置"].includes(node.label) && node.states?.includes("disabled"))), "后台任务");
 }

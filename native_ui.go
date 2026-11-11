@@ -538,13 +538,13 @@ func (app *nativeApp) stashPanel(c *ui.Context) {
 			if listRow(c, stash.Message, app.stashHash == stash.Hash).Children(func() {
 				ui.Icon(c, nativeIcons["stash"]).TextColor(c.Theme().TextMuted)
 				ui.Text(c, stash.Message).Grow(1).MinWidth(0).MaxLines(2)
-			}).Clicked() {
+			}).Clicked() && (app.stashHash != stash.Hash || app.readTask != nil || app.problem != "") {
 				app.selectStash(stash.Hash)
 			}
 		}
 	})
 	if app.stashHash != "" {
-		ui.Row(c).Padding(12).Gap(6).Disabled(!app.writable).Children(func() {
+		ui.Row(c).Padding(12).Gap(6).Disabled(!app.writable || app.readTask != nil).Children(func() {
 			if ui.Button(c, "应用").Clicked() {
 				app.applyStash(false)
 			}
@@ -559,7 +559,7 @@ func (app *nativeApp) stashPanel(c *ui.Context) {
 }
 
 func (app *nativeApp) diffPanel(c *ui.Context) {
-	ui.Column(c).Fill().MinWidth(0).Children(func() {
+	ui.Column(c).Fill().MinWidth(0).Disabled(app.readTask != nil).Children(func() {
 		if app.conflict != nil {
 			app.conflictPanel(c)
 			return
@@ -573,6 +573,10 @@ func (app *nativeApp) diffPanel(c *ui.Context) {
 				}
 			} else if app.screen == "stash" {
 				title = "储藏差异"
+			}
+			if app.readTask != nil && app.readTask.kind != nativeReadHistory {
+				ui.Spinner(c).Size(14, 14)
+				title = app.readTask.label
 			}
 			ui.Text(c, title).Bold().Grow(1).MinWidth(0).MaxLines(1).Tooltip(title)
 			layout := 0
@@ -677,7 +681,14 @@ func (app *nativeApp) patchToolbar(c *ui.Context) {
 func (app *nativeApp) conflictPanel(c *ui.Context) {
 	conflict := app.conflict
 	ui.Column(c).FillWidth().Padding(12).Gap(8).Children(func() {
-		ui.Text(c, conflict.Path).Bold().MaxLines(1)
+		ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
+			title := conflict.Path
+			if app.readTask != nil {
+				ui.Spinner(c).Size(14, 14)
+				title = app.readTask.label
+			}
+			ui.Text(c, title).Bold().MinWidth(0).Grow(1).MaxLines(1)
+		})
 		ui.Row(c).Gap(6).Wrap().Disabled(!app.writable).Children(func() {
 			if ui.Button(c, "使用当前版本").Clicked() {
 				app.resolveConflict("ours")

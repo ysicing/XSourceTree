@@ -256,6 +256,253 @@ func TestNativeBusyPreventsOverlappingTasks(t *testing.T) {
 	}
 }
 
+func TestNativeReadDoesNotBlockNavigation(t *testing.T) {
+	for _, kind := range []string{"file", "history", "commit", "commit-file", "stash"} {
+		t.Run(kind, func(t *testing.T) {
+			app, path, finish := nativeFixture(t)
+			writeNativeFile(t, path, "hello.txt", "局部刷新\n")
+			nativeGit(t, path, "stash", "push", "-m", "测试储藏")
+			writeNativeFile(t, path, "hello.txt", "工作区修改\n")
+			app.refresh()
+			finish()
+			if kind == "commit-file" {
+				app.screen = "history"
+				app.selectCommit(app.repository.snapshot.Head)
+				finish()
+			}
+			tester := ui.NewTester(app.view, 1024, 680)
+			switch kind {
+			case "file":
+				app.selectFile("hello.txt", false)
+			case "history":
+				app.screen = "history"
+				app.searchHistory(false)
+			case "commit":
+				app.screen = "history"
+				app.selectCommit(app.repository.snapshot.Head)
+			case "commit-file":
+				app.selectCommitFile("hello.txt")
+			case "stash":
+				app.screen = "stash"
+				app.selectStash(app.repository.stashes[0].Hash)
+			}
+			defer finish()
+			if app.busy {
+				t.Fatal("只读加载进入了全局忙碌状态")
+			}
+			tester.Frame()
+			if err := tester.Click("返回仓库"); err != nil {
+				t.Fatal(err)
+			}
+			if app.screen != "library" {
+				t.Fatal("只读加载阻止了页面导航")
+			}
+		})
+	}
+}
+
+func takeNativeUpdate(t *testing.T, updates <-chan func()) func() {
+	t.Helper()
+	select {
+	case update := <-updates:
+		return update
+	case <-time.After(15 * time.Second):
+		t.Fatal("后台读取未返回")
+		return nil
+	}
+}
+
+func TestNativeSelectionLatestResultWins(t *testing.T) {
+	app, path, finish := nativeFixture(t)
+	writeNativeFile(t, path, "hello.txt", "第一份差异\n")
+	writeNativeFile(t, path, "second.txt", "第二份差异\n")
+	app.refresh()
+	finish()
+	repository := app.repository
+	app.selectedFiles["false:hello.txt"] = true
+	app.prefs.Drafts[repository.snapshot.Path] = "保留提交草稿"
+	updates := make(chan func(), 2)
+	app.post = func(update func()) { updates <- update }
+	app.selectFile("hello.txt", false)
+	first := takeNativeUpdate(t, updates)
+	app.selectFile("second.txt", false)
+	second := takeNativeUpdate(t, updates)
+	if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+		tester := ui.NewTester(app.view, 1024, 680)
+		saveNativeScreenshot(t, tester, directory, "native-local-loading-light.png")
+		tester.SetDark(true)
+		saveNativeScreenshot(t, tester, directory, "native-local-loading-dark.png")
+	}
+	second()
+	first()
+	if app.selectedFile != "second.txt" || !strings.Contains(app.diff.Text, "第二份差异") || app.problem != "" {
+		t.Fatalf("较早的请求覆盖了最后一次选择: %s %s", app.selectedFile, app.problem)
+	}
+	if app.repository != repository || !app.selectedFiles["false:hello.txt"] || app.prefs.Drafts[repository.snapshot.Path] != "保留提交草稿" {
+		t.Fatal("读取差异重置了仓库、勾选状态或提交草稿")
+	}
+	view := app.diffViews[0]
+	tester := ui.NewTester(app.view, 1024, 680)
+	if err := tester.Click("second.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if app.readTask != nil || app.diffViews[0] != view {
+		t.Fatal("再次点击已选文件重建了差异编辑器")
+	}
+}
+
+func TestNativeReadDropsResultsAfterLeaving(t *testing.T) {
+	for _, action := range []string{"navigate", "refresh", "close"} {
+		t.Run(action, func(t *testing.T) {
+			app, path, finish := nativeFixture(t)
+			writeNativeFile(t, path, "hello.txt", "过期差异\n")
+			app.refresh()
+			finish()
+			updates := make(chan func(), 2)
+			app.post = func(update func()) { updates <- update }
+			app.selectFile("hello.txt", false)
+			stale := takeNativeUpdate(t, updates)
+			switch action {
+			case "navigate":
+				app.showLibrary()
+			case "refresh":
+				app.refresh()
+				takeNativeUpdate(t, updates)()
+			case "close":
+				app.closed = true
+				app.cancelRead()
+				app.cancel()
+			}
+			stale()
+			if app.selectedFile != "" || app.diff.Text != "" || app.problem != "" || app.readTask != nil {
+				t.Fatal("离开页面或刷新后，过期读取仍回填了界面")
+			}
+		})
+	}
+}
+
+func TestNativeMutationWaitsForCanceledRead(t *testing.T) {
+	app, _, finish := nativeFixture(t)
+	started, canceled, release, stopped := make(chan struct{}), make(chan struct{}), make(chan struct{}), make(chan struct{})
+	app.load("读取中", nativeReadDiff, func(ctx context.Context) (func(), error) {
+		close(started)
+		<-ctx.Done()
+		close(canceled)
+		<-release
+		close(stopped)
+		return func() { t.Error("已取消的读取更新了界面") }, ctx.Err()
+	})
+	<-started
+	applied := false
+	app.run("写操作", func(_ context.Context) (func(), error) {
+		select {
+		case <-stopped:
+		default:
+			t.Error("写操作没有等待已取消的读取退出")
+		}
+		return func() { applied = true }, nil
+	})
+	<-canceled
+	close(release)
+	finish()
+	finish()
+	if !applied || app.busy || app.readTask != nil || app.problem != "" {
+		t.Fatal("取消读取后，写操作未正常完成")
+	}
+}
+
+func TestNativeLoadingProtectsSelectedActions(t *testing.T) {
+	for _, screen := range []string{"history", "stash"} {
+		t.Run(screen, func(t *testing.T) {
+			app, path, finish := nativeFixture(t)
+			app.screen = screen
+			if screen == "stash" {
+				writeNativeFile(t, path, "hello.txt", "储藏内容\n")
+				nativeGit(t, path, "stash", "push", "-m", "保护储藏")
+				app.refresh()
+				finish()
+				app.selectStash(app.repository.stashes[0].Hash)
+				finish()
+				app.selectStash(app.stashHash)
+			} else {
+				app.selectCommit(app.repository.snapshot.Head)
+				finish()
+				app.selectCommit(app.commitHash)
+			}
+			defer finish()
+			tester := ui.NewTester(app.view, 1024, 680)
+			labels := []string{"新建标签"}
+			if screen == "stash" {
+				labels = []string{"应用", "应用并删除", "删除"}
+			}
+			for _, label := range labels {
+				control, found := tester.AccessByRole(ui.RoleButton, label)
+				if !found || !control.Disabled {
+					t.Errorf("加载期间应禁用 %s", label)
+				}
+			}
+			if err := tester.Click("更多"); err != nil {
+				t.Fatal(err)
+			}
+			if err := tester.ChooseMenuItem("新建标签…"); err == nil || !strings.Contains(err.Error(), "disabled") {
+				t.Errorf("加载期间标签菜单应禁用: %v", err)
+			}
+			tester.CloseMenu()
+			app.tagDialog()
+			if screen == "stash" {
+				app.applyStash(false)
+				app.applyStash(true)
+				app.dropStash()
+			}
+			if app.dialog != nil || app.busy {
+				t.Fatal("加载期间直接调用仍允许操作旧选择")
+			}
+		})
+	}
+}
+
+func TestNativeCommitLoadingProtectsFileSelection(t *testing.T) {
+	app, _, finish := nativeFixture(t)
+	app.screen = "history"
+	app.searchHistory(false)
+	finish()
+	app.selectCommit(app.repository.snapshot.Head)
+	finish()
+	app.selectCommit(app.commitHash)
+	request := app.readTask
+	tester := ui.NewTester(app.view, 1024, 680)
+	files, found := tester.AccessByRole(ui.RoleList, "提交文件列表")
+	if !found || !files.Disabled {
+		t.Error("提交读取期间旧文件列表应禁用")
+	}
+	history, found := tester.AccessByRole(ui.RoleTable, "提交历史表格")
+	if !found || history.Disabled {
+		t.Error("提交读取期间历史表格应仍可选择")
+	}
+	app.selectCommitFile("hello.txt")
+	if app.readTask != request {
+		t.Fatal("旧文件选择取消了新提交读取")
+	}
+	finish()
+	app.selectCommitFile("hello.txt")
+	tester.Frame()
+	if files, found := tester.AccessByRole(ui.RoleList, "提交文件列表"); !found || files.Disabled {
+		t.Error("文件差异读取期间应允许继续选择其他文件")
+	}
+	finish()
+	app.searchHistory(false)
+	defer finish()
+	tester.Frame()
+	if files, found := tester.AccessByRole(ui.RoleList, "提交文件列表"); !found || !files.Disabled {
+		t.Error("历史搜索期间旧文件列表应禁用")
+	}
+	if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+		saveNativeScreenshot(t, tester, directory, "native-history-loading-light.png")
+		tester.SetDark(true)
+		saveNativeScreenshot(t, tester, directory, "native-history-loading-dark.png")
+	}
+}
+
 func TestNativeUIChineseDraftAndDiffLayouts(t *testing.T) {
 	app, path, finish := nativeFixture(t)
 	writeNativeFile(t, path, "hello.txt", "新的中文内容\n")

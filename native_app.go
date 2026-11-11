@@ -57,6 +57,8 @@ type nativeApp struct {
 	post                  func(func())
 	closed                bool
 	busy                  bool
+	readTask              *nativeRead
+	readDone              <-chan struct{}
 	writable              bool
 	status                string
 	problem               string
@@ -186,6 +188,7 @@ func (app *nativeApp) open() {
 	protectWindowClose(app.win, app)
 	app.win.OnClosed(func() {
 		app.closed = true
+		app.cancelRead()
 		app.stopCommitAI()
 		app.cancel()
 		if app.stopUpdater != nil {
@@ -194,7 +197,7 @@ func (app *nativeApp) open() {
 		}
 	})
 	app.win.OnFocus(func() {
-		if !app.busy && app.dialog == nil && !app.conflictDirty() {
+		if !app.busy && app.readTask == nil && app.dialog == nil && !app.conflictDirty() {
 			app.refresh()
 		}
 	})
@@ -231,9 +234,14 @@ func (app *nativeApp) run(label string, task func(context.Context) (func(), erro
 	if app.busy || app.closed {
 		return
 	}
+	app.cancelRead()
+	previous := app.readDone
 	app.busy, app.status, app.problem = true, label, ""
 	dialog := app.dialog
 	go func() {
+		if previous != nil {
+			<-previous
+		}
 		apply, err := task(app.ctx)
 		app.post(func() {
 			if app.closed {
@@ -472,10 +480,12 @@ func (app *nativeApp) leaveConflict(action func()) {
 	}
 	if app.conflictDirty() {
 		app.confirm("放弃冲突编辑？", "尚未保存的合并结果将丢失，磁盘文件不会改变。", "放弃编辑", func() {
+			app.cancelRead()
 			app.clearDiff()
 			action()
 		})
 	} else {
+		app.cancelRead()
 		action()
 	}
 }

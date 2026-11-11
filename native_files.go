@@ -271,7 +271,7 @@ func (app *nativeApp) changeFileRow(c *ui.Context, file gitrepo.File, staged boo
 			ui.Text(c, status).Width(12).Font("monospace").FontSize(11).TextColor(color)
 			nativeFileIcon(c, file.Path)
 			ui.Text(c, name).FontSize(12).Grow(1).MinWidth(0).SingleLine()
-		}).Clicked() {
+		}).Clicked() && (!selected || app.readTask != nil || app.problem != "") {
 			app.selectFile(file.Path, staged)
 		}
 	})

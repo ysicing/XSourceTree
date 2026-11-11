@@ -56,17 +56,57 @@ func TestNativeApplicationSettingsCategories(t *testing.T) {
 	if _, found := tester.Find("完成"); found {
 		t.Fatal("自动保存的设置不应显示完成按钮")
 	}
-	for _, label := range []string{"通用", "Git", "快捷键", "更新"} {
+	for _, label := range []string{"外观", "Git", "快捷键", "更新", "AI"} {
 		if _, found := tester.Find(label); !found {
 			t.Fatalf("缺少设置分类: %s", label)
 		}
 	}
 	if _, found := tester.Find("自动检查更新"); found {
-		t.Fatal("通用页混入了更新设置")
+		t.Fatal("外观页混入了更新设置")
 	}
-	if err := tester.Click("Git"); err != nil {
+	for _, appearance := range []struct{ label, screenshot string }{
+		{appearanceLight, "settings-appearance-light.png"},
+		{appearanceDark, "settings-appearance-dark.png"},
+		{appearanceSystem, "settings-appearance-system.png"},
+	} {
+		if _, found := tester.AccessByRole(ui.RoleRadio, appearance.label); !found {
+			t.Fatalf("缺少可访问的外观选项: %s", appearance.label)
+		}
+		if err := tester.Click(appearance.label); err != nil {
+			t.Fatal(err)
+		}
+		tester.Frame()
+		restored := newNativeApp(app.service, app.stateFile)
+		restored.cancel()
+		if app.prefs.Appearance != appearance.label || restored.prefs.Appearance != appearance.label || app.settingsError != "" {
+			t.Fatalf("外观未立即应用并保存: %s, %s", app.prefs.Appearance, app.settingsError)
+		}
+		if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+			saveNativeScreenshot(t, tester, directory, appearance.screenshot)
+		}
+	}
+	tester.Key(0, ui.KeyLeft)
+	tester.Frame()
+	if app.prefs.Appearance != appearanceDark {
+		t.Fatal("外观选择不支持方向键")
+	}
+	if err := tester.Click(appearanceSystem); err != nil {
 		t.Fatal(err)
 	}
+	tester.SetSize(780, 480)
+	for _, label := range []string{appearanceSystem, appearanceLight, appearanceDark, "关闭设置"} {
+		if bounds, found := tester.Find(label); !found || bounds.W <= 0 || bounds.H <= 0 || bounds.X+bounds.W > 780 || bounds.Y+bounds.H > 480 {
+			t.Fatalf("紧凑窗口中的外观选项不可见: %s", label)
+		}
+	}
+	if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+		saveNativeScreenshot(t, tester, directory, "settings-appearance-small.png")
+	}
+	tester.SetSize(1024, 680)
+	if err := tester.Click("外观"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Key(0, ui.KeyDown)
 	finish()
 	tester.Frame()
 	if _, found := tester.Find("Default User"); !found {

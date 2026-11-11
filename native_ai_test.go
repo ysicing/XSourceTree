@@ -282,8 +282,32 @@ func TestNativeAISettingsAndRepositoryInheritance(t *testing.T) {
 		t.Fatalf("连接测试或模型选择失败: %+v %s", app.prefs.AI, app.settingsError)
 	}
 	if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+		saveNativeScreenshot(t, tester, directory, "ai-settings-light.png")
+		tester.SetDark(true)
+		saveNativeScreenshot(t, tester, directory, "ai-settings-dark.png")
+	}
+	tester.SetSize(780, 480)
+	tester.SetDark(false)
+	navigation, found := tester.Find("应用设置分类")
+	if !found {
+		t.Fatal("AI 设置缺少分类导航")
+	}
+	if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
 		saveNativeScreenshot(t, tester, directory, "ai-settings-narrow.png")
 	}
+	tester.Scroll(500, 300, 0, 500)
+	tester.Frame()
+	if info, found := tester.AccessByRole(ui.RolePopUpButton, "提交说明格式"); !found || info.Bounds.W <= 0 || info.Bounds.H <= 0 ||
+		info.Bounds.Y+info.Bounds.H > 480 {
+		t.Fatal("紧凑窗口无法滚动到 AI 输出格式设置")
+	}
+	if bounds, found := tester.Find("应用设置分类"); !found || bounds != navigation {
+		t.Fatal("滚动 AI 内容时不应移动分类导航")
+	}
+	if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+		saveNativeScreenshot(t, tester, directory, "ai-settings-narrow-scrolled.png")
+	}
+	tester.SetSize(1024, 680)
 	app.closeDialog(app.dialog)
 	app.prefs.AI.Language, app.prefs.AI.Format = commitai.English, commitai.Plain
 	options := app.commitAIOptions(path)

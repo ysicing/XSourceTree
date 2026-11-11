@@ -193,7 +193,7 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 	app.settingsAutoDownloads = updater.AutomaticDownloads()
 	app.shortcutDraft = app.prefs.Shortcuts
 	app.settingsError = ""
-	dialog := &nativeDialog{title: "应用设置", dismiss: "取消"}
+	dialog := &nativeDialog{title: "应用设置", width: 740, dismiss: "取消"}
 	tab := initialTab
 	identity := &nativeIdentityEditor{}
 	ai := &nativeAISettings{}
@@ -204,8 +204,22 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 	dialog.submit = func(dialog *nativeDialog) { identity.save(app, dialog) }
 	dialog.canSubmit = func() bool { return tab == 1 && identity.dirty() }
 	dialog.body = func(c *ui.Context) {
-		ui.Column(c).FillWidth().Gap(12).Children(func() {
-			if ui.Segmented(c, &tab, "通用", "Git", "快捷键", "更新", "AI").Label("应用设置分类").Changed() {
+		categories := []string{"外观", "Git", "快捷键", "更新", "AI"}
+		ui.Row(c).FillWidth().Gap(24).AlignItems(ui.Stretch).Children(func() {
+			tabs := ui.TabsBase(c, &tab, len(categories))
+			tabs.List.Column().Label("应用设置分类").Width(140).Shrink(0).
+				Gap(4).Padding(8).Radius(10).Background(c.Theme().Surface).Children(func() {
+				for index, category := range categories {
+					item := tabs.Tab(index).FillWidth().Padding(10, 12).Radius(7)
+					if index == tab {
+						item.Background(c.Theme().Accent.Alpha(0.12)).TextColor(c.Theme().Accent).FontWeight(600)
+					} else if item.Hovered() {
+						item.Background(c.Theme().SurfaceHover)
+					}
+					item.Children(func() { ui.Text(c, category).SingleLine() })
+				}
+			})
+			if tabs.List.Changed() {
 				dialog.problem = ""
 				if tab != 4 {
 					ai.stop()
@@ -219,39 +233,30 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 				dialog.action = "保存"
 			}
 			_, height := c.Size()
-			contentHeight := min(350, max(120, height-240))
-			ui.Scroll(c).Key(tab).MinHeight(min(240, contentHeight)).MaxHeight(contentHeight).FillWidth().Children(func() {
-				ui.Column(c).FillWidth().Gap(18).Children(func() {
-					switch tab {
-					case 0:
-						settingsSection(c, "外观", func() {
-							ui.Row(c).FillWidth().Gap(12).AlignItems(ui.Center).Children(func() {
-								ui.Text(c, "外观模式").FontSize(13).Grow(1)
-								choice := ui.Select(c, &app.prefs.Appearance, []string{appearanceSystem, appearanceLight, appearanceDark}).Label("外观模式").Width(180)
-								if choice.Changed() {
-									app.applyAppearance()
-									app.saveSettings()
-								}
-							})
-						})
-					case 1:
-						ui.Text(c, "默认提交身份").FontSize(14).Bold()
-						ui.Text(c, "保存到全局 Git 配置，也会影响其他 Git 工具。").FontSize(12).TextColor(c.Theme().TextMuted)
-						identity.view(app, dialog, c)
-					case 2:
-						settingsSection(c, "快捷键", func() {
+			contentHeight := min(400, max(100, height-240))
+			ui.Column(c).Grow(1).MinWidth(0).Gap(20).Padding(4, 0).Children(func() {
+				ui.Text(c, categories[tab]).FontSize(18).Bold()
+				ui.Scroll(c).Key(tab).MaxHeight(contentHeight).FillWidth().Children(func() {
+					ui.Column(c).FillWidth().Gap(16).Padding(2, 4, 6).Children(func() {
+						switch tab {
+						case 0:
+							app.appearancePreferences(c)
+						case 1:
+							ui.Text(c, "保存到全局 Git 配置，也会影响其他 Git 工具。").FontSize(12).TextColor(c.Theme().TextMuted)
+							identity.view(app, dialog, c)
+						case 2:
 							shortcutPreference(app, c, "本地仓库", &app.shortcutDraft.Library)
 							shortcutPreference(app, c, "添加本地仓库", &app.shortcutDraft.AddRepository)
 							shortcutPreference(app, c, "扫描文件夹", &app.shortcutDraft.Scan)
 							shortcutPreference(app, c, "刷新", &app.shortcutDraft.Refresh)
 							shortcutPreference(app, c, "提交", &app.shortcutDraft.Commit)
-							if ui.Button(c, "恢复默认快捷键").FontSize(12).Clicked() {
-								app.shortcutDraft = defaultNativeShortcuts()
-								app.applyShortcutDraft()
-							}
-						})
-					case 3:
-						settingsSection(c, "更新", func() {
+							ui.Row(c).FillWidth().Children(func() {
+								if ui.Button(c, "恢复默认快捷键").Clicked() {
+									app.shortcutDraft = defaultNativeShortcuts()
+									app.applyShortcutDraft()
+								}
+							})
+						case 3:
 							if ui.Checkbox(c, &app.settingsAutoChecks, "自动检查更新").Changed() {
 								updater.SetAutomaticChecks(app.settingsAutoChecks)
 							}
@@ -280,13 +285,15 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 							if app.availableVersion != "" {
 								ui.Text(c, "新版本 v"+app.availableVersion).FontSize(13).TextColor(c.Theme().Accent)
 							}
-							if ui.Button(c, "立即检查更新").Clicked() {
-								updater.CheckForUpdates()
-							}
-						})
-					case 4:
-						ai.view(app, dialog, c)
-					}
+							ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
+								if ui.Button(c, "立即检查更新").Clicked() {
+									updater.CheckForUpdates()
+								}
+							})
+						case 4:
+							ai.view(app, dialog, c)
+						}
+					})
 				})
 			})
 			if tab != 1 {
@@ -295,6 +302,50 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 		})
 	}
 	app.dialog = dialog
+}
+
+func (app *nativeApp) appearancePreferences(c *ui.Context) {
+	ui.RadioGroup(c, func() {
+		for _, appearance := range []string{appearanceSystem, appearanceLight, appearanceDark} {
+			selected := app.prefs.Appearance == appearance
+			option := ui.RadioBase(c, &app.prefs.Appearance, appearance).Label(appearance).
+				Column().Grow(1).Shrink(1).MinWidth(0).Padding(8).Gap(10).Radius(10).
+				Border(2, ui.Transparent)
+			switch {
+			case selected:
+				option.BorderColor(c.Theme().Accent).Background(c.Theme().Accent.Alpha(0.06))
+			case option.Hovered():
+				option.Background(c.Theme().SurfaceHover)
+			}
+			option.Children(func() {
+				themes := []*ui.Theme{ui.LightTheme(), ui.DarkTheme()}
+				if appearance == appearanceLight {
+					themes = themes[:1]
+				} else if appearance == appearanceDark {
+					themes = themes[1:]
+				}
+				ui.Row(c).FillWidth().Height(80).Radius(6).Clip().Border(1, c.Theme().Border).AccessHidden(true).Children(func() {
+					for _, theme := range themes {
+						ui.Themed(c, theme).Grow(1).FillHeight().Center().Children(func() {
+							ui.Text(c, "Aa").FontSize(26).Bold()
+						})
+					}
+				})
+				ui.Row(c).FillWidth().Gap(4).AlignItems(ui.Center).Children(func() {
+					ui.Text(c, appearance).FontSize(13).Grow(1).SingleLine()
+					mark := ui.Icon(c, nativeIcons["check"]).FontSize(14).AccessHidden(true)
+					if !selected {
+						mark.Opacity(0)
+					}
+				})
+			})
+			if option.Changed() {
+				app.settingsError = ""
+				app.applyAppearance()
+				app.saveSettings()
+			}
+		}
+	}).Row().FillWidth().Gap(8).Label("外观模式")
 }
 
 func (app *nativeApp) applyAppearance() {
@@ -306,14 +357,6 @@ func (app *nativeApp) applyAppearance() {
 		return
 	}
 	app.win.SetWindowButtonsTheme(appearanceThemeSource(app.prefs.Appearance))
-}
-
-func settingsSection(c *ui.Context, title string, content func()) {
-	ui.Column(c).FillWidth().Gap(8).Children(func() {
-		ui.Text(c, title).FontSize(14).Bold()
-		content()
-		ui.Divider(c)
-	})
 }
 
 func (app *nativeApp) shortcutDraftChanged() {

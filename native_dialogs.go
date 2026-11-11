@@ -12,6 +12,7 @@ import (
 	"github.com/ysicing/XSourceTree/internal/workspace"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/sfsymbols"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -25,6 +26,7 @@ type nativeField struct {
 type nativeDialog struct {
 	parent     *nativeDialog
 	title      string
+	width      float32
 	detail     string
 	action     string
 	dismiss    string
@@ -72,12 +74,29 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 	}
 	open := true
 	width, _ := c.Size()
+	panelWidth := dialog.width
+	if panelWidth == 0 {
+		panelWidth = 580
+	}
 	ui.Modal(c, &open, func() {
-		ui.Column(c).Key(dialog).Width(580).MaxWidth(max(0, width-c.Theme().Space(20))).Gap(12).Children(func() {
+		ui.Column(c).Key(dialog).Width(panelWidth).MaxWidth(max(0, width-c.Theme().Space(20))).Gap(12).Children(func() {
 			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(12).Children(func() {
 				ui.Text(c, dialog.title).FontSize(20).Bold().Grow(1).MinWidth(0)
 				if dialog.onClose != nil {
-					if iconButton(c, "关闭设置", nativeIcons["close"]).Disabled(app.busy).Clicked() {
+					closeButton := ui.ButtonBase(c).Label("关闭设置").Tooltip("关闭设置").
+						Size(28, 28).Padding(4).Radius(14).AlignItems(ui.Center).Justify(ui.Center).Disabled(app.busy)
+					color := c.Theme().TextMuted
+					if closeButton.Pressed() {
+						closeButton.Background(c.Theme().SurfacePressed)
+						color = c.Theme().Text
+					} else if closeButton.Hovered() {
+						closeButton.Background(c.Theme().SurfaceHover)
+						color = c.Theme().Text
+					}
+					closeButton.Children(func() {
+						sfsymbols.Symbol(c, "xmark.circle.fill").Size(20).Color(color).Fallback(nativeIcons["close"])
+					})
+					if closeButton.Clicked() {
 						app.closeDialog(dialog)
 					}
 				}

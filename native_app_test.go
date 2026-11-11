@@ -262,9 +262,11 @@ func TestNativeUIChineseDraftAndDiffLayouts(t *testing.T) {
 	app.refresh()
 	finish()
 	tester := ui.NewTester(app.view, 1320, 860)
-	if err := tester.Click("提交说明"); err != nil {
-		t.Fatal(err)
+	input, found := tester.AccessByRole(ui.RoleTextField, "提交说明")
+	if !found {
+		t.Fatal("缺少提交说明输入框")
 	}
+	tester.ClickAt(input.Bounds.X+input.Bounds.W/2, input.Bounds.Y+input.Bounds.H/2)
 	tester.Type("修复中文输入")
 	if app.prefs.Drafts[app.repository.snapshot.Path] != "修复中文输入" {
 		t.Fatal("中文提交说明没有写回状态")

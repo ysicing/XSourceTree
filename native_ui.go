@@ -410,9 +410,12 @@ func (app *nativeApp) changesPanel(c *ui.Context) {
 	ui.Divider(c)
 	ui.Column(c).FillWidth().Padding(12).Gap(8).Disabled(!app.writable).Children(func() {
 		draft := app.prefs.Drafts[app.repository.snapshot.Path]
+		app.commitAIHeader(c)
 		if ui.TextArea(c, &draft).Label("提交说明").Placeholder("提交说明").Lines(3, 6).FillWidth().Changed() {
 			app.prefs.Drafts[app.repository.snapshot.Path] = draft
+			app.draftRevision++
 		}
+		app.commitAIResult(c)
 		count := 0
 		conflicts := false
 		for _, file := range app.repository.snapshot.Files {

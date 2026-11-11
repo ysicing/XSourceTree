@@ -178,6 +178,14 @@ func applyNativeShortcuts(shortcuts nativeShortcuts) {
 }
 
 func (app *nativeApp) settingsDialog() {
+	app.settingsDialogAt(0)
+}
+
+func (app *nativeApp) aiSettingsDialog() {
+	app.settingsDialogAt(4)
+}
+
+func (app *nativeApp) settingsDialogAt(initialTab int) {
 	if app.busy || app.dialog != nil {
 		return
 	}
@@ -186,15 +194,22 @@ func (app *nativeApp) settingsDialog() {
 	app.shortcutDraft = app.prefs.Shortcuts
 	app.settingsError = ""
 	dialog := &nativeDialog{title: "应用设置", dismiss: "取消"}
-	tab := 0
+	tab := initialTab
 	identity := &nativeIdentityEditor{}
-	dialog.onClose = func() { identity.close(app, dialog) }
+	ai := &nativeAISettings{}
+	dialog.onClose = func() {
+		ai.stop()
+		identity.close(app, dialog)
+	}
 	dialog.submit = func(dialog *nativeDialog) { identity.save(app, dialog) }
 	dialog.canSubmit = func() bool { return tab == 1 && identity.dirty() }
 	dialog.body = func(c *ui.Context) {
 		ui.Column(c).FillWidth().Gap(12).Children(func() {
-			if ui.Segmented(c, &tab, "通用", "Git", "快捷键", "更新").Label("应用设置分类").Changed() {
+			if ui.Segmented(c, &tab, "通用", "Git", "快捷键", "更新", "AI").Label("应用设置分类").Changed() {
 				dialog.problem = ""
+				if tab != 4 {
+					ai.stop()
+				}
 				if tab == 1 && !identity.ready {
 					identity.load(app, dialog)
 				}
@@ -269,6 +284,8 @@ func (app *nativeApp) settingsDialog() {
 								updater.CheckForUpdates()
 							}
 						})
+					case 4:
+						ai.view(app, dialog, c)
 					}
 				})
 			})

@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ysicing/XSourceTree/internal/commitai"
 	"github.com/ysicing/XSourceTree/internal/gitrepo"
 	"github.com/ysicing/XSourceTree/internal/workspace"
 
@@ -22,19 +23,22 @@ import (
 )
 
 type nativePreferences struct {
-	Sidebar              float32           `json:"sidebar"`
-	Files                float32           `json:"files"`
-	History              float32           `json:"history"`
-	HistoryFiles         float32           `json:"historyFiles"`
-	Split                bool              `json:"split"`
-	Wrap                 bool              `json:"wrap"`
-	FileSort             string            `json:"fileSort"`
-	FileDescending       bool              `json:"fileDescending"`
-	FileTree             bool              `json:"fileTree"`
-	Drafts               map[string]string `json:"drafts"`
-	Appearance           string            `json:"appearance"`
-	Shortcuts            nativeShortcuts   `json:"shortcuts"`
-	UpdateCheckFrequency string            `json:"updateCheckFrequency"`
+	Sidebar              float32                     `json:"sidebar"`
+	Files                float32                     `json:"files"`
+	History              float32                     `json:"history"`
+	HistoryFiles         float32                     `json:"historyFiles"`
+	Split                bool                        `json:"split"`
+	Wrap                 bool                        `json:"wrap"`
+	FileSort             string                      `json:"fileSort"`
+	FileDescending       bool                        `json:"fileDescending"`
+	FileTree             bool                        `json:"fileTree"`
+	Drafts               map[string]string           `json:"drafts"`
+	Appearance           string                      `json:"appearance"`
+	Shortcuts            nativeShortcuts             `json:"shortcuts"`
+	UpdateCheckFrequency string                      `json:"updateCheckFrequency"`
+	AI                   commitai.Options            `json:"ai"`
+	AIConsent            bool                        `json:"aiConsent"`
+	RepositoryAI         map[string]nativeAIOverride `json:"repositoryAI,omitempty"`
 }
 
 type repositoryView struct {
@@ -98,6 +102,8 @@ type nativeApp struct {
 	settingsAutoDownloads bool
 	availableVersion      string
 	stopUpdater           func()
+	ai                    *nativeCommitAI
+	draftRevision         uint64
 
 	historySelected    int
 	historyGraph       []historyGraphRow
@@ -146,6 +152,10 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 		app.prefs.Drafts = map[string]string{}
 	}
 	normalizeNativePreferences(&app.prefs)
+	commitai.Normalize(&app.prefs.AI)
+	if app.prefs.RepositoryAI == nil {
+		app.prefs.RepositoryAI = map[string]nativeAIOverride{}
+	}
 	return app
 }
 
@@ -176,6 +186,7 @@ func (app *nativeApp) open() {
 	protectWindowClose(app.win, app)
 	app.win.OnClosed(func() {
 		app.closed = true
+		app.stopCommitAI()
 		app.cancel()
 		if app.stopUpdater != nil {
 			app.stopUpdater()
@@ -268,6 +279,9 @@ func (app *nativeApp) readRepository(ctx context.Context, path string, open bool
 }
 
 func (app *nativeApp) adopt(result *repositoryView) {
+	if app.repository == nil || app.repository.snapshot.Path != result.snapshot.Path {
+		app.stopCommitAI()
+	}
 	app.repository, app.writable = result, true
 	app.library = app.service.Library()
 	app.selectedFiles = map[string]bool{}
@@ -277,6 +291,9 @@ func (app *nativeApp) adopt(result *repositoryView) {
 
 func (app *nativeApp) openRepository(path string) {
 	app.leaveConflict(func() {
+		if !app.busy {
+			app.stopCommitAI()
+		}
 		app.run("正在打开仓库…", func(ctx context.Context) (func(), error) {
 			result, err := app.readRepository(ctx, path, true)
 			if err != nil {
@@ -318,6 +335,9 @@ func (app *nativeApp) mutate(label string, operation func(context.Context, strin
 func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation func(context.Context, string) error) {
 	if app.repository == nil || app.busy || (operation != nil && !app.writable) {
 		return
+	}
+	if operation != nil {
+		app.stopCommitAI()
 	}
 	path, screen, file, staged := app.repository.snapshot.Path, app.screen, app.selectedFile, app.staged
 	query, historyFile := app.historyQuery, app.historyFile
@@ -391,7 +411,10 @@ func isStaged(file gitrepo.File) bool {
 func isWorking(file gitrepo.File) bool { return file.Working != " " || file.Conflict }
 
 func (app *nativeApp) showLibrary() {
-	app.leaveConflict(func() { app.screen = "library" })
+	app.leaveConflict(func() {
+		app.stopCommitAI()
+		app.screen = "library"
+	})
 }
 
 func (app *nativeApp) commit() {
@@ -420,6 +443,7 @@ func (app *nativeApp) commit() {
 		app.problem = "没有已暂存的变更"
 		return
 	}
+	app.stopCommitAI()
 	app.run("正在提交…", func(ctx context.Context) (func(), error) {
 		commitErr := app.service.Commit(ctx, path, message)
 		result, refreshErr := app.readRepository(ctx, path, false)

@@ -185,6 +185,7 @@ func (app *nativeApp) repositorySettingsDialog() {
 		return
 	}
 	identity := &nativeIdentityEditor{path: app.repository.snapshot.Path}
+	app.settingsError = ""
 	tab := 0
 	dialog := &nativeDialog{
 		title:  "仓库设置 — " + app.repository.snapshot.Name,
@@ -195,7 +196,7 @@ func (app *nativeApp) repositorySettingsDialog() {
 	dialog.canSubmit = func() bool { return tab == 0 && app.writable && identity.dirty() }
 	dialog.body = func(c *ui.Context) {
 		ui.Column(c).FillWidth().Gap(12).Children(func() {
-			ui.Segmented(c, &tab, "提交身份", "远程").Label("仓库设置分类")
+			ui.Segmented(c, &tab, "提交身份", "远程", "AI").Label("仓库设置分类")
 			dialog.action = ""
 			if tab == 0 {
 				dialog.action = "保存"
@@ -206,8 +207,10 @@ func (app *nativeApp) repositorySettingsDialog() {
 				ui.Column(c).FillWidth().Gap(12).Children(func() {
 					if tab == 0 {
 						identity.view(app, dialog, c)
-					} else {
+					} else if tab == 1 {
 						app.remoteSettingsView(c)
+					} else {
+						app.repositoryAISettings(c, identity.path)
 					}
 				})
 			})

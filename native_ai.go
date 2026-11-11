@@ -72,7 +72,6 @@ func (app *nativeApp) requestCommitAI() {
 	}
 	if !app.prefs.AIConsent && strings.TrimSpace(app.prefs.AI.Model) == "" {
 		app.aiSettingsDialog()
-		app.dialog.detail = "先测试连接并选择模型，AI 配置对所有仓库生效。关闭设置后，再点击“AI 生成”。"
 		return
 	}
 	if app.prefs.AIConsent {
@@ -287,11 +286,14 @@ func (app *nativeApp) commitAIResult(c *ui.Context) {
 }
 
 type nativeAISettings struct {
-	models   []string
-	message  string
-	checking bool
-	cancel   context.CancelFunc
-	serial   uint64
+	models    []string
+	endpoint  string
+	problem   string
+	manual    bool
+	connected bool
+	checking  bool
+	cancel    context.CancelFunc
+	serial    uint64
 }
 
 func (editor *nativeAISettings) stop() {
@@ -304,25 +306,30 @@ func (editor *nativeAISettings) stop() {
 }
 
 func (editor *nativeAISettings) check(app *nativeApp, dialog *nativeDialog) {
-	editor.stop()
+	editor.reset()
 	serial := editor.serial
 	ctx, cancel := context.WithCancel(app.ctx)
-	editor.cancel, editor.checking, editor.message = cancel, true, ""
+	editor.cancel, editor.checking = cancel, true
+	app.settingsError = ""
 	options := app.prefs.AI
 	go func() {
 		defer cancel()
 		var models []string
 		var endpoint string
 		err := func() error {
-			client, err := commitai.New(options.Endpoint)
+			var err error
+			endpoint = options.Endpoint
+			if strings.TrimSpace(endpoint) == "" {
+				endpoint, err = commitai.DiscoverEndpoint()
+				if err != nil {
+					return err
+				}
+			}
+			client, err := commitai.New(endpoint)
 			if err != nil {
 				return err
 			}
 			defer client.Close()
-			endpoint = options.Endpoint
-			if endpoint == "" {
-				endpoint, _ = commitai.DiscoverEndpoint()
-			}
 			models, err = client.Models(ctx)
 			return err
 		}()
@@ -331,15 +338,18 @@ func (editor *nativeAISettings) check(app *nativeApp, dialog *nativeDialog) {
 				return
 			}
 			editor.checking, editor.cancel = false, nil
-			if err != nil {
-				app.settingsError = commitAIError(err)
+			if err != nil && !errors.Is(err, commitai.ErrNoModels) {
+				editor.problem = commitAIError(err)
 				return
 			}
-			editor.models = models
-			editor.message = fmt.Sprintf("已连接 %s · %d 个模型", endpoint, len(models))
+			editor.models, editor.endpoint, editor.connected = models, endpoint, true
+			if len(models) == 0 {
+				editor.problem = "请先在 Magpie 中配置模型，再重新检测。"
+				return
+			}
 			model, err := commitai.SelectModel(models, app.prefs.AI.Model)
 			if err != nil {
-				app.settingsError = err.Error()
+				editor.problem = err.Error()
 				return
 			}
 			app.prefs.AI.Model = model
@@ -349,50 +359,113 @@ func (editor *nativeAISettings) check(app *nativeApp, dialog *nativeDialog) {
 	}()
 }
 
+func (editor *nativeAISettings) reset() {
+	editor.stop()
+	editor.models, editor.endpoint, editor.problem, editor.connected = nil, "", "", false
+}
+
+func aiSettingsRow(c *ui.Context, label string, content func()) {
+	ui.Row(c).FillWidth().Gap(16).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, label).FontSize(13).Width(72).Shrink(0)
+		ui.Column(c).Grow(1).MinWidth(0).Children(content)
+	})
+}
+
 func (editor *nativeAISettings) view(app *nativeApp, dialog *nativeDialog, c *ui.Context) {
-	ui.Column(c).FillWidth().Gap(10).Children(func() {
-		ui.Text(c, "Magpie").FontSize(14).Bold()
-		ui.Text(c, "Magpie 地址").FontSize(12)
-		if ui.TextInput(c, &app.prefs.AI.Endpoint).Label("Magpie 地址").
-			Placeholder("自动发现本机 Magpie").FillWidth().Disabled(editor.checking).Changed() {
-			editor.models, editor.message = nil, ""
-			app.settingsError = ""
-			app.saveSettings()
-		}
-		ui.Row(c).Gap(8).Children(func() {
-			if ui.Button(c, "自动发现").Disabled(editor.checking).Clicked() {
-				app.prefs.AI.Endpoint = ""
-				app.saveSettings()
-				editor.check(app, dialog)
-			}
-			label := "测试连接"
-			if editor.checking {
-				label = "正在连接…"
-			}
-			if ui.Button(c, label).Disabled(editor.checking).Clicked() {
-				editor.check(app, dialog)
-			}
+	ui.Column(c).FillWidth().Gap(20).Children(func() {
+		ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
+			ui.Text(c, "连接与模型").FontSize(13).Bold()
+			ui.Spacer(c)
+			ui.Text(c, "适用于所有仓库").FontSize(12).TextColor(c.Theme().TextMuted)
 		})
-		if editor.message != "" {
-			ui.Text(c, editor.message).FontSize(12).TextColor(c.Theme().TextMuted).MaxLines(2)
-		}
-		ui.Text(c, "模型").FontSize(12)
-		if len(editor.models) > 0 {
-			if ui.Select(c, &app.prefs.AI.Model, editor.models).Label("AI 模型").FillWidth().Changed() {
+		ui.Column(c).FillWidth().Gap(12).Children(func() {
+			aiSettingsRow(c, "连接方式", func() {
+				mode := "自动发现本机 Magpie"
+				if editor.manual {
+					mode = "手动输入地址"
+				}
+				if ui.Select(c, &mode, []string{"自动发现本机 Magpie", "手动输入地址"}).
+					Label("连接方式").FillWidth().Disabled(editor.checking).Changed() {
+					editor.manual = mode == "手动输入地址"
+					editor.reset()
+					app.settingsError = ""
+					if !editor.manual {
+						app.prefs.AI.Endpoint = ""
+						app.saveSettings()
+					}
+				}
+			})
+			if editor.manual {
+				aiSettingsRow(c, "服务地址", func() {
+					if ui.TextInput(c, &app.prefs.AI.Endpoint).Label("Magpie 地址").
+						Placeholder("http://127.0.0.1:3425/v1").FillWidth().Disabled(editor.checking).Changed() {
+						editor.reset()
+						app.settingsError = ""
+						app.saveSettings()
+					}
+				})
+			}
+			aiSettingsRow(c, "连接状态", func() {
+				ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
+					status, label := "未连接", "连接"
+					color := c.Theme().TextMuted
+					switch {
+					case editor.checking:
+						status, label = "正在连接", "正在连接…"
+						ui.Spinner(c).Size(14, 14)
+					case editor.connected:
+						status, label = fmt.Sprintf("已连接 · %d 个模型", len(editor.models)), "重新检测"
+					case editor.problem != "":
+						status, label, color = "连接失败", "重试", c.Theme().Danger
+					}
+					ui.Text(c, status).FontSize(13).TextColor(color).
+						Grow(1).MinWidth(0).Tooltip(editor.endpoint)
+					if editor.connected {
+						if ui.Button(c, label).Clicked() {
+							editor.check(app, dialog)
+						}
+					} else if ui.PrimaryButton(c, label).
+						Disabled(editor.checking || (editor.manual && strings.TrimSpace(app.prefs.AI.Endpoint) == "")).Clicked() {
+						editor.check(app, dialog)
+					}
+				})
+			})
+			if editor.problem != "" {
+				aiSettingsRow(c, "", func() {
+					ui.Text(c, editor.problem).FontSize(12).TextColor(c.Theme().Danger).Selectable()
+				})
+			}
+			aiSettingsRow(c, "模型", func() {
+				if len(editor.models) > 0 {
+					if ui.Select(c, &app.prefs.AI.Model, editor.models).Label("AI 模型").
+						FillWidth().Tooltip(app.prefs.AI.Model).Disabled(editor.checking).Changed() {
+						editor.problem, app.settingsError = "", ""
+						app.saveSettings()
+					}
+				} else {
+					model := app.prefs.AI.Model
+					if model == "" {
+						model = "连接后选择模型"
+					}
+					if editor.connected {
+						model = "暂无可用模型"
+					}
+					ui.Select(c, &model, []string{model}).Label("AI 模型").FillWidth().Disabled(true)
+				}
+			})
+		})
+		ui.Divider(c)
+		ui.Column(c).FillWidth().Gap(12).Children(func() {
+			ui.Text(c, "生成偏好").FontSize(13).Bold()
+			if aiOutputPreferences(c, &app.prefs.AI.Language, &app.prefs.AI.Format, false) {
 				app.settingsError = ""
 				app.saveSettings()
 			}
-		} else if ui.TextInput(c, &app.prefs.AI.Model).Label("AI 模型").Placeholder("自动选择可用模型").
-			FillWidth().Disabled(editor.checking).Changed() {
-			app.saveSettings()
+		})
+		ui.Text(c, "仅发送已暂存文件的路径与差异；所选模型可能在云端运行。").FontSize(12).TextColor(c.Theme().TextMuted)
+		if !app.prefs.AIConsent && editor.connected && len(editor.models) > 0 && editor.problem == "" && app.settingsError == "" {
+			ui.Text(c, "已配置，关闭设置后可返回生成提交说明。").FontSize(12).TextColor(c.Theme().TextMuted)
 		}
-		ui.Divider(c)
-		changed := aiOutputPreferences(c, &app.prefs.AI.Language, &app.prefs.AI.Format, false)
-		if changed {
-			app.settingsError = ""
-			app.saveSettings()
-		}
-		ui.Text(c, "仅发送已暂存的路径与差异；模型可能在云端运行。").FontSize(12).TextColor(c.Theme().TextMuted)
 	})
 }
 
@@ -404,13 +477,11 @@ func aiOutputPreferences(c *ui.Context, language, format *string, inherit bool) 
 		formats = append([]string{"跟随应用设置"}, formats...)
 	}
 	changed := false
-	ui.Row(c).FillWidth().Gap(12).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, "语言").FontSize(13).Grow(1)
-		changed = ui.Select(c, language, languages).Label("提交说明语言").Width(200).Changed() || changed
+	aiSettingsRow(c, "语言", func() {
+		changed = ui.Select(c, language, languages).Label("提交说明语言").FillWidth().Changed() || changed
 	})
-	ui.Row(c).FillWidth().Gap(12).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, "格式").FontSize(13).Grow(1)
-		changed = ui.Select(c, format, formats).Label("提交说明格式").Width(200).Changed() || changed
+	aiSettingsRow(c, "格式", func() {
+		changed = ui.Select(c, format, formats).Label("提交说明格式").FillWidth().Changed() || changed
 	})
 	return changed
 }

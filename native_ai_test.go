@@ -5,10 +5,12 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -150,7 +152,7 @@ func TestNativeAIFirstUseOpensGlobalSettings(t *testing.T) {
 	if app.dialog == nil || app.dialog.title != "应用设置" {
 		t.Fatal("未配置模型时应先打开全局 AI 设置")
 	}
-	if _, found := tester.Find("测试连接"); !found {
+	if _, found := tester.Find("连接"); !found {
 		t.Fatal("首次使用应直接进入 AI 分类")
 	}
 	if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
@@ -168,7 +170,7 @@ func TestNativeAIFirstUseOpensGlobalSettings(t *testing.T) {
 	}
 	app.requestCommitAI()
 	tester.Frame()
-	if err := tester.Click("测试连接"); err != nil {
+	if err := tester.Click("连接"); err != nil {
 		t.Fatal(err)
 	}
 	finish()
@@ -338,12 +340,12 @@ func TestNativeAISettingsAndRepositoryInheritance(t *testing.T) {
 	})
 	app.aiSettingsDialog()
 	tester := ui.NewTester(app.view, 1024, 680)
-	for _, label := range []string{"Magpie 地址", "AI 模型", "测试连接", "自动发现", "提交说明语言", "提交说明格式"} {
+	for _, label := range []string{"Magpie 地址", "AI 模型", "连接", "连接方式", "连接与模型", "生成偏好", "提交说明语言", "提交说明格式"} {
 		if _, found := tester.Find(label); !found {
 			t.Fatalf("AI 设置缺少 %s", label)
 		}
 	}
-	if err := tester.Click("测试连接"); err != nil {
+	if err := tester.Click("连接"); err != nil {
 		t.Fatal(err)
 	}
 	finish()
@@ -407,10 +409,212 @@ func TestNativeAISettingsAndRepositoryInheritance(t *testing.T) {
 	if info, found := tester.AccessByRole(ui.RolePopUpButton, "提交说明语言"); !found || info.Value != commitai.Chinese {
 		t.Fatalf("仓库 AI 页未显示语言覆盖: %+v", info)
 	}
-	if _, found := tester.Find("测试连接"); found {
+	if _, found := tester.Find("连接方式"); found {
 		t.Fatal("仓库设置不应重复连接配置")
 	}
 	if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
 		saveNativeScreenshot(t, tester, directory, "ai-repository-settings.png")
+	}
+}
+
+func TestNativeAIConnectionStates(t *testing.T) {
+	for _, scenario := range []struct {
+		name, response, model string
+		connected, retry      bool
+	}{
+		{name: "success", response: `{"data":[{"id":"group/codex"}]}`, connected: true},
+		{name: "empty", response: `{"data":[]}`, model: "saved-model", connected: true},
+		{name: "missing-model", response: `{"data":[{"id":"group/codex"}]}`, model: "removed-model", connected: true},
+		{name: "retry", response: `{"data":[{"id":"group/codex"}]}`, model: "group/codex", retry: true},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			app, _, finish := nativeFixture(t)
+			var requests atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				if request.URL.Path != "/v1/models" {
+					t.Errorf("配置时不应访问 %s", request.URL.Path)
+				}
+				if requests.Add(1) == 1 && scenario.retry {
+					writer.WriteHeader(http.StatusServiceUnavailable)
+					return
+				}
+				_, _ = writer.Write([]byte(scenario.response))
+			}))
+			defer server.Close()
+			app.prefs.AI.Endpoint, app.prefs.AI.Model = server.URL+"/v1", scenario.model
+			editor := &nativeAISettings{manual: true}
+			label := "连接"
+			if scenario.retry {
+				editor.connected, editor.models = true, []string{scenario.model}
+				label = "重新检测"
+			}
+			dialog := &nativeDialog{title: "应用设置", width: 620, height: 520}
+			dialog.body = func(c *ui.Context) { editor.view(app, dialog, c) }
+			app.dialog = dialog
+			tester := ui.NewTester(app.view, 1024, 680)
+			if err := tester.Click(label); err != nil {
+				t.Fatal(err)
+			}
+			if len(editor.models) != 0 {
+				t.Fatal("重新检测时不应保留旧模型列表")
+			}
+			if info, found := tester.AccessByRole(ui.RolePopUpButton, "AI 模型"); !found || !info.Disabled {
+				t.Fatal("加载模型期间应禁用选择")
+			}
+			finish()
+			tester.Frame()
+			if editor.connected != scenario.connected || editor.checking {
+				t.Fatalf("连接状态错误: %+v", editor)
+			}
+			switch scenario.name {
+			case "success":
+				if editor.problem != "" || app.prefs.AI.Model != "group/codex" {
+					t.Fatal("成功后应选择可用模型")
+				}
+			case "empty":
+				if editor.problem == "" || len(editor.models) != 0 || app.prefs.AI.Model != scenario.model {
+					t.Fatal("没有模型时应保留配置并说明如何恢复")
+				}
+				if _, found := tester.Access("已连接 · 0 个模型"); !found {
+					t.Fatal("辅助功能应能读取实际连接状态")
+				}
+			case "missing-model":
+				if editor.problem == "" || app.prefs.AI.Model != scenario.model {
+					t.Fatal("不能静默替换已失效的模型")
+				}
+				if err := tester.Click("AI 模型"); err != nil {
+					t.Fatal(err)
+				}
+				if err := tester.Click("group/codex"); err != nil {
+					t.Fatal(err)
+				}
+				if editor.problem != "" || app.prefs.AI.Model != "group/codex" {
+					t.Fatal("选择有效模型后应清除提示并保存")
+				}
+			case "retry":
+				if editor.problem == "" || len(editor.models) != 0 || app.prefs.AI.Model != scenario.model {
+					t.Fatal("检测失败应禁用旧列表并保留已保存的模型")
+				}
+				if err := tester.Click("重试"); err != nil {
+					t.Fatal(err)
+				}
+				finish()
+				tester.Frame()
+				if !editor.connected || editor.problem != "" {
+					t.Fatal("重试成功后应恢复模型选择")
+				}
+			}
+			model, found := tester.AccessByRole(ui.RolePopUpButton, "AI 模型")
+			if !found || model.Disabled != (len(editor.models) == 0) {
+				t.Fatalf("模型控件状态错误: %+v", model)
+			}
+			if app.prefs.AIConsent || app.ai != nil {
+				t.Fatal("配置不能授予发送授权或开始生成")
+			}
+			if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+				saveNativeScreenshot(t, tester, directory, "ai-connection-"+scenario.name+".png")
+			}
+		})
+	}
+}
+
+func TestNativeAISettingsLongModelLayout(t *testing.T) {
+	app, _, _ := nativeFixture(t)
+	app.prefs.AI.Model = strings.Repeat("provider/very-long-model-", 10)
+	editor := &nativeAISettings{connected: true, models: []string{app.prefs.AI.Model}}
+	dialog := &nativeDialog{title: "应用设置", width: 620, height: 520}
+	dialog.onClose = func() { app.dialog = nil }
+	dialog.body = func(c *ui.Context) { editor.view(app, dialog, c) }
+	app.dialog = dialog
+	for _, size := range [][2]int{{1024, 680}, {780, 480}} {
+		for _, appearance := range []string{appearanceLight, appearanceDark} {
+			app.prefs.Appearance = appearance
+			tester := ui.NewTester(app.view, size[0], size[1])
+			panel, found := tester.AccessByRole(ui.RoleDialog, "")
+			if !found {
+				t.Fatal("缺少设置面板")
+			}
+			model, found := tester.AccessByRole(ui.RolePopUpButton, "AI 模型")
+			if !found || model.Offscreen || model.Bounds.X < panel.Bounds.X ||
+				model.Bounds.X+model.Bounds.W > panel.Bounds.X+panel.Bounds.W {
+				t.Fatalf("长模型名称不应挤出面板: %+v %+v", panel.Bounds, model.Bounds)
+			}
+			close, found := tester.AccessByRole(ui.RoleButton, "关闭设置")
+			if !found || close.Offscreen {
+				t.Fatal("长模型名称不应挤走关闭入口")
+			}
+			if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+				saveNativeScreenshot(t, tester, directory, fmt.Sprintf("ai-long-model-%s-%d.png", appearance, size[1]))
+			}
+		}
+	}
+}
+
+func TestNativeAIConnectionModeAndCancellation(t *testing.T) {
+	app, _, finish, _, _ := nativeAIFixture(t, false)
+	editor := &nativeAISettings{manual: true}
+	dialog := &nativeDialog{title: "应用设置", width: 620, height: 520}
+	dialog.body = func(c *ui.Context) { editor.view(app, dialog, c) }
+	app.dialog = dialog
+	tester := ui.NewTester(app.view, 1024, 680)
+	editor.check(app, dialog)
+	editor.stop()
+	finish()
+	if editor.connected || len(editor.models) != 0 || app.prefs.AI.Model != "" {
+		t.Fatal("取消后返回的连接结果不应更新配置")
+	}
+	tester.Frame()
+	endpoint := app.prefs.AI.Endpoint
+	t.Setenv("MAGPIE_ADDR", endpoint)
+	mode, found := tester.AccessByRole(ui.RolePopUpButton, "连接方式")
+	if !found {
+		t.Fatal("缺少连接方式下拉框")
+	}
+	tester.ClickAt(mode.Bounds.X+mode.Bounds.W/2, mode.Bounds.Y+mode.Bounds.H/2)
+	if err := tester.Click("自动发现本机 Magpie"); err != nil {
+		t.Fatal(err)
+	}
+	if editor.manual || app.prefs.AI.Endpoint != "" {
+		t.Fatal("自动模式应清除手动地址")
+	}
+	if _, found := tester.Find("Magpie 地址"); found {
+		t.Fatal("自动模式不应展示手动地址")
+	}
+	if err := tester.Click("连接"); err != nil {
+		t.Fatal(err)
+	}
+	finish()
+	tester.Frame()
+	if !editor.connected || app.prefs.AI.Model != "group/codex" || app.prefs.AI.Endpoint != "" {
+		t.Fatal("自动发现应加载模型，不能固化自动发现地址")
+	}
+	mode, found = tester.AccessByRole(ui.RolePopUpButton, "连接方式")
+	if !found {
+		t.Fatal("缺少连接方式下拉框")
+	}
+	tester.ClickAt(mode.Bounds.X+mode.Bounds.W/2, mode.Bounds.Y+mode.Bounds.H/2)
+	if err := tester.Click("手动输入地址"); err != nil {
+		t.Fatal(err)
+	}
+	if info, found := tester.AccessByRole(ui.RoleButton, "连接"); !found || !info.Disabled {
+		t.Fatal("空手动地址不能连接")
+	}
+	if err := tester.Click("Magpie 地址"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Type(endpoint)
+	if app.prefs.AI.Endpoint != endpoint || editor.connected || len(editor.models) != 0 {
+		t.Fatal("更换地址应保存输入并清除旧连接状态")
+	}
+	restored := newNativeApp(app.service, app.stateFile)
+	defer restored.cancel()
+	if restored.prefs.AI.Endpoint != app.prefs.AI.Endpoint || restored.prefs.AI.Model != "group/codex" {
+		t.Fatal("切换连接方式不能丢失已保存的模型")
+	}
+	editor.check(app, dialog)
+	app.dialog = nil
+	finish()
+	if editor.connected || editor.problem != "" {
+		t.Fatal("关闭后到达的请求不能更新旧设置页面")
 	}
 }

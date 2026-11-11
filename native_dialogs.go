@@ -85,27 +85,28 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 			panel.Height(min(dialog.height, max(0, height-c.Theme().Space(20))))
 		}
 		panel.Children(func() {
-			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(12).Children(func() {
-				ui.Text(c, dialog.title).FontSize(20).Bold().Grow(1).MinWidth(0)
+			header := func() {
+				fontSize := float32(20)
 				if dialog.onClose != nil {
-					closeButton := ui.ButtonBase(c).Label("关闭设置").Tooltip("关闭设置").
-						Size(28, 28).Padding(4).Radius(14).AlignItems(ui.Center).Justify(ui.Center).Disabled(app.busy)
-					color := c.Theme().TextMuted
-					if closeButton.Pressed() {
-						closeButton.Background(c.Theme().SurfacePressed)
-						color = c.Theme().Text
-					} else if closeButton.Hovered() {
-						closeButton.Background(c.Theme().SurfaceHover)
-						color = c.Theme().Text
-					}
+					fontSize = 16
+				}
+				ui.Text(c, dialog.title).FontSize(fontSize).Bold().Grow(1).MinWidth(0)
+				if dialog.onClose != nil {
+					closeButton := ui.Button(c, "").Label("关闭设置").Tooltip("关闭设置").
+						Size(28, 28).Padding(4).Disabled(app.busy)
 					closeButton.Children(func() {
-						sfsymbols.Symbol(c, "xmark.circle.fill").Size(20).Color(color).Fallback(nativeIcons["close"])
+						sfsymbols.Symbol(c, "xmark.circle.fill").Size(18).Color(c.Theme().TextMuted).Fallback(nativeIcons["close"])
 					})
 					if closeButton.Clicked() {
 						app.closeDialog(dialog)
 					}
 				}
-			})
+			}
+			if dialog.onClose != nil {
+				ui.Toolbar(c, header).Label("设置操作").FillWidth().Padding(0)
+			} else {
+				ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(12).Children(header)
+			}
 			if dialog.detail != "" {
 				ui.Text(c, dialog.detail).MaxLines(5).Selectable()
 			}

@@ -193,10 +193,10 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 	app.settingsAutoDownloads = updater.AutomaticDownloads()
 	app.shortcutDraft = app.prefs.Shortcuts
 	app.settingsError = ""
-	dialog := &nativeDialog{title: "应用设置", width: 740, height: 560, dismiss: "取消"}
+	dialog := &nativeDialog{title: "应用设置", width: 620, height: 520, dismiss: "取消"}
 	tab := initialTab
 	identity := &nativeIdentityEditor{}
-	ai := &nativeAISettings{}
+	ai := &nativeAISettings{manual: app.prefs.AI.Endpoint != ""}
 	dialog.onClose = func() {
 		ai.stop()
 		identity.close(app, dialog)
@@ -220,7 +220,9 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 				dialog.action = "保存"
 			}
 			ui.Column(c).Grow(1).MinHeight(0).MinWidth(0).Gap(20).Padding(4, 0).Children(func() {
-				ui.Text(c, categories[tab]).FontSize(18).Bold()
+				if tab != 4 {
+					ui.Text(c, categories[tab]).FontSize(18).Bold()
+				}
 				ui.Scroll(c).Key(tab).Grow(1).MinHeight(0).FillWidth().Children(func() {
 					ui.Column(c).FillWidth().Gap(16).Padding(2, 4, 6).Children(func() {
 						switch tab {

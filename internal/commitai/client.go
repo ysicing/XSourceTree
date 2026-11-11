@@ -31,6 +31,9 @@ const (
 	responseLimit = 1 << 20
 )
 
+// ErrNoModels 表示网关可连接，但尚未提供可用模型。
+var ErrNoModels = errors.New("Magpie 未提供可用模型")
+
 type Options struct {
 	Endpoint string `json:"endpoint,omitempty"`
 	Model    string `json:"model,omitempty"`
@@ -186,7 +189,7 @@ func (client *Client) Models(ctx context.Context) ([]string, error) {
 	slices.Sort(models)
 	models = slices.Compact(models)
 	if len(models) == 0 {
-		return nil, errors.New("Magpie 未提供可用模型")
+		return nil, ErrNoModels
 	}
 	return models, nil
 }

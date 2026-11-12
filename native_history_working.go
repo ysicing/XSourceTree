@@ -13,7 +13,7 @@ import (
 )
 
 func (app *nativeApp) historyWorkingOffset() int {
-	if app.repository != nil && len(app.repository.snapshot.Files) > 0 && app.historyOffset == 0 &&
+	if app.screen == "history" && app.repository != nil && len(app.repository.snapshot.Files) > 0 && app.historyOffset == 0 &&
 		app.historyResult.query == "" && app.historyResult.file == "" {
 		return 1
 	}
@@ -87,7 +87,7 @@ func (app *nativeApp) openHistoryWorkingChanges() {
 		return
 	}
 	file, staged := app.selectedFile, app.staged
-	app.screen, app.historyWorking = "changes", false
+	app.switchWorkspace("changes")
 	app.refSelected = nativeRefKey{}
 	app.fileQuery, app.fileFilter = "", ""
 	clear(app.fileCollapsed)

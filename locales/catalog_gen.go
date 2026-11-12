@@ -36,6 +36,206 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// SearchAllContent says "全部内容"
+// in the language the app shows.
+func SearchAllContent() string { return In(i18n.Locale()).SearchAllContent() }
+
+// SearchAllContent says "全部内容"
+// in the language of msgs.
+func (msgs Messages) SearchAllContent() string {
+	return Catalog.Format(msgs.locale, "searchAllContent", nil)
+}
+
+// RunSearch says "执行搜索"
+// in the language the app shows.
+func RunSearch() string { return In(i18n.Locale()).RunSearch() }
+
+// RunSearch says "执行搜索"
+// in the language of msgs.
+func (msgs Messages) RunSearch() string {
+	return Catalog.Format(msgs.locale, "runSearch", nil)
+}
+
+// SearchMessages says "搜索提交信息"
+// in the language the app shows.
+func SearchMessages() string { return In(i18n.Locale()).SearchMessages() }
+
+// SearchMessages says "搜索提交信息"
+// in the language of msgs.
+func (msgs Messages) SearchMessages() string {
+	return Catalog.Format(msgs.locale, "searchMessages", nil)
+}
+
+// SearchSHA says "输入完整或短 SHA"
+// in the language the app shows.
+func SearchSHA() string { return In(i18n.Locale()).SearchSHA() }
+
+// SearchSHA says "输入完整或短 SHA"
+// in the language of msgs.
+func (msgs Messages) SearchSHA() string {
+	return Catalog.Format(msgs.locale, "searchSHA", nil)
+}
+
+// SearchBranches says "搜索本地或远程分支"
+// in the language the app shows.
+func SearchBranches() string { return In(i18n.Locale()).SearchBranches() }
+
+// SearchBranches says "搜索本地或远程分支"
+// in the language of msgs.
+func (msgs Messages) SearchBranches() string {
+	return Catalog.Format(msgs.locale, "searchBranches", nil)
+}
+
+// SearchChangedLines says "搜索变更行内容"
+// in the language the app shows.
+func SearchChangedLines() string { return In(i18n.Locale()).SearchChangedLines() }
+
+// SearchChangedLines says "搜索变更行内容"
+// in the language of msgs.
+func (msgs Messages) SearchChangedLines() string {
+	return Catalog.Format(msgs.locale, "searchChangedLines", nil)
+}
+
+// SearchAuthors says "搜索作者或邮箱"
+// in the language the app shows.
+func SearchAuthors() string { return In(i18n.Locale()).SearchAuthors() }
+
+// SearchAuthors says "搜索作者或邮箱"
+// in the language of msgs.
+func (msgs Messages) SearchAuthors() string {
+	return Catalog.Format(msgs.locale, "searchAuthors", nil)
+}
+
+// SearchConditionsChanged says "条件已修改，按回车重新搜索"
+// in the language the app shows.
+func SearchConditionsChanged() string { return In(i18n.Locale()).SearchConditionsChanged() }
+
+// SearchConditionsChanged says "条件已修改，按回车重新搜索"
+// in the language of msgs.
+func (msgs Messages) SearchConditionsChanged() string {
+	return Catalog.Format(msgs.locale, "searchConditionsChanged", nil)
+}
+
+// SearchFileChanges says "文件变更"
+// in the language the app shows.
+func SearchFileChanges() string { return In(i18n.Locale()).SearchFileChanges() }
+
+// SearchFileChanges says "文件变更"
+// in the language of msgs.
+func (msgs Messages) SearchFileChanges() string {
+	return Catalog.Format(msgs.locale, "searchFileChanges", nil)
+}
+
+// SearchUser says "用户"
+// in the language the app shows.
+func SearchUser() string { return In(i18n.Locale()).SearchUser() }
+
+// SearchUser says "用户"
+// in the language of msgs.
+func (msgs Messages) SearchUser() string {
+	return Catalog.Format(msgs.locale, "searchUser", nil)
+}
+
+// SearchType says "搜索类型"
+// in the language the app shows.
+func SearchType() string { return In(i18n.Locale()).SearchType() }
+
+// SearchType says "搜索类型"
+// in the language of msgs.
+func (msgs Messages) SearchType() string {
+	return Catalog.Format(msgs.locale, "searchType", nil)
+}
+
+// SearchDateRange says "日期范围"
+// in the language the app shows.
+func SearchDateRange() string { return In(i18n.Locale()).SearchDateRange() }
+
+// SearchDateRange says "日期范围"
+// in the language of msgs.
+func (msgs Messages) SearchDateRange() string {
+	return Catalog.Format(msgs.locale, "searchDateRange", nil)
+}
+
+// SearchStartDate says "开始日期"
+// in the language the app shows.
+func SearchStartDate() string { return In(i18n.Locale()).SearchStartDate() }
+
+// SearchStartDate says "开始日期"
+// in the language of msgs.
+func (msgs Messages) SearchStartDate() string {
+	return Catalog.Format(msgs.locale, "searchStartDate", nil)
+}
+
+// SearchEndDate says "结束日期"
+// in the language the app shows.
+func SearchEndDate() string { return In(i18n.Locale()).SearchEndDate() }
+
+// SearchEndDate says "结束日期"
+// in the language of msgs.
+func (msgs Messages) SearchEndDate() string {
+	return Catalog.Format(msgs.locale, "searchEndDate", nil)
+}
+
+// SearchDateTo says "至"
+// in the language the app shows.
+func SearchDateTo() string { return In(i18n.Locale()).SearchDateTo() }
+
+// SearchDateTo says "至"
+// in the language of msgs.
+func (msgs Messages) SearchDateTo() string {
+	return Catalog.Format(msgs.locale, "searchDateTo", nil)
+}
+
+// SearchInvalidDates says "开始日期不能晚于结束日期"
+// in the language the app shows.
+func SearchInvalidDates() string { return In(i18n.Locale()).SearchInvalidDates() }
+
+// SearchInvalidDates says "开始日期不能晚于结束日期"
+// in the language of msgs.
+func (msgs Messages) SearchInvalidDates() string {
+	return Catalog.Format(msgs.locale, "searchInvalidDates", nil)
+}
+
+// SearchStartHint says "输入条件，按回车搜索提交"
+// in the language the app shows.
+func SearchStartHint() string { return In(i18n.Locale()).SearchStartHint() }
+
+// SearchStartHint says "输入条件，按回车搜索提交"
+// in the language of msgs.
+func (msgs Messages) SearchStartHint() string {
+	return Catalog.Format(msgs.locale, "searchStartHint", nil)
+}
+
+// SearchResultCount says "已加载 {count} 条结果"
+// in the language the app shows.
+func SearchResultCount(count string) string { return In(i18n.Locale()).SearchResultCount(count) }
+
+// SearchResultCount says "已加载 {count} 条结果"
+// in the language of msgs.
+func (msgs Messages) SearchResultCount(count string) string {
+	return Catalog.Format(msgs.locale, "searchResultCount", map[string]any{"count": count})
+}
+
+// SearchResults says "搜索结果"
+// in the language the app shows.
+func SearchResults() string { return In(i18n.Locale()).SearchResults() }
+
+// SearchResults says "搜索结果"
+// in the language of msgs.
+func (msgs Messages) SearchResults() string {
+	return Catalog.Format(msgs.locale, "searchResults", nil)
+}
+
+// ViewInCommitHistory says "在提交历史中查看"
+// in the language the app shows.
+func ViewInCommitHistory() string { return In(i18n.Locale()).ViewInCommitHistory() }
+
+// ViewInCommitHistory says "在提交历史中查看"
+// in the language of msgs.
+func (msgs Messages) ViewInCommitHistory() string {
+	return Catalog.Format(msgs.locale, "viewInCommitHistory", nil)
+}
+
 // UncommittedChanges says "未提交更改"
 // in the language the app shows.
 func UncommittedChanges() string { return In(i18n.Locale()).UncommittedChanges() }

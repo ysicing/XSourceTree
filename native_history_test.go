@@ -270,8 +270,12 @@ func TestNativeHistoryPaginationKeepsSelection(t *testing.T) {
 		t.Fatal("当前分支分页未沿用筛选范围")
 	}
 	tester.Frame()
-	app.historyFile = "hello.txt"
 	if err := tester.Click("搜索"); err != nil {
+		t.Fatal(err)
+	}
+	app.historyFile = "hello.txt"
+	tester.Frame()
+	if err := tester.Click("执行搜索"); err != nil {
 		t.Fatal(err)
 	}
 	finish()

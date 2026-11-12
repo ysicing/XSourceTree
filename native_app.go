@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/ysicing/XSourceTree/internal/commitai"
 	"github.com/ysicing/XSourceTree/internal/gitrepo"
@@ -50,6 +51,13 @@ type repositoryView struct {
 }
 
 type nativeApp struct {
+	nativeHistoryState
+	browseState           nativeHistoryState
+	searchState           nativeHistoryState
+	searchInput           ui.Handle
+	searchDateEnabled     bool
+	searchSince           time.Time
+	searchUntil           time.Time
 	service               *RepositoryService
 	win                   *mygo.Window
 	ctx                   context.Context
@@ -74,18 +82,6 @@ type nativeApp struct {
 	fileFilter            string
 	fileCollapsed         map[string]bool
 	selectedFiles         map[string]bool
-	history               []gitrepo.Commit
-	historyQuery          string
-	historyFile           string
-	historyMore           bool
-	historyOffset         int
-	historyFilter         gitrepo.HistoryFilter
-	historyResult         nativeHistoryRequest
-	commitHash            string
-	viewedTag             string
-	viewedCommit          gitrepo.Commit
-	commitFiles           []gitrepo.CommitFile
-	commitFile            string
 	stashHash             string
 	diff                  gitrepo.Diff
 	patch                 gitrepo.Patch
@@ -103,7 +99,6 @@ type nativeApp struct {
 	scanSelected          map[string]bool
 	prefs                 nativePreferences
 	stateFile             string
-	historyList           *ui.ListState
 	settingsError         string
 	shortcutDraft         nativeShortcuts
 	settingsAutoChecks    bool
@@ -116,19 +111,8 @@ type nativeApp struct {
 	ai                    *nativeCommitAI
 	draftRevision         uint64
 
-	historySelected      int
-	historyTableSelected int
-	historyWorking       bool
-	historyGraph         []historyGraphRow
-	historyGraphSource   *gitrepo.Commit
-	historyGraphWorking  bool
-	historyGraphHead     string
-	commitList           *ui.ListState
-	commitSelected       int
-	workingList          *ui.ListState
-	workingSelected      int
-	refCollapsed         map[nativeRefKey]bool
-	refSelected          nativeRefKey
+	refCollapsed map[nativeRefKey]bool
+	refSelected  nativeRefKey
 }
 
 func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
@@ -140,9 +124,8 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 			Sidebar: 226, Files: 360, History: 56, HistoryFiles: 280, Wrap: true, Drafts: map[string]string{},
 			Appearance: appearanceSystem, Shortcuts: defaultNativeShortcuts(),
 		},
-		historySelected: -1, commitSelected: -1,
-		historyList: &ui.ListState{}, commitList: &ui.ListState{},
-		workingList: &ui.ListState{}, workingSelected: -1,
+		nativeHistoryState: newNativeHistoryState(),
+		browseState:        newNativeHistoryState(), searchState: newNativeHistoryState(),
 		refCollapsed: make(map[nativeRefKey]bool), fileCollapsed: make(map[string]bool),
 		chooseLanguage: mygo.App.SetLocale,
 	}
@@ -348,6 +331,10 @@ func (app *nativeApp) openRepository(path string) {
 				app.historyGraph, app.historyGraphSource = nil, nil
 				app.historyWorking = false
 				app.historySelected, app.commitSelected = -1, -1
+				app.nativeHistoryState = newNativeHistoryState()
+				app.browseState, app.searchState = newNativeHistoryState(), newNativeHistoryState()
+				app.searchDateEnabled = false
+				app.searchSince, app.searchUntil = time.Time{}, time.Time{}
 			}, nil
 		})
 	})
@@ -381,6 +368,10 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 	path, screen, file, staged := app.repository.snapshot.Path, app.screen, app.selectedFile, app.staged
 	wasWorking := screen == "history" && app.historyWorking
 	historyRequest := app.historyRequest()
+	historyScreen := screen == "history" || screen == "search" && app.historyLoaded
+	if screen == "search" {
+		historyRequest = app.historyResult
+	}
 	historyOffset := app.historyOffset
 	if historyRequest != app.historyResult {
 		historyOffset = 0
@@ -395,7 +386,7 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 		}
 		result, refreshErr := app.readRepository(ctx, path, false)
 		var history []gitrepo.Commit
-		if refreshErr == nil && screen == "history" {
+		if refreshErr == nil && historyScreen {
 			history, refreshErr = app.service.SearchHistory(ctx, path, historyRequest.query, historyRequest.file, historyOffset, historyRequest.filter)
 		}
 		var selection *nativeSelection
@@ -436,7 +427,7 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 		return func() {
 			retained := -1
 			preserveHistory := operation == nil || dialog != nil && dialog.preserveHistory
-			if preserveHistory && screen == "history" && refreshErr == nil {
+			if preserveHistory && historyScreen && refreshErr == nil {
 				for index, commit := range history {
 					if commit.Hash == app.commitHash {
 						retained = index
@@ -444,7 +435,7 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 					}
 				}
 			}
-			preserveDetails := preserveHistory && !wasWorking && screen == "history" &&
+			preserveDetails := preserveHistory && !wasWorking && historyScreen &&
 				refreshErr == nil && (retained >= 0 || app.viewedTag != "" && app.viewedCommit.Hash == app.commitHash)
 			if result != nil {
 				if preserveDetails {
@@ -456,8 +447,9 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 				}
 			}
 			app.writable = refreshErr == nil
-			if screen == "history" && refreshErr == nil {
+			if historyScreen && refreshErr == nil {
 				app.history, app.historyMore = history, len(history) == 100
+				app.historyLoaded = true
 				app.historyOffset = historyOffset
 				app.historyResult = historyRequest
 				if preserveDetails {

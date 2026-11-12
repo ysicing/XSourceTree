@@ -168,10 +168,15 @@ try {
   await request("menu", { path: ["仓库", "刷新"] });
   await ready();
   assert.equal(git("tag", "--list"), "native-smoke");
-  await fill("搜索提交、作者或 ID", "使用原生 UI");
   await press("搜索");
+  await fill("搜索提交、作者或 ID", "使用原生 UI");
+  await press("执行搜索");
   await waitFor((nodes) => nodes.some((node) => node.label?.includes("使用原生 UI 提交")), "历史结果");
-  await capture("native-desktop-history.png");
+  await press("使用原生 UI 提交");
+  await shown("在提交历史中查看");
+  await capture("native-desktop-search.png");
+  await press("在提交历史中查看");
+  await shown("提交历史表格");
   console.log("✓ 分支创建与切换、标签加载、历史搜索");
 
   const tagHead = git("rev-parse", "HEAD");
@@ -181,17 +186,14 @@ try {
   await ready();
   await press("标签");
   await press("native-annotated");
-  await shown("此提交不在当前筛选结果中");
   await shown("初始提交");
   await shown("完整提交 ID");
-  await capture("native-desktop-tag-filtered.png");
-  await press("在全部历史中查看");
   await waitFor((nodes) => nodes.some((node) =>
     node.role === "row" && node.key === tagTarget && node.states?.includes("checked")), "标签提交定位");
   assert.equal(git("rev-parse", "HEAD"), tagHead);
   assert.equal(git("branch", "--show-current"), "main");
   await capture("native-desktop-tag-selected.png");
-  console.log("✓ 附注标签定位、筛选外查看入口、保持当前分支");
+  console.log("✓ 搜索返回历史、附注标签定位、保持当前分支");
 
   await press("文件变更");
   await press("仓库设置");

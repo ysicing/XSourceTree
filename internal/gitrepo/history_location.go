@@ -18,6 +18,9 @@ type HistoryLocation struct {
 
 // LocateHistory 返回目标所在的匹配页；目标被筛选排除时仍返回提交详情。
 func (repo *Repository) LocateHistory(ctx context.Context, hash, query, path string, filter HistoryFilter) (HistoryLocation, error) {
+	if err := filter.validate(); err != nil {
+		return HistoryLocation{}, err
+	}
 	if err := validCommitHash(hash); err != nil {
 		return HistoryLocation{}, err
 	}

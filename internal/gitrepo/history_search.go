@@ -21,9 +21,34 @@ type CommitFile struct {
 type HistoryFilter struct {
 	CurrentBranch bool
 	HideRemotes   bool
+	Mode          string
+	Since         string
+	Until         string
+}
+
+func (filter HistoryFilter) validate() error {
+	switch filter.Mode {
+	case "", "message", "hash", "branch", "changes", "author":
+	default:
+		return errors.New("搜索类型无效")
+	}
+	for _, date := range []string{filter.Since, filter.Until} {
+		if date != "" {
+			if _, err := time.Parse(time.DateOnly, date); err != nil {
+				return errors.New("日期格式应为 YYYY-MM-DD")
+			}
+		}
+	}
+	if filter.Since != "" && filter.Until != "" && filter.Since > filter.Until {
+		return errors.New("开始日期不能晚于结束日期")
+	}
+	return nil
 }
 
 func (repo *Repository) SearchHistory(ctx context.Context, query string, path string, skip int, filter HistoryFilter) ([]Commit, error) {
+	if err := filter.validate(); err != nil {
+		return nil, err
+	}
 	if skip < 0 || skip > 1<<31-1 {
 		return nil, errors.New("历史分页无效")
 	}

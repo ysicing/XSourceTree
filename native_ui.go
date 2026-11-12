@@ -120,7 +120,7 @@ func (app *nativeApp) view(c *ui.Context) {
 					switch app.screen {
 					case "library":
 						app.libraryView(c)
-					case "history":
+					case "history", "search":
 						app.historyWorkspace(c)
 					default:
 						ui.Split(c, &app.prefs.Files, func() { app.repositoryPanel(c) }, func() { app.diffPanel(c) }).Grow(1).MinHeight(0).FillWidth()
@@ -215,6 +215,7 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 					}
 				})
 				ui.SidebarItem(c, "screen:history", nil, locales.CommitHistory()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
+				ui.SidebarItem(c, "screen:search", nil, locales.Search()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
 			})
 			app.localBranchSidebar(c)
 			app.tagSidebar(c)
@@ -230,13 +231,13 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 			case strings.HasPrefix(selected, "screen:"):
 				screen := strings.TrimPrefix(selected, "screen:")
 				app.leaveConflict(func() {
-					app.screen, app.group = screen, ""
-					app.historyWorking = false
-					app.refSelected = nativeRefKey{}
-					app.clearDiff()
-					app.selectedFile, app.commitHash, app.stashHash = "", "", ""
-					if screen == "history" {
+					app.switchWorkspace(screen)
+					app.group = ""
+					if screen == "history" && !app.historyLoaded {
 						app.searchHistory(false)
+					} else if (screen == "history" || screen == "search" && app.historyLoaded) &&
+						app.historyNeedsRefresh() {
+						app.refresh()
 					}
 				})
 			case strings.HasPrefix(selected, "group:"):
@@ -585,7 +586,7 @@ func (app *nativeApp) diffPanel(c *ui.Context) {
 		}
 		ui.Row(c).FillWidth().Padding(10, 14).Gap(8).AlignItems(ui.Center).Children(func() {
 			title := app.selectedFile
-			if app.screen == "history" && !app.historyWorking {
+			if (app.screen == "history" || app.screen == "search") && !app.historyWorking {
 				title = app.commitFile
 				if title == "" {
 					title = shortHash(app.commitHash)
@@ -669,8 +670,11 @@ func (app *nativeApp) patchToolbar(c *ui.Context) {
 			}
 		}
 		if ui.Button(c, locales.FileHistory()).Clicked() {
-			app.historyFile, app.historyQuery, app.screen = app.selectedFile, "", "history"
-			app.searchHistory(false)
+			file := app.selectedFile
+			app.switchWorkspace("search")
+			app.historyFile, app.historyQuery, app.historyFilter = file, "", gitrepo.HistoryFilter{}
+			app.searchDateEnabled = false
+			app.executeSearch()
 		}
 		if !app.patch.Supported || len(app.patch.Hunks) == 0 {
 			return

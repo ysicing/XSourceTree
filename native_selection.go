@@ -7,6 +7,7 @@ import (
 	"context"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/ysicing/XSourceTree/internal/gitrepo"
 	"github.com/ysicing/XSourceTree/locales"
@@ -85,7 +86,7 @@ func (app *nativeApp) load(label string, kind nativeReadKind, task func(context.
 				apply()
 			}
 			if err != nil {
-				if kind == nativeReadHistory {
+				if kind == nativeReadHistory && screen != "search" {
 					app.historyFilter = app.historyResult.filter
 				}
 				app.problem = err.Error()
@@ -244,7 +245,14 @@ type nativeHistoryRequest struct {
 }
 
 func (app *nativeApp) historyRequest() nativeHistoryRequest {
-	return nativeHistoryRequest{query: app.historyQuery, file: app.historyFile, filter: app.historyFilter}
+	request := nativeHistoryRequest{query: app.historyQuery, file: app.historyFile, filter: app.historyFilter}
+	if app.screen == "search" {
+		request.filter.Since, request.filter.Until = "", ""
+		if app.searchDateEnabled {
+			request.filter.Since, request.filter.Until = app.searchSince.Format(time.DateOnly), app.searchUntil.Format(time.DateOnly)
+		}
+	}
+	return request
 }
 
 func (app *nativeApp) searchHistory(more bool) {
@@ -252,6 +260,9 @@ func (app *nativeApp) searchHistory(more bool) {
 		return
 	}
 	path, request := app.repository.snapshot.Path, app.historyRequest()
+	if more && app.screen == "search" {
+		request = app.historyResult
+	}
 	more = more && request == app.historyResult
 	skip := 0
 	if more {
@@ -277,6 +288,7 @@ func (app *nativeApp) searchHistory(more bool) {
 				app.clearDiff()
 			}
 			app.historyResult = request
+			app.historyLoaded = true
 			app.historyMore = len(commits) == 100
 		}, err
 	})
@@ -331,6 +343,7 @@ func (app *nativeApp) selectTag(name string, all bool) {
 		return
 	}
 	app.leaveConflict(func() {
+		app.switchWorkspace("history")
 		path, request := app.repository.snapshot.Path, app.historyResult
 		if len(app.history) == 0 {
 			request = app.historyRequest()
@@ -338,7 +351,6 @@ func (app *nativeApp) selectTag(name string, all bool) {
 		if all {
 			request = nativeHistoryRequest{}
 		}
-		app.screen = "history"
 		app.load(locales.ReadingCommit(), nativeReadHistory, func(ctx context.Context) (func(), error) {
 			hash, err := app.service.ResolveCreationTarget(ctx, path, "refs/tags/"+name)
 			if err != nil {
@@ -376,6 +388,7 @@ func (app *nativeApp) selectTag(name string, all bool) {
 					}
 				}
 				app.viewedTag, app.viewedCommit = name, location.Commit
+				app.historyLoaded = true
 				app.refSelected = nativeRefKey{repository: path, kind: "标签", reference: name}
 				app.applyCommitSelection(hash, files, file)
 				if err == nil {

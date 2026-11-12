@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -28,6 +29,7 @@ type historyLogWriter struct {
 	target      string
 	found       bool
 	offset      int
+	filter      HistoryFilter
 }
 
 func newHistoryLogWriter(ctx context.Context, query string, skip int, cancel context.CancelFunc) *historyLogWriter {
@@ -84,7 +86,18 @@ func (writer *historyLogWriter) Write(data []byte) (int, error) {
 
 func (writer *historyLogWriter) accept() {
 	matches := writer.query == ""
-	for _, index := range [...]int{0, 2, 3, 6, 7} {
+	indices := []int{0, 2, 3, 6, 7}
+	switch writer.filter.Mode {
+	case "message":
+		indices = []int{6}
+	case "hash":
+		indices = []int{0}
+	case "author":
+		indices = []int{3, 7}
+	case "branch", "changes":
+		matches = true
+	}
+	for _, index := range indices {
 		if matches || strings.Contains(strings.ToLower(writer.fields[index]), writer.query) {
 			matches = true
 			break
@@ -92,6 +105,17 @@ func (writer *historyLogWriter) accept() {
 	}
 	if !matches {
 		return
+	}
+	if writer.filter.Since != "" || writer.filter.Until != "" {
+		date, err := time.Parse(time.RFC3339, writer.fields[4])
+		if err != nil {
+			return
+		}
+		day := date.In(time.Local).Format(time.DateOnly)
+		if writer.filter.Since != "" && day < writer.filter.Since ||
+			writer.filter.Until != "" && day > writer.filter.Until {
+			return
+		}
 	}
 	if writer.skip > 0 {
 		writer.skip--
@@ -144,6 +168,7 @@ func (repo *Repository) streamHistory(ctx context.Context, query, path string, s
 const historyFormat = "--format=%H%x00%P%x00%s%x00%an%x00%aI%x00%D%x00%B%x00%ae"
 
 func (repo *Repository) readHistory(ctx context.Context, path string, filter HistoryFilter, stdout *historyLogWriter) error {
+	stdout.filter = filter
 	processCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	stdout.cancel = cancel
@@ -153,7 +178,30 @@ func (repo *Repository) readHistory(ctx context.Context, path string, filter His
 	if filter.HideRemotes {
 		args = append(args, "--decorate-refs-exclude=refs/remotes/*")
 	}
-	if filter.CurrentBranch {
+	if filter.Mode == "changes" && stdout.query != "" {
+		args = append(args, "-G"+regexp.QuoteMeta(stdout.query), "--regexp-ignore-case", "--diff-merges=first-parent",
+			"--no-patch", "--no-ext-diff", "--no-textconv")
+	}
+	if filter.Mode == "branch" && stdout.query != "" {
+		refs, err := repo.git(ctx, "for-each-ref", "--format=%(refname)", "refs/heads/", "refs/remotes/")
+		if err != nil {
+			return err
+		}
+		matched := false
+		for _, ref := range strings.Fields(refs) {
+			if filter.HideRemotes && strings.HasPrefix(ref, "refs/remotes/") {
+				continue
+			}
+			name := strings.TrimPrefix(strings.TrimPrefix(ref, "refs/heads/"), "refs/remotes/")
+			if strings.Contains(strings.ToLower(name), stdout.query) {
+				args = append(args, ref)
+				matched = true
+			}
+		}
+		if !matched {
+			return nil
+		}
+	} else if filter.CurrentBranch {
 		args = append(args, "HEAD")
 	} else {
 		if filter.HideRemotes {

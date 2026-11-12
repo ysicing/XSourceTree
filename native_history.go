@@ -201,43 +201,40 @@ func (app *nativeApp) historyWorkspace(c *ui.Context) {
 }
 
 func (app *nativeApp) historyPanel(c *ui.Context) {
-	ui.Row(c).FillWidth().Padding(4, 10).Gap(8).AlignItems(ui.Center).Children(func() {
-		scopes := []string{locales.AllBranches(), locales.CurrentBranch()}
-		scope := scopes[0]
-		if app.historyFilter.CurrentBranch {
-			scope = scopes[1]
-		}
-		c.Key("history-scope")
-		ui.Select(c, &scope, scopes).Label(locales.HistoryBranchScope()).Width(140).Height(26).FontSize(12).
-			Disabled(app.busy).OnChange(func() {
-			app.historyFilter.CurrentBranch = scope == scopes[1]
-			app.searchHistory(false)
-		})
-		remotes := []string{locales.ShowRemoteBranches(), locales.HideRemoteBranches()}
-		remote := remotes[0]
-		if app.historyFilter.HideRemotes {
-			remote = remotes[1]
-		}
-		c.Key("history-remotes")
-		ui.Select(c, &remote, remotes).Label(locales.HistoryRemoteVisibility()).Width(190).Height(26).FontSize(12).
-			Disabled(app.busy).OnChange(func() {
-			app.historyFilter.HideRemotes = remote == remotes[1]
-			app.searchHistory(false)
-		})
-	})
-	ui.Row(c).FillWidth().Padding(8, 10).Gap(8).AlignItems(ui.Center).Children(func() {
-		submitted := ui.TextInput(c, &app.historyQuery).Search().Placeholder(locales.SearchHistory()).Grow(1).MinWidth(100).Submitted()
-		submitted = ui.TextInput(c, &app.historyFile).Placeholder(locales.OptionalFilePath()).Width(160).Submitted() || submitted
-		if ui.Button(c, locales.Search()).Clicked() || submitted {
-			app.searchHistory(false)
-		}
-		if app.readTask != nil && app.readTask.kind == nativeReadHistory {
-			ui.Spinner(c).Size(14, 14).Label(locales.SearchingHistory())
-			if ui.Button(c, locales.CancelSearch()).Clicked() {
-				app.readTask.cancel()
+	if app.screen == "search" {
+		app.searchControls(c)
+	} else {
+		ui.Row(c).FillWidth().Padding(4, 10).Gap(8).AlignItems(ui.Center).Children(func() {
+			scopes := []string{locales.AllBranches(), locales.CurrentBranch()}
+			scope := scopes[0]
+			if app.historyFilter.CurrentBranch {
+				scope = scopes[1]
 			}
-		}
-	})
+			c.Key("history-scope")
+			ui.Select(c, &scope, scopes).Label(locales.HistoryBranchScope()).Width(140).Height(26).FontSize(12).
+				Disabled(app.busy).OnChange(func() {
+				app.historyFilter.CurrentBranch = scope == scopes[1]
+				app.searchHistory(false)
+			})
+			remotes := []string{locales.ShowRemoteBranches(), locales.HideRemoteBranches()}
+			remote := remotes[0]
+			if app.historyFilter.HideRemotes {
+				remote = remotes[1]
+			}
+			c.Key("history-remotes")
+			ui.Select(c, &remote, remotes).Label(locales.HistoryRemoteVisibility()).Width(190).Height(26).FontSize(12).
+				Disabled(app.busy).OnChange(func() {
+				app.historyFilter.HideRemotes = remote == remotes[1]
+				app.searchHistory(false)
+			})
+			if app.readTask != nil && app.readTask.kind == nativeReadHistory {
+				ui.Spinner(c).Size(14, 14).Label(locales.SearchingHistory())
+				if ui.Button(c, locales.CancelSearch()).Clicked() {
+					app.readTask.cancel()
+				}
+			}
+		})
+	}
 	if app.viewedTag != "" {
 		ui.Row(c).FillWidth().Padding(4, 10).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Icon(c, nativeIcons["tag"]).FontSize(12).Shrink(0)
@@ -258,7 +255,11 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 	if len(app.history) == 0 && workingOffset == 0 {
 		app.historyGraph, app.historyGraphSource = nil, nil
 		ui.Column(c).Key("empty-history").Grow(1).FillWidth().Center().Children(func() {
-			ui.Text(c, locales.NoMatchingCommits()).TextColor(c.Theme().TextMuted)
+			message := locales.NoMatchingCommits()
+			if app.screen == "search" && !app.historyLoaded {
+				message = locales.SearchStartHint()
+			}
+			ui.Text(c, message).TextColor(c.Theme().TextMuted)
 		})
 		return
 	}
@@ -305,6 +306,9 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 			return
 		}
 		commit := history[row]
+		if app.screen == "search" && menu.Item(locales.ViewInCommitHistory()).Disabled(app.busy || app.readTask != nil).Chosen() {
+			app.revealSearchCommit(commit.Hash)
+		}
 		unavailable := !app.canCreateReference() || app.readTask != nil && app.readTask.kind == nativeReadHistory
 		if menu.Item(locales.BranchFromCommit()).Disabled(unavailable).Chosen() {
 			app.referenceDialog(false, locales.ReferenceCommit()+" "+commit.Subject, commit.Hash, false)
@@ -326,7 +330,16 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 			{Title: locales.Date(), Width: 138, MinWidth: 138},
 			{Title: locales.CommitID(), Width: 88, MinWidth: 88},
 		}
+		label := locales.HistoryTable()
+		searching := app.screen == "search"
+		if searching {
+			columns = columns[1:]
+			label = locales.SearchResults()
+		}
 		if ui.Table(c, app.historyList, columns, len(app.history)+workingOffset, func(index, column int) {
+			if searching {
+				column++
+			}
 			working := workingOffset != 0 && index == 0
 			var commit gitrepo.Commit
 			if !working {
@@ -361,7 +374,7 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 			case 4:
 				ui.Text(c, shortHash(commit.Hash)).Font("monospace").FontSize(12).TextColor(theme.TextMuted).SingleLine()
 			}
-		}).Fill().Label(locales.HistoryTable()).
+		}).Fill().Label(label).
 			Disabled(app.busy || app.readTask != nil && app.readTask.kind == nativeReadHistory).
 			Changed() && app.historyTableSelected >= 0 {
 			if workingOffset != 0 && app.historyTableSelected == 0 {
@@ -378,6 +391,9 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 			}
 		}
 	})
+	if app.screen == "search" {
+		ui.Text(c, app.searchSummary()).FontSize(11).TextColor(c.Theme().TextMuted).Padding(4, 10)
+	}
 	if app.historyMore {
 		if ui.Button(c, locales.LoadMore()).FillWidth().
 			Disabled(app.busy || app.readTask != nil && app.readTask.kind == nativeReadHistory).Clicked() {
@@ -418,6 +434,11 @@ func (app *nativeApp) historyDetails(c *ui.Context) {
 				ui.Text(c, historyDate(selected.Date)).FontSize(11).TextColor(c.Theme().TextMuted).SingleLine()
 			}
 			ui.Text(c, app.commitHash).Font("monospace").FontSize(11).MinWidth(0).Grow(1).SingleLine().Selectable().Label(locales.FullCommitID())
+			if app.screen == "search" {
+				hash := app.commitHash
+				ui.Button(c, locales.ViewInCommitHistory()).FontSize(12).Disabled(app.busy || app.readTask != nil).
+					OnClick(func() { app.revealSearchCommit(hash) })
+			}
 		})
 		if selected != nil && selected.Refs != "" {
 			ui.Text(c, selected.Refs).FontSize(11).TextColor(c.Theme().TextMuted).MaxLines(1).Selectable().Tooltip(selected.Refs)

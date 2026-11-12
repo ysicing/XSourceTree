@@ -26,6 +26,7 @@ type historyEdge struct {
 }
 
 type historyGraphRow struct {
+	Working                bool
 	Column, Color, Columns int
 	Incoming               []int
 	Edges                  []historyEdge
@@ -114,12 +115,20 @@ func drawHistoryGraph(p *ui.Painter, r ui.Rect, row historyGraphRow, theme *ui.T
 		p.Line(x(column), r.Y, x(column), middle, 1.6, historyColor(theme, color))
 	}
 	for _, edge := range row.Edges {
-		path := new(ui.Path).MoveTo(x(edge.From), middle)
+		start := middle
+		if row.Working && edge.From == row.Column {
+			start += 3.6
+		}
+		path := new(ui.Path).MoveTo(x(edge.From), start)
 		path.CubeTo(x(edge.From), middle+r.H/4, x(edge.To), middle+r.H/4, x(edge.To), r.Y+r.H)
 		p.StrokePath(path, 1.6, historyColor(theme, edge.Color))
 	}
 	dot := new(ui.Path).Circle(x(row.Column), middle, 3.6)
-	p.FillPath(dot, historyColor(theme, row.Color))
+	if row.Working {
+		p.StrokePath(dot, 1.6, theme.TextMuted)
+	} else {
+		p.FillPath(dot, historyColor(theme, row.Color))
+	}
 }
 
 func historyDate(value string) string {
@@ -178,7 +187,11 @@ func (app *nativeApp) historyWorkspace(c *ui.Context) {
 				app.historyDetails(c)
 				ui.Divider(c)
 				ui.Split(c, &app.prefs.HistoryFiles, func() {
-					app.historyFiles(c)
+					if app.historyWorking {
+						app.historyWorkingFiles(c)
+					} else {
+						app.historyFiles(c)
+					}
 				}, func() {
 					app.diffPanel(c)
 				}).FillWidth().Grow(1).MinHeight(0).SplitReset(280)
@@ -218,9 +231,6 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 		if ui.Button(c, locales.Search()).Clicked() || submitted {
 			app.searchHistory(false)
 		}
-		if ui.Button(c, locales.NewTag()).Disabled(!app.writable || app.readTask != nil).Clicked() {
-			app.tagDialog()
-		}
 		if app.readTask != nil && app.readTask.kind == nativeReadHistory {
 			ui.Spinner(c).Size(14, 14).Label(locales.SearchingHistory())
 			if ui.Button(c, locales.CancelSearch()).Clicked() {
@@ -244,7 +254,8 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 			OnClick(func() { app.searchHistory(false) })
 	}
 	ui.Divider(c)
-	if len(app.history) == 0 {
+	workingOffset := app.historyWorkingOffset()
+	if len(app.history) == 0 && workingOffset == 0 {
 		app.historyGraph, app.historyGraphSource = nil, nil
 		ui.Column(c).Key("empty-history").Grow(1).FillWidth().Center().Children(func() {
 			ui.Text(c, locales.NoMatchingCommits()).TextColor(c.Theme().TextMuted)
@@ -252,19 +263,44 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 		return
 	}
 	// 搜索和分页会替换切片或改变长度，拖动分隔线时无需反复计算整张图。
-	if app.historyGraphSource != &app.history[0] || len(app.historyGraph) != len(app.history) {
-		app.historyGraph = commitGraph(app.history)
-		app.historyGraphSource = &app.history[0]
+	var source *gitrepo.Commit
+	if len(app.history) > 0 {
+		source = &app.history[0]
+	}
+	head := app.repository.snapshot.Head
+	if app.historyGraphSource != source || len(app.historyGraph) != len(app.history)+workingOffset ||
+		app.historyGraphWorking != (workingOffset != 0) || app.historyGraphHead != head {
+		app.historyGraph = historyGraphWithWorking(app.history, head, workingOffset != 0)
+		app.historyGraphSource, app.historyGraphHead = source, head
+		app.historyGraphWorking = workingOffset != 0
 	}
 	graphWidth := float32(80)
 	for _, row := range app.historyGraph {
 		graphWidth = max(graphWidth, 24+float32(row.Columns)*16)
 	}
-	app.historyList.Selected = &app.historySelected
+	app.historyTableSelected = -1
+	if app.historyWorking && workingOffset != 0 {
+		app.historyTableSelected = 0
+	} else if app.historySelected >= 0 {
+		app.historyTableSelected = app.historySelected + workingOffset
+	}
+	app.historyList.Selected = &app.historyTableSelected
 	history := app.history
-	app.historyList.Key = func(index int) any { return history[index].Hash }
-	app.historyList.Label = func(index int) string { return history[index].Subject }
+	workingLabel := locales.UncommittedFiles(fmt.Sprint(len(app.repository.snapshot.Files)))
+	app.historyList.Key = func(index int) any {
+		if workingOffset != 0 && index == 0 {
+			return "working-tree"
+		}
+		return history[index-workingOffset].Hash
+	}
+	app.historyList.Label = func(index int) string {
+		if workingOffset != 0 && index == 0 {
+			return workingLabel
+		}
+		return history[index-workingOffset].Subject
+	}
 	app.historyList.CellMenu = func(menu *ui.Menu, row, _ int) {
+		row -= workingOffset
 		if row < 0 || row >= len(history) {
 			return
 		}
@@ -290,8 +326,12 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 			{Title: locales.Date(), Width: 138, MinWidth: 138},
 			{Title: locales.CommitID(), Width: 88, MinWidth: 88},
 		}
-		if ui.Table(c, app.historyList, columns, len(app.history), func(index, column int) {
-			commit := app.history[index]
+		if ui.Table(c, app.historyList, columns, len(app.history)+workingOffset, func(index, column int) {
+			working := workingOffset != 0 && index == 0
+			var commit gitrepo.Commit
+			if !working {
+				commit = app.history[index-workingOffset]
+			}
 			switch column {
 			case 0:
 				ui.Box(c).Width(graphWidth - 17.5).MinHeight(17.5).AlignSelf(ui.Stretch).Draw(func(p *ui.Painter, r ui.Rect) {
@@ -299,6 +339,10 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 					drawHistoryGraph(p, r, app.historyGraph[index], &theme)
 				})
 			case 1:
+				if working {
+					ui.Text(c, workingLabel).Bold().SingleLine().Tooltip(workingLabel)
+					return
+				}
 				ui.Row(c).FillWidth().MinWidth(0).Gap(4).AlignItems(ui.Center).Children(func() {
 					if spans, overflow := historyRefs(commit.Refs, &theme); len(spans) > 0 {
 						ui.Row(c).MaxWidth(180).Gap(3).MinWidth(0).AlignItems(ui.Center).Children(func() {
@@ -319,9 +363,17 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 			}
 		}).Fill().Label(locales.HistoryTable()).
 			Disabled(app.busy || app.readTask != nil && app.readTask.kind == nativeReadHistory).
-			Changed() && app.historySelected >= 0 && app.historySelected < len(app.history) {
-			hash := app.history[app.historySelected].Hash
-			if hash != app.commitHash || app.readTask != nil || app.problem != "" {
+			Changed() && app.historyTableSelected >= 0 {
+			if workingOffset != 0 && app.historyTableSelected == 0 {
+				app.selectHistoryWorking()
+				return
+			}
+			index := app.historyTableSelected - workingOffset
+			if index >= len(app.history) {
+				return
+			}
+			hash := app.history[index].Hash
+			if app.historyWorking || hash != app.commitHash || app.readTask != nil || app.problem != "" {
 				app.selectCommit(hash)
 			}
 		}
@@ -336,6 +388,13 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 
 func (app *nativeApp) historyDetails(c *ui.Context) {
 	ui.Column(c).FillWidth().Padding(9, 14).Gap(5).Children(func() {
+		if app.historyWorking {
+			ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, locales.UncommittedChanges()).Bold().FontSize(15).Grow(1)
+				ui.Button(c, locales.GoToFileChanges()).Disabled(app.busy || app.readTask != nil).OnClick(app.openHistoryWorkingChanges)
+			})
+			return
+		}
 		if app.commitHash == "" {
 			ui.Text(c, locales.SelectCommit()).TextColor(c.Theme().TextMuted)
 			return

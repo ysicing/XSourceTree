@@ -135,6 +135,11 @@ try {
   await press("添加");
   await press(basename(fixture));
   await shown("文件变更");
+  await press("提交历史");
+  await press("未提交更改 · 1 个文件");
+  await shown("未暂存文件");
+  await capture("native-desktop-working-history.png");
+  await press("前往文件变更");
   await press("hello.txt");
   await press("并排");
   await capture("native-desktop-diff.png");
@@ -159,17 +164,15 @@ try {
   await press("main");
   assert.equal(git("branch", "--show-current"), "main");
   await press("提交历史");
-  await press("新建标签");
-  await fill("标签名称", "native-smoke");
-  await shown("本地名称可用");
-  await capture("native-reference-create-tag.png");
-  await press("创建");
+  git("tag", "native-smoke");
+  await request("menu", { path: ["仓库", "刷新"] });
+  await ready();
   assert.equal(git("tag", "--list"), "native-smoke");
   await fill("搜索提交、作者或 ID", "使用原生 UI");
   await press("搜索");
   await waitFor((nodes) => nodes.some((node) => node.label?.includes("使用原生 UI 提交")), "历史结果");
   await capture("native-desktop-history.png");
-  console.log("✓ 分支创建与切换、标签创建、历史搜索");
+  console.log("✓ 分支创建与切换、标签加载、历史搜索");
 
   const tagHead = git("rev-parse", "HEAD");
   const tagTarget = git("rev-parse", "HEAD^");

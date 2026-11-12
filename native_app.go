@@ -116,13 +116,19 @@ type nativeApp struct {
 	ai                    *nativeCommitAI
 	draftRevision         uint64
 
-	historySelected    int
-	historyGraph       []historyGraphRow
-	historyGraphSource *gitrepo.Commit
-	commitList         *ui.ListState
-	commitSelected     int
-	refCollapsed       map[nativeRefKey]bool
-	refSelected        nativeRefKey
+	historySelected      int
+	historyTableSelected int
+	historyWorking       bool
+	historyGraph         []historyGraphRow
+	historyGraphSource   *gitrepo.Commit
+	historyGraphWorking  bool
+	historyGraphHead     string
+	commitList           *ui.ListState
+	commitSelected       int
+	workingList          *ui.ListState
+	workingSelected      int
+	refCollapsed         map[nativeRefKey]bool
+	refSelected          nativeRefKey
 }
 
 func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
@@ -136,6 +142,7 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 		},
 		historySelected: -1, commitSelected: -1,
 		historyList: &ui.ListState{}, commitList: &ui.ListState{},
+		workingList: &ui.ListState{}, workingSelected: -1,
 		refCollapsed: make(map[nativeRefKey]bool), fileCollapsed: make(map[string]bool),
 		chooseLanguage: mygo.App.SetLocale,
 	}
@@ -339,6 +346,7 @@ func (app *nativeApp) openRepository(path string) {
 				app.history, app.commitHash, app.commitFiles, app.stashHash = nil, "", nil, ""
 				app.historyOffset, app.viewedTag, app.viewedCommit = 0, "", gitrepo.Commit{}
 				app.historyGraph, app.historyGraphSource = nil, nil
+				app.historyWorking = false
 				app.historySelected, app.commitSelected = -1, -1
 			}, nil
 		})
@@ -371,6 +379,7 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 		app.stopCommitAI()
 	}
 	path, screen, file, staged := app.repository.snapshot.Path, app.screen, app.selectedFile, app.staged
+	wasWorking := screen == "history" && app.historyWorking
 	historyRequest := app.historyRequest()
 	historyOffset := app.historyOffset
 	if historyRequest != app.historyResult {
@@ -393,9 +402,41 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 		if refreshErr == nil && screen == "changes" && file != "" && fileExists(result.snapshot.Files, file, staged) {
 			selection, refreshErr = app.readSelection(ctx, path, file, staged, result.snapshot.Files)
 		}
+		var workingSelection *nativeSelection
+		var headFiles []gitrepo.CommitFile
+		var headDiff gitrepo.Diff
+		var detailErr error
+		restoreWorking := wasWorking && refreshErr == nil && historyOffset == 0 &&
+			historyRequest.query == "" && historyRequest.file == ""
+		if restoreWorking {
+			if len(result.snapshot.Files) > 0 {
+				workingFile, workingStaged := historyWorkingFile(result.snapshot.Files, file, staged)
+				workingSelection = &nativeSelection{file: workingFile, staged: workingStaged}
+				workingSelection.diff, detailErr = app.service.Diff(ctx, path, workingFile, workingStaged)
+			} else if result.snapshot.Head != "" {
+				headVisible := false
+				for _, commit := range history {
+					headVisible = headVisible || commit.Hash == result.snapshot.Head
+				}
+				if !headVisible {
+					var location gitrepo.HistoryLocation
+					location, detailErr = app.service.LocateHistory(ctx, path, result.snapshot.Head, "", "", historyRequest.filter)
+					if detailErr == nil && len(location.Commits) > 0 {
+						history, historyOffset = location.Commits, location.Offset
+					}
+				}
+				if detailErr == nil {
+					headFiles, detailErr = app.service.CommitFiles(ctx, path, result.snapshot.Head)
+				}
+				if detailErr == nil && len(headFiles) > 0 {
+					headDiff, detailErr = app.service.CommitFileDiff(ctx, path, result.snapshot.Head, headFiles[0].Path)
+				}
+			}
+		}
 		return func() {
 			retained := -1
-			if dialog != nil && dialog.preserveHistory && screen == "history" && refreshErr == nil {
+			preserveHistory := operation == nil || dialog != nil && dialog.preserveHistory
+			if preserveHistory && screen == "history" && refreshErr == nil {
 				for index, commit := range history {
 					if commit.Hash == app.commitHash {
 						retained = index
@@ -403,13 +444,14 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 					}
 				}
 			}
-			preserveDetails := dialog != nil && dialog.preserveHistory && screen == "history" &&
+			preserveDetails := preserveHistory && !wasWorking && screen == "history" &&
 				refreshErr == nil && (retained >= 0 || app.viewedTag != "" && app.viewedCommit.Hash == app.commitHash)
 			if result != nil {
 				if preserveDetails {
 					app.repository = result
 					app.library = app.service.Library()
 				} else {
+					app.historyWorking = false
 					app.adopt(result)
 				}
 			}
@@ -431,6 +473,20 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 				app.setSelection(selection)
 			} else {
 				app.selectedFile = ""
+			}
+			if restoreWorking {
+				if workingSelection != nil {
+					app.applyHistoryWorkingSelection(workingSelection)
+				} else {
+					headFile := ""
+					if len(headFiles) > 0 {
+						headFile = headFiles[0].Path
+					}
+					app.applyCommitSelection(result.snapshot.Head, headFiles, headFile)
+					if detailErr == nil {
+						app.setDiff(headDiff)
+					}
+				}
 			}
 			if conflict != nil && (operationErr != nil || dirty && (refreshErr != nil || selection != nil && selection.conflict != nil)) {
 				// 修改分支、标签或远程配置时，仍在编辑的冲突草稿和原始校验令牌必须保留。
@@ -456,7 +512,7 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 					}
 				}
 			}
-		}, errors.Join(operationErr, refreshErr)
+		}, errors.Join(operationErr, refreshErr, detailErr)
 	})
 }
 

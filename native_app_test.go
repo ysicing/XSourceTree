@@ -540,7 +540,7 @@ func TestNativeLoadingProtectsSelectedActions(t *testing.T) {
 			}
 			defer finish()
 			tester := ui.NewTester(app.view, 1024, 680)
-			labels := []string{"新建标签"}
+			var labels []string
 			if screen == "stash" {
 				labels = []string{"应用", "应用并删除", "删除"}
 			}

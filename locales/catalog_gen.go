@@ -36,6 +36,46 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// UncommittedChanges says "未提交更改"
+// in the language the app shows.
+func UncommittedChanges() string { return In(i18n.Locale()).UncommittedChanges() }
+
+// UncommittedChanges says "未提交更改"
+// in the language of msgs.
+func (msgs Messages) UncommittedChanges() string {
+	return Catalog.Format(msgs.locale, "uncommittedChanges", nil)
+}
+
+// UncommittedFiles says "未提交更改 · {count} 个文件"
+// in the language the app shows.
+func UncommittedFiles(count string) string { return In(i18n.Locale()).UncommittedFiles(count) }
+
+// UncommittedFiles says "未提交更改 · {count} 个文件"
+// in the language of msgs.
+func (msgs Messages) UncommittedFiles(count string) string {
+	return Catalog.Format(msgs.locale, "uncommittedFiles", map[string]any{"count": count})
+}
+
+// GoToFileChanges says "前往文件变更"
+// in the language the app shows.
+func GoToFileChanges() string { return In(i18n.Locale()).GoToFileChanges() }
+
+// GoToFileChanges says "前往文件变更"
+// in the language of msgs.
+func (msgs Messages) GoToFileChanges() string {
+	return Catalog.Format(msgs.locale, "goToFileChanges", nil)
+}
+
+// WorkingTreeFiles says "工作区文件列表"
+// in the language the app shows.
+func WorkingTreeFiles() string { return In(i18n.Locale()).WorkingTreeFiles() }
+
+// WorkingTreeFiles says "工作区文件列表"
+// in the language of msgs.
+func (msgs Messages) WorkingTreeFiles() string {
+	return Catalog.Format(msgs.locale, "workingTreeFiles", nil)
+}
+
 // BranchFromCommit says "从此提交新建分支…"
 // in the language the app shows.
 func BranchFromCommit() string { return In(i18n.Locale()).BranchFromCommit() }

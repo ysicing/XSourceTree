@@ -188,7 +188,7 @@ func TestNativeHistoryWorkspace(t *testing.T) {
 		saveNativeScreenshot(t, tester, directory, "native-history-dark.png")
 	}
 	tester.SetSize(1024, 680)
-	for _, label := range []string{"所有分支", "显示远程分支", "搜索", "新建标签", "差异布局", "提交文件列表"} {
+	for _, label := range []string{"所有分支", "显示远程分支", "搜索", "差异布局", "提交文件列表"} {
 		bounds, found := tester.Find(label)
 		if !found || bounds.X < 0 || bounds.Y < 0 || bounds.X+bounds.W > 1024 || bounds.Y+bounds.H > 680 {
 			t.Fatalf("窄窗口操作不可见: %s %+v", label, bounds)
@@ -367,7 +367,7 @@ func TestNativeHistoryFilters(t *testing.T) {
 	}
 	for _, dark := range []bool{false, true} {
 		tester.SetDark(dark)
-		for _, label := range []string{"所有分支", "隐藏远程分支", "搜索", "新建标签"} {
+		for _, label := range []string{"所有分支", "隐藏远程分支", "搜索"} {
 			bounds, found := tester.Find(label)
 			if !found || bounds.X < 0 || bounds.X+bounds.W > 1024 || bounds.Y < 52 || bounds.Y+bounds.H > 680 {
 				t.Fatalf("窄窗口筛选被裁切: %s %+v", label, bounds)

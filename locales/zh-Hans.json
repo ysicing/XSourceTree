@@ -1,5 +1,9 @@
 {
   "@@locale": "zh-Hans",
+  "uncommittedChanges": "未提交更改",
+  "uncommittedFiles": "未提交更改 · {count} 个文件",
+  "goToFileChanges": "前往文件变更",
+  "workingTreeFiles": "工作区文件列表",
   "branchFromCommit": "从此提交新建分支…",
   "tagFromCommit": "从此提交新建标签…",
   "branchFromBranch": "从此分支新建分支…",

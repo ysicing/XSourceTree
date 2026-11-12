@@ -1,5 +1,9 @@
 {
   "@@locale": "en",
+  "uncommittedChanges": "Uncommitted changes",
+  "uncommittedFiles": "Uncommitted changes · {count} files",
+  "goToFileChanges": "Go to file changes",
+  "workingTreeFiles": "Working tree files",
   "branchFromCommit": "New Branch from This Commit…",
   "tagFromCommit": "New Tag from This Commit…",
   "branchFromBranch": "New Branch from This Branch…",

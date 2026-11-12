@@ -231,6 +231,7 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 				screen := strings.TrimPrefix(selected, "screen:")
 				app.leaveConflict(func() {
 					app.screen, app.group = screen, ""
+					app.historyWorking = false
 					app.refSelected = nativeRefKey{}
 					app.clearDiff()
 					app.selectedFile, app.commitHash, app.stashHash = "", "", ""
@@ -584,7 +585,7 @@ func (app *nativeApp) diffPanel(c *ui.Context) {
 		}
 		ui.Row(c).FillWidth().Padding(10, 14).Gap(8).AlignItems(ui.Center).Children(func() {
 			title := app.selectedFile
-			if app.screen == "history" {
+			if app.screen == "history" && !app.historyWorking {
 				title = app.commitFile
 				if title == "" {
 					title = shortHash(app.commitHash)

@@ -268,6 +268,7 @@ func (app *nativeApp) searchHistory(more bool) {
 				app.history = append(app.history, commits...)
 			} else {
 				app.history = commits
+				app.historyWorking = false
 				app.historyOffset, app.viewedTag, app.viewedCommit = 0, "", gitrepo.Commit{}
 				app.historySelected, app.commitSelected = -1, -1
 				// 旧界面的辅助功能节点仍引用列表状态，替换指针而非原地清零。
@@ -312,10 +313,11 @@ func (app *nativeApp) selectCommit(hash string) {
 
 func (app *nativeApp) applyCommitSelection(hash string, files []gitrepo.CommitFile, file string) {
 	app.clearDiff()
+	app.historyWorking = false
 	app.commitHash, app.commitFiles, app.commitFile = hash, files, file
 	app.historySelected = slices.IndexFunc(app.history, func(commit gitrepo.Commit) bool { return commit.Hash == hash })
 	if app.historySelected >= 0 {
-		app.historyList.ScrollIntoView(app.historySelected)
+		app.historyList.ScrollIntoView(app.historySelected + app.historyWorkingOffset())
 	}
 	app.commitSelected = -1
 	if len(files) > 0 {

@@ -73,18 +73,10 @@ func (app *nativeApp) stagePaths(staged bool, files []string) {
 }
 
 func (app *nativeApp) branchDialog() {
-	app.dialog = &nativeDialog{
-		title: locales.NewBranch(), action: locales.CreateAndSwitch(), fields: []nativeField{{label: locales.BranchName()}},
-		submit: func(dialog *nativeDialog) {
-			name := dialog.fields[0].value
-			app.leaveConflict(func() {
-				app.dialog = dialog
-				app.mutateForm(dialog, locales.CreatingBranch(), func(ctx context.Context, path string) error {
-					return app.service.CreateBranch(ctx, path, name)
-				})
-			})
-		},
+	if !app.canCreateReference() {
+		return
 	}
+	app.referenceDialog(false, "HEAD · "+app.repository.snapshot.Branch, app.repository.snapshot.Head, true)
 }
 
 func (app *nativeApp) renameBranchDialog(old string) {
@@ -121,15 +113,7 @@ func (app *nativeApp) tagDialog() {
 	if hash == "" {
 		hash = app.repository.snapshot.Head
 	}
-	app.dialog = &nativeDialog{
-		title: locales.NewLocalTag(), detail: shortHash(hash), action: locales.Create(), fields: []nativeField{{label: locales.TagName()}},
-		submit: func(dialog *nativeDialog) {
-			name := dialog.fields[0].value
-			app.mutateForm(dialog, locales.CreatingTag(), func(ctx context.Context, path string) error {
-				return app.service.CreateTag(ctx, path, name, hash)
-			})
-		},
-	}
+	app.referenceDialog(true, locales.ReferenceCommit(), hash, false)
 }
 
 func (app *nativeApp) deleteTag(name string) {

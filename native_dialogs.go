@@ -25,26 +25,30 @@ type nativeField struct {
 }
 
 type nativeDialog struct {
-	parent     *nativeDialog
-	title      string
-	titleText  func() string
-	width      float32
-	height     float32
-	detail     string
-	action     string
-	dismiss    string
-	fields     []nativeField
-	check      bool
-	checkLabel string
-	options    []string
-	choice     string
-	body       func(*ui.Context)
-	submit     func(*nativeDialog)
-	danger     bool
-	problem    string
-	canSubmit  func() bool
-	blocked    bool
-	onClose    func()
+	parent          *nativeDialog
+	title           string
+	titleText       func() string
+	width           float32
+	height          float32
+	detail          string
+	action          string
+	dismiss         string
+	fields          []nativeField
+	check           bool
+	checkLabel      string
+	options         []string
+	choice          string
+	body            func(*ui.Context)
+	submit          func(*nativeDialog)
+	danger          bool
+	problem         string
+	canSubmit       func() bool
+	blocked         bool
+	onClose         func()
+	onChange        func()
+	onResult        func(error)
+	cancel          func()
+	preserveHistory bool
 }
 
 func (dialog *nativeDialog) valid() bool {
@@ -62,6 +66,9 @@ func (dialog *nativeDialog) valid() bool {
 func (app *nativeApp) closeDialog(dialog *nativeDialog) {
 	if app.busy || app.dialog != dialog {
 		return
+	}
+	if dialog.cancel != nil {
+		dialog.cancel()
 	}
 	if dialog.onClose != nil {
 		dialog.onClose()
@@ -114,7 +121,7 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 				ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(12).Children(header)
 			}
 			if dialog.detail != "" {
-				ui.Text(c, dialog.detail).MaxLines(5).Selectable()
+				ui.Text(c, dialog.detail).MaxLines(5).Selectable().Tooltip(dialog.detail)
 			}
 			submitted := false
 			focused := false
@@ -123,6 +130,9 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 				ui.Column(c).Key(index).Gap(5).FillWidth().Children(func() {
 					ui.Text(c, field.label).FontSize(12).TextColor(c.Theme().TextMuted)
 					input := ui.TextInput(c, &field.value).Label(field.label).ReadOnly(field.readOnly).Disabled(app.busy).FillWidth()
+					if dialog.onChange != nil {
+						input.OnChange(dialog.onChange)
+					}
 					if !focused && !field.readOnly {
 						input.AutoFocus()
 						focused = true
@@ -155,6 +165,9 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 					dismiss = locales.Cancel()
 				}
 				if ui.Button(c, dismiss).Disabled(app.busy).Clicked() {
+					if dialog.cancel != nil {
+						dialog.cancel()
+					}
 					app.dialog = dialog.parent
 				}
 				if dialog.action != "" {

@@ -249,6 +249,19 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 	history := app.history
 	app.historyList.Key = func(index int) any { return history[index].Hash }
 	app.historyList.Label = func(index int) string { return history[index].Subject }
+	app.historyList.CellMenu = func(menu *ui.Menu, row, _ int) {
+		if row < 0 || row >= len(history) {
+			return
+		}
+		commit := history[row]
+		unavailable := !app.canCreateReference() || app.readTask != nil && app.readTask.kind == nativeReadHistory
+		if menu.Item(locales.BranchFromCommit()).Disabled(unavailable).Chosen() {
+			app.referenceDialog(false, locales.ReferenceCommit()+" "+commit.Subject, commit.Hash, false)
+		}
+		if menu.Item(locales.TagFromCommit()).Disabled(unavailable).Chosen() {
+			app.referenceDialog(true, locales.ReferenceCommit()+" "+commit.Subject, commit.Hash, false)
+		}
+	}
 	theme := *c.Theme()
 	tableTheme := theme
 	tableTheme.Spacing, tableTheme.FontSize = 3.5, 14

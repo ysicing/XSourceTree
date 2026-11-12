@@ -224,6 +224,14 @@ func (app *nativeApp) localBranchSidebar(c *ui.Context) {
 			item.Tooltip(name + " · " + locales.CurrentBranch())
 		}
 		item.ContextMenu(func(menu *ui.Menu) {
+			unavailable := !app.canCreateReference()
+			if menu.Item(locales.BranchFromBranch()).Disabled(unavailable).Chosen() {
+				app.referenceFrom(false, "branch", name)
+			}
+			if menu.Item(locales.TagFromBranch()).Disabled(unavailable).Chosen() {
+				app.referenceFrom(true, "branch", name)
+			}
+			menu.Separator()
 			if menu.Item(locales.RenameBranchMenu()).Disabled(!app.writable).Chosen() {
 				app.renameBranchDialog(name)
 			}
@@ -254,6 +262,10 @@ func (app *nativeApp) tagSidebar(c *ui.Context) {
 	app.referenceSidebar(c, "标签", "标签树", nativeIcons["tag"], nativeReferenceNodes(names, "", ""), func(name string, item ui.Element) {
 		tag := tags[name]
 		item.ContextMenu(func(menu *ui.Menu) {
+			if menu.Item(locales.BranchFromTag()).Disabled(!app.canCreateReference()).Chosen() {
+				app.referenceFrom(false, "tag", name)
+			}
+			menu.Separator()
 			if menu.Item(locales.DeleteTagMenu()).Disabled(!app.writable).Chosen() {
 				app.deleteTag(name)
 			}

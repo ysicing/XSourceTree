@@ -216,20 +216,23 @@ func TestNativeHistoryAccessibilityDuringReplacement(t *testing.T) {
 }
 
 func TestNativeFormKeepsFailedInput(t *testing.T) {
-	app, _, finish := nativeFixture(t)
+	app, path, finish := nativeFixture(t)
 	app.branchDialog()
 	dialog := app.dialog
 	tester := ui.NewTester(app.view, 1320, 860)
 	if info, ok := tester.AccessByRole(ui.RoleButton, "创建并切换"); !ok || !info.Disabled {
 		t.Fatal("空分支名称仍可提交")
 	}
-	dialog.fields[0].value = "invalid branch"
+	dialog.fields[0].value = "taken-after-check"
+	dialog.onChange()
+	finish()
+	nativeGit(t, path, "branch", "taken-after-check")
 	tester.Frame()
 	if err := tester.Click("创建并切换"); err != nil {
 		t.Fatal(err)
 	}
 	finish()
-	if app.dialog != dialog || dialog.fields[0].value != "invalid branch" {
+	if app.dialog != dialog || dialog.fields[0].value != "taken-after-check" {
 		t.Fatal("失败后丢失表单输入")
 	}
 	tester.Frame()
@@ -237,6 +240,8 @@ func TestNativeFormKeepsFailedInput(t *testing.T) {
 		t.Fatal("表单未显示失败原因")
 	}
 	dialog.fields[0].value = "valid-branch"
+	dialog.onChange()
+	finish()
 	tester.Frame()
 	if err := tester.Click("创建并切换"); err != nil {
 		t.Fatal(err)

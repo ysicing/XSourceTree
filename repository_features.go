@@ -74,6 +74,38 @@ func (service *RepositoryService) CreateTag(ctx context.Context, path, name, has
 	return repo.CreateTag(ctx, name, hash)
 }
 
+func (service *RepositoryService) CheckReferenceName(ctx context.Context, path, name string, tag bool) error {
+	repo, err := service.manager.Get(path)
+	if err != nil {
+		return err
+	}
+	return repo.CheckReferenceName(ctx, name, tag)
+}
+
+func (service *RepositoryService) ResolveCreationTarget(ctx context.Context, path, reference string) (string, error) {
+	repo, err := service.manager.Get(path)
+	if err != nil {
+		return "", err
+	}
+	return repo.ResolveCreationTarget(ctx, reference)
+}
+
+func (service *RepositoryService) CreateBranchAt(ctx context.Context, path, name, hash string) error {
+	repo, err := service.manager.Get(path)
+	if err != nil {
+		return err
+	}
+	return repo.CreateBranchAt(ctx, name, hash)
+}
+
+func (service *RepositoryService) SwitchCreatedBranch(ctx context.Context, path, name, hash string) error {
+	repo, err := service.manager.Get(path)
+	if err != nil {
+		return err
+	}
+	return repo.SwitchCreatedBranch(ctx, name, hash)
+}
+
 func (service *RepositoryService) DeleteTag(ctx context.Context, path, name string) error {
 	repo, err := service.manager.Get(path)
 	if err != nil {

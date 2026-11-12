@@ -386,16 +386,34 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 			selection, refreshErr = app.readSelection(ctx, path, file, staged, result.snapshot.Files)
 		}
 		return func() {
+			retained := -1
+			if dialog != nil && dialog.preserveHistory && screen == "history" && refreshErr == nil {
+				for index, commit := range history {
+					if commit.Hash == app.commitHash {
+						retained = index
+						break
+					}
+				}
+			}
 			if result != nil {
-				app.adopt(result)
+				if retained >= 0 {
+					app.repository = result
+					app.library = app.service.Library()
+				} else {
+					app.adopt(result)
+				}
 			}
 			app.writable = refreshErr == nil
 			if screen == "history" && refreshErr == nil {
 				app.history, app.historyMore = history, len(history) == 100
 				app.historyResult = historyRequest
-				app.commitHash, app.commitFile, app.commitFiles = "", "", nil
-				app.historySelected, app.commitSelected = -1, -1
-				app.historyList, app.commitList = &ui.ListState{}, &ui.ListState{}
+				if retained >= 0 {
+					app.historySelected = retained
+				} else {
+					app.commitHash, app.commitFile, app.commitFiles = "", "", nil
+					app.historySelected, app.commitSelected = -1, -1
+					app.historyList, app.commitList = &ui.ListState{}, &ui.ListState{}
+				}
 			}
 			if selection != nil {
 				app.setSelection(selection)
@@ -413,7 +431,13 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 			}
 			if dialog != nil && app.dialog == dialog {
 				dialog.blocked = refreshErr != nil
+				if dialog.onResult != nil {
+					dialog.onResult(operationErr)
+				}
 				if operationErr == nil {
+					if dialog.cancel != nil {
+						dialog.cancel()
+					}
 					app.dialog = dialog.parent
 					if app.dialog != nil && refreshErr != nil {
 						app.dialog.problem = refreshErr.Error()

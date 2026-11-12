@@ -148,7 +148,12 @@ try {
   console.log("✓ 原生窗口、中文输入、并排 Diff、暂存和菜单提交");
 
   await press("分支");
+  await fill("分支名称", "main");
+  await shown("本地分支 main 已存在");
+  await capture("native-reference-name-conflict.png");
   await fill("分支名称", "native-topic");
+  await shown("本地名称可用");
+  await capture("native-reference-create-branch.png");
   await press("创建并切换");
   assert.equal(git("branch", "--show-current"), "native-topic");
   await press("main");
@@ -156,6 +161,8 @@ try {
   await press("提交历史");
   await press("新建标签");
   await fill("标签名称", "native-smoke");
+  await shown("本地名称可用");
+  await capture("native-reference-create-tag.png");
   await press("创建");
   assert.equal(git("tag", "--list"), "native-smoke");
   await fill("搜索提交、作者或 ID", "使用原生 UI");

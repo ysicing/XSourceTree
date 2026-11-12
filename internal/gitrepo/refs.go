@@ -62,7 +62,7 @@ func (repo *Repository) CreateTag(ctx context.Context, name, hash string) error 
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := repo.validateTag(ctx, name); err != nil {
+	if err := repo.checkReferenceName(ctx, name, true); err != nil {
 		return err
 	}
 	target := hash

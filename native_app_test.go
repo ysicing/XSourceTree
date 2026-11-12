@@ -296,6 +296,20 @@ func TestNativeConflictResolutionAndFailureKeepsEditor(t *testing.T) {
 	}
 	app.conflictEdit.Buffer = editor.NewBuffer("合并结果\n")
 	token := app.conflict.Token
+	app.branchDialog()
+	draft := app.dialog
+	draft.fields[0].value = "keep-conflict-draft"
+	draft.onChange()
+	finish()
+	draft.submit(draft)
+	if app.dialog == draft || app.dialog.parent != draft {
+		t.Fatal("切换前未确认冲突草稿")
+	}
+	app.closeDialog(app.dialog)
+	if app.dialog != draft || draft.fields[0].value != "keep-conflict-draft" || app.conflictEdit.Buffer.String() != "合并结果\n" {
+		t.Fatal("取消切换确认丢失了表单或冲突草稿")
+	}
+	app.closeDialog(draft)
 	app.mutate("创建标签", func(ctx context.Context, path string) error {
 		return app.service.CreateTag(ctx, path, "conflict-draft", app.repository.snapshot.Head)
 	})
@@ -680,6 +694,8 @@ func TestNativeRepositoryActionsMenu(t *testing.T) {
 		t.Fatal(err)
 	}
 	tester.Type("menu-tag")
+	finish()
+	tester.Frame()
 	if err := tester.Click("创建"); err != nil {
 		t.Fatal(err)
 	}

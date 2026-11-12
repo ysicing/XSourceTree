@@ -36,6 +36,220 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// BranchFromCommit says "从此提交新建分支…"
+// in the language the app shows.
+func BranchFromCommit() string { return In(i18n.Locale()).BranchFromCommit() }
+
+// BranchFromCommit says "从此提交新建分支…"
+// in the language of msgs.
+func (msgs Messages) BranchFromCommit() string {
+	return Catalog.Format(msgs.locale, "branchFromCommit", nil)
+}
+
+// TagFromCommit says "从此提交新建标签…"
+// in the language the app shows.
+func TagFromCommit() string { return In(i18n.Locale()).TagFromCommit() }
+
+// TagFromCommit says "从此提交新建标签…"
+// in the language of msgs.
+func (msgs Messages) TagFromCommit() string {
+	return Catalog.Format(msgs.locale, "tagFromCommit", nil)
+}
+
+// BranchFromBranch says "从此分支新建分支…"
+// in the language the app shows.
+func BranchFromBranch() string { return In(i18n.Locale()).BranchFromBranch() }
+
+// BranchFromBranch says "从此分支新建分支…"
+// in the language of msgs.
+func (msgs Messages) BranchFromBranch() string {
+	return Catalog.Format(msgs.locale, "branchFromBranch", nil)
+}
+
+// TagFromBranch says "从此分支新建标签…"
+// in the language the app shows.
+func TagFromBranch() string { return In(i18n.Locale()).TagFromBranch() }
+
+// TagFromBranch says "从此分支新建标签…"
+// in the language of msgs.
+func (msgs Messages) TagFromBranch() string {
+	return Catalog.Format(msgs.locale, "tagFromBranch", nil)
+}
+
+// BranchFromTag says "从此标签新建分支…"
+// in the language the app shows.
+func BranchFromTag() string { return In(i18n.Locale()).BranchFromTag() }
+
+// BranchFromTag says "从此标签新建分支…"
+// in the language of msgs.
+func (msgs Messages) BranchFromTag() string {
+	return Catalog.Format(msgs.locale, "branchFromTag", nil)
+}
+
+// ReferenceBranch says "分支"
+// in the language the app shows.
+func ReferenceBranch() string { return In(i18n.Locale()).ReferenceBranch() }
+
+// ReferenceBranch says "分支"
+// in the language of msgs.
+func (msgs Messages) ReferenceBranch() string {
+	return Catalog.Format(msgs.locale, "referenceBranch", nil)
+}
+
+// ReferenceTag says "标签"
+// in the language the app shows.
+func ReferenceTag() string { return In(i18n.Locale()).ReferenceTag() }
+
+// ReferenceTag says "标签"
+// in the language of msgs.
+func (msgs Messages) ReferenceTag() string {
+	return Catalog.Format(msgs.locale, "referenceTag", nil)
+}
+
+// ReferenceCommit says "提交"
+// in the language the app shows.
+func ReferenceCommit() string { return In(i18n.Locale()).ReferenceCommit() }
+
+// ReferenceCommit says "提交"
+// in the language of msgs.
+func (msgs Messages) ReferenceCommit() string {
+	return Catalog.Format(msgs.locale, "referenceCommit", nil)
+}
+
+// CreationTarget says "起点：{source}"
+// in the language the app shows.
+func CreationTarget(source string) string { return In(i18n.Locale()).CreationTarget(source) }
+
+// CreationTarget says "起点：{source}"
+// in the language of msgs.
+func (msgs Messages) CreationTarget(source string) string {
+	return Catalog.Format(msgs.locale, "creationTarget", map[string]any{"source": source})
+}
+
+// ReadingCreationTarget says "正在读取创建起点…"
+// in the language the app shows.
+func ReadingCreationTarget() string { return In(i18n.Locale()).ReadingCreationTarget() }
+
+// ReadingCreationTarget says "正在读取创建起点…"
+// in the language of msgs.
+func (msgs Messages) ReadingCreationTarget() string {
+	return Catalog.Format(msgs.locale, "readingCreationTarget", nil)
+}
+
+// CheckingReferenceName says "正在检查本地名称…"
+// in the language the app shows.
+func CheckingReferenceName() string { return In(i18n.Locale()).CheckingReferenceName() }
+
+// CheckingReferenceName says "正在检查本地名称…"
+// in the language of msgs.
+func (msgs Messages) CheckingReferenceName() string {
+	return Catalog.Format(msgs.locale, "checkingReferenceName", nil)
+}
+
+// RecheckReferenceName says "重新检查"
+// in the language the app shows.
+func RecheckReferenceName() string { return In(i18n.Locale()).RecheckReferenceName() }
+
+// RecheckReferenceName says "重新检查"
+// in the language of msgs.
+func (msgs Messages) RecheckReferenceName() string {
+	return Catalog.Format(msgs.locale, "recheckReferenceName", nil)
+}
+
+// ReferenceNameAvailable says "本地名称可用"
+// in the language the app shows.
+func ReferenceNameAvailable() string { return In(i18n.Locale()).ReferenceNameAvailable() }
+
+// ReferenceNameAvailable says "本地名称可用"
+// in the language of msgs.
+func (msgs Messages) ReferenceNameAvailable() string {
+	return Catalog.Format(msgs.locale, "referenceNameAvailable", nil)
+}
+
+// SwitchAfterCreation says "创建后切换到新分支"
+// in the language the app shows.
+func SwitchAfterCreation() string { return In(i18n.Locale()).SwitchAfterCreation() }
+
+// SwitchAfterCreation says "创建后切换到新分支"
+// in the language of msgs.
+func (msgs Messages) SwitchAfterCreation() string {
+	return Catalog.Format(msgs.locale, "switchAfterCreation", nil)
+}
+
+// RetryBranchSwitch says "重试切换"
+// in the language the app shows.
+func RetryBranchSwitch() string { return In(i18n.Locale()).RetryBranchSwitch() }
+
+// RetryBranchSwitch says "重试切换"
+// in the language of msgs.
+func (msgs Messages) RetryBranchSwitch() string {
+	return Catalog.Format(msgs.locale, "retryBranchSwitch", nil)
+}
+
+// BranchCreated says "已创建本地分支 {name}"
+// in the language the app shows.
+func BranchCreated(name string) string { return In(i18n.Locale()).BranchCreated(name) }
+
+// BranchCreated says "已创建本地分支 {name}"
+// in the language of msgs.
+func (msgs Messages) BranchCreated(name string) string {
+	return Catalog.Format(msgs.locale, "branchCreated", map[string]any{"name": name})
+}
+
+// BranchCreatedAndSwitched says "已创建并切换到分支 {name}"
+// in the language the app shows.
+func BranchCreatedAndSwitched(name string) string {
+	return In(i18n.Locale()).BranchCreatedAndSwitched(name)
+}
+
+// BranchCreatedAndSwitched says "已创建并切换到分支 {name}"
+// in the language of msgs.
+func (msgs Messages) BranchCreatedAndSwitched(name string) string {
+	return Catalog.Format(msgs.locale, "branchCreatedAndSwitched", map[string]any{"name": name})
+}
+
+// LocalTagCreated says "已创建本地标签 {name}"
+// in the language the app shows.
+func LocalTagCreated(name string) string { return In(i18n.Locale()).LocalTagCreated(name) }
+
+// LocalTagCreated says "已创建本地标签 {name}"
+// in the language of msgs.
+func (msgs Messages) LocalTagCreated(name string) string {
+	return Catalog.Format(msgs.locale, "localTagCreated", map[string]any{"name": name})
+}
+
+// BranchCreatedSwitchFailed says "分支 {name} 已创建，但切换未正常完成"
+// in the language the app shows.
+func BranchCreatedSwitchFailed(name string) string {
+	return In(i18n.Locale()).BranchCreatedSwitchFailed(name)
+}
+
+// BranchCreatedSwitchFailed says "分支 {name} 已创建，但切换未正常完成"
+// in the language of msgs.
+func (msgs Messages) BranchCreatedSwitchFailed(name string) string {
+	return Catalog.Format(msgs.locale, "branchCreatedSwitchFailed", map[string]any{"name": name})
+}
+
+// NoCreationCommit says "当前仓库没有可创建标签的提交"
+// in the language the app shows.
+func NoCreationCommit() string { return In(i18n.Locale()).NoCreationCommit() }
+
+// NoCreationCommit says "当前仓库没有可创建标签的提交"
+// in the language of msgs.
+func (msgs Messages) NoCreationCommit() string {
+	return Catalog.Format(msgs.locale, "noCreationCommit", nil)
+}
+
+// UnbornBranchTarget says "仓库尚无提交，将创建并切换到初始分支"
+// in the language the app shows.
+func UnbornBranchTarget() string { return In(i18n.Locale()).UnbornBranchTarget() }
+
+// UnbornBranchTarget says "仓库尚无提交，将创建并切换到初始分支"
+// in the language of msgs.
+func (msgs Messages) UnbornBranchTarget() string {
+	return Catalog.Format(msgs.locale, "unbornBranchTarget", nil)
+}
+
 // AllBranches says "所有分支"
 // in the language the app shows.
 func AllBranches() string { return In(i18n.Locale()).AllBranches() }

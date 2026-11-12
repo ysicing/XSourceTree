@@ -188,7 +188,7 @@ func TestNativeHistoryWorkspace(t *testing.T) {
 		saveNativeScreenshot(t, tester, directory, "native-history-dark.png")
 	}
 	tester.SetSize(1024, 680)
-	for _, label := range []string{"搜索", "新建标签", "差异布局", "提交文件列表"} {
+	for _, label := range []string{"所有分支", "显示远程分支", "搜索", "新建标签", "差异布局", "提交文件列表"} {
 		bounds, found := tester.Find(label)
 		if !found || bounds.X < 0 || bounds.Y < 0 || bounds.X+bounds.W > 1024 || bounds.Y+bounds.H > 680 {
 			t.Fatalf("窄窗口操作不可见: %s %+v", label, bounds)
@@ -254,6 +254,22 @@ func TestNativeHistoryPaginationKeepsSelection(t *testing.T) {
 	if row, ok := tester.AccessByRole(ui.RoleRow, app.history[0].Subject); !ok || !row.Selected {
 		t.Fatal("加载更多后没有保持选中行")
 	}
+	app.historyFilter.CurrentBranch = true
+	app.historyQuery = "历史提交 100"
+	app.searchHistory(true)
+	finish()
+	if len(app.history) != 1 || app.historyMore || app.commitHash != "" {
+		t.Fatal("筛选变化后加载更多混入了旧页")
+	}
+	app.historyQuery = ""
+	app.searchHistory(false)
+	finish()
+	app.searchHistory(true)
+	finish()
+	if len(app.history) != 102 || app.historyMore || !app.historyResult.filter.CurrentBranch {
+		t.Fatal("当前分支分页未沿用筛选范围")
+	}
+	tester.Frame()
 	app.historyFile = "hello.txt"
 	if err := tester.Click("搜索"); err != nil {
 		t.Fatal(err)
@@ -262,6 +278,149 @@ func TestNativeHistoryPaginationKeepsSelection(t *testing.T) {
 	tester.Frame()
 	if len(app.history) != 1 || app.history[0].Subject != "初始提交" || app.commitHash != "" {
 		t.Fatal("文件路径筛选没有替换历史结果或清空旧选择")
+	}
+}
+
+func TestNativeHistoryFilters(t *testing.T) {
+	app, path, finish := nativeFixture(t)
+	nativeGit(t, path, "switch", "-c", "local-feature")
+	nativeGit(t, path, "commit", "--allow-empty", "-m", "local feature needle")
+	nativeGit(t, path, "switch", "main")
+	nativeGit(t, path, "switch", "-c", "remote-feature")
+	nativeGit(t, path, "commit", "--allow-empty", "-m", "remote feature needle")
+	remote := nativeGit(t, path, "rev-parse", "HEAD")
+	nativeGit(t, path, "update-ref", "refs/remotes/origin/feature", remote)
+	nativeGit(t, path, "switch", "main")
+	nativeGit(t, path, "branch", "-D", "remote-feature")
+	app.screen = "history"
+	app.searchHistory(false)
+	finish()
+	tester := ui.NewTester(app.view, 1024, 680)
+	for _, check := range []struct {
+		trigger, option string
+		filter          gitrepo.HistoryFilter
+		count           int
+	}{
+		{"所有分支", "当前分支", gitrepo.HistoryFilter{CurrentBranch: true}, 1},
+		{"显示远程分支", "隐藏远程分支", gitrepo.HistoryFilter{CurrentBranch: true, HideRemotes: true}, 1},
+		{"当前分支", "所有分支", gitrepo.HistoryFilter{HideRemotes: true}, 2},
+		{"隐藏远程分支", "显示远程分支", gitrepo.HistoryFilter{}, 3},
+	} {
+		app.selectCommit(app.history[0].Hash)
+		finish()
+		tester.Frame()
+		if err := tester.Click(check.trigger); err != nil {
+			t.Fatal(err)
+		}
+		if err := tester.Click(check.option); err != nil {
+			t.Fatal(err)
+		}
+		if app.busy || app.readTask == nil || app.readTask.kind != nativeReadHistory {
+			t.Fatal("筛选没有使用局部历史加载")
+		}
+		finish()
+		tester.Frame()
+		if app.historyFilter != check.filter || len(app.history) != check.count ||
+			app.commitHash != "" || app.commitFile != "" || app.diff.Text != "" {
+			t.Fatalf("筛选失效或残留旧提交详情: filter=%+v commits=%d problem=%s", app.historyFilter, len(app.history), app.problem)
+		}
+	}
+	if err := tester.Click("显示远程分支"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tester.Click("隐藏远程分支"); err != nil {
+		t.Fatal(err)
+	}
+	finish()
+	app.refresh()
+	finish()
+	tester.Frame()
+	if len(app.history) != 2 || !app.historyResult.filter.HideRemotes {
+		t.Fatal("刷新丢失历史筛选")
+	}
+	app.historyQuery = "needle"
+	app.searchHistory(false)
+	finish()
+	tester.Frame()
+	if len(app.history) != 1 || app.history[0].Subject != "local feature needle" {
+		t.Fatal("搜索未遵循历史筛选")
+	}
+	if err := tester.Click("所有分支"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Key(0, ui.KeyDown)
+	tester.Key(0, ui.KeyEnter)
+	finish()
+	tester.Frame()
+	if !app.historyFilter.CurrentBranch || len(app.history) != 0 || !tester.HasText("没有匹配的提交") {
+		t.Fatal("键盘筛选或空结果反馈失效")
+	}
+	if err := tester.Click("当前分支"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Key(0, ui.KeyUp)
+	tester.Key(0, ui.KeyEnter)
+	finish()
+	tester.Frame()
+	if app.historyFilter.CurrentBranch || len(app.history) != 1 {
+		t.Fatal("空结果状态无法通过筛选返回历史")
+	}
+	for _, dark := range []bool{false, true} {
+		tester.SetDark(dark)
+		for _, label := range []string{"所有分支", "隐藏远程分支", "搜索", "新建标签"} {
+			bounds, found := tester.Find(label)
+			if !found || bounds.X < 0 || bounds.X+bounds.W > 1024 || bounds.Y < 52 || bounds.Y+bounds.H > 680 {
+				t.Fatalf("窄窗口筛选被裁切: %s %+v", label, bounds)
+			}
+		}
+	}
+	for _, language := range []struct{ tag, scope, remotes string }{
+		{"en", "All branches", "Hide remote branches"},
+		{"zh-Hant", "所有分支", "隱藏遠端分支"},
+	} {
+		t.Setenv("MYGO_LOCALE", language.tag)
+		tester.Frame()
+		for _, label := range []string{language.scope, language.remotes} {
+			bounds, found := tester.Find(label)
+			if !found || bounds.X+bounds.W > 1024 {
+				t.Fatalf("筛选翻译缺失或被裁切: %s %+v", label, bounds)
+			}
+		}
+	}
+}
+
+func TestNativeHistoryFilterLatestResultWins(t *testing.T) {
+	app, path, finish := nativeFixture(t)
+	nativeGit(t, path, "switch", "-c", "feature")
+	nativeGit(t, path, "commit", "--allow-empty", "-m", "remote only")
+	remote := nativeGit(t, path, "rev-parse", "HEAD")
+	nativeGit(t, path, "update-ref", "refs/remotes/origin/feature", remote)
+	nativeGit(t, path, "switch", "main")
+	nativeGit(t, path, "branch", "-D", "feature")
+	app.screen = "history"
+	app.searchHistory(false)
+	finish()
+	updates := make(chan func(), 2)
+	app.post = func(update func()) { updates <- update }
+	app.historyFilter.HideRemotes = true
+	app.searchHistory(false)
+	stale := takeNativeUpdate(t, updates)
+	app.historyFilter.HideRemotes = false
+	app.searchHistory(false)
+	takeNativeUpdate(t, updates)()
+	stale()
+	if app.historyFilter.HideRemotes || len(app.history) != 2 || app.historyResult.filter.HideRemotes || app.problem != "" {
+		t.Fatal("过期筛选结果覆盖了最后一次选择")
+	}
+	app.historyFilter.CurrentBranch = true
+	blocked := make(chan struct{})
+	app.readDone = blocked
+	app.searchHistory(false)
+	app.readTask.cancel()
+	close(blocked)
+	takeNativeUpdate(t, updates)()
+	if len(app.history) != 2 || app.historyFilter.CurrentBranch || app.problem == "" {
+		t.Fatal("取消筛选没有保留原结果及其范围")
 	}
 }
 

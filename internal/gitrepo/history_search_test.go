@@ -70,7 +70,7 @@ exec "$XSOURCE_REAL_GIT" "$@"
 	for _, query := range []string{"[LITERAL].*", "hidden body NEEDLE", "ARCHIVE PERSON", "ARCHIVE@EXAMPLE.TEST", strings.ToUpper(oldest[:12])} {
 		t.Run(query, func(t *testing.T) {
 			before := historyLogCallCount(t, calls)
-			commits, err := repo.SearchHistory(ctx, query, "", 0)
+			commits, err := repo.SearchHistory(ctx, query, "", 0, HistoryFilter{})
 			if err != nil || len(commits) != 1 || commits[0].Hash != oldest {
 				t.Fatalf("search %q: %+v, %v", query, commits, err)
 			}
@@ -79,22 +79,22 @@ exec "$XSOURCE_REAL_GIT" "$@"
 			}
 		})
 	}
-	if commits, err := repo.SearchHistory(ctx, "old literalZZ", "", 0); err != nil || len(commits) != 0 {
+	if commits, err := repo.SearchHistory(ctx, "old literalZZ", "", 0, HistoryFilter{}); err != nil || len(commits) != 0 {
 		t.Fatalf("literal search: %+v, %v", commits, err)
 	}
-	first, err := repo.SearchHistory(ctx, "recent", "", 0)
+	first, err := repo.SearchHistory(ctx, "recent", "", 0, HistoryFilter{})
 	if err != nil || len(first) != 100 {
 		t.Fatalf("first matched page: %d, %v", len(first), err)
 	}
-	second, err := repo.SearchHistory(ctx, "recent", "", 100)
+	second, err := repo.SearchHistory(ctx, "recent", "", 100, HistoryFilter{})
 	if err != nil || len(second) != 100 || first[0].Hash == second[0].Hash {
 		t.Fatalf("second matched page: %d, %v", len(second), err)
 	}
-	last, err := repo.SearchHistory(ctx, "recent", "", 300)
+	last, err := repo.SearchHistory(ctx, "recent", "", 300, HistoryFilter{})
 	if err != nil || len(last) != 10 {
 		t.Fatalf("last matched page: %d, %v", len(last), err)
 	}
-	past, err := repo.SearchHistory(ctx, "recent", "", 310)
+	past, err := repo.SearchHistory(ctx, "recent", "", 310, HistoryFilter{})
 	if err != nil || len(past) != 0 {
 		t.Fatalf("past matched pages: %+v, %v", past, err)
 	}
@@ -119,7 +119,7 @@ func TestSearchHistoryAcrossBranchesAndLiteralPaths(t *testing.T) {
 	git(t, dir, "add", ".")
 	git(t, dir, "commit", "-m", "unrelated")
 	for _, query := range []string{"", "needle"} {
-		commits, err := repo.SearchHistory(ctx, query, literal, 0)
+		commits, err := repo.SearchHistory(ctx, query, literal, 0, HistoryFilter{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -140,7 +140,7 @@ func TestSearchHistoryAcrossBranchesAndLiteralPaths(t *testing.T) {
 		git(t, dir, "add", ".")
 		git(t, dir, "commit", "-m", "special path")
 		expected := git(t, dir, "rev-parse", "HEAD")
-		commits, err := repo.SearchHistory(ctx, "", path, 0)
+		commits, err := repo.SearchHistory(ctx, "", path, 0, HistoryFilter{})
 		if err != nil || len(commits) != 1 || commits[0].Hash != expected {
 			t.Fatalf("path %q: %+v, %v", path, commits, err)
 		}
@@ -150,13 +150,13 @@ func TestSearchHistoryAcrossBranchesAndLiteralPaths(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		search, err := repo.SearchHistory(ctx, "", "", skip)
+		search, err := repo.SearchHistory(ctx, "", "", skip, HistoryFilter{})
 		if err != nil || !reflect.DeepEqual(history, search) {
 			t.Fatalf("empty search differs from History: %+v, %v", search, err)
 		}
 	}
 	git(t, dir, "checkout", "--orphan", "unborn")
-	commits, err := repo.SearchHistory(ctx, "needle", "", 0)
+	commits, err := repo.SearchHistory(ctx, "needle", "", 0, HistoryFilter{})
 	if err != nil || len(commits) != 1 || commits[0].Hash != branch {
 		t.Fatalf("other branches with unborn HEAD: %+v, %v", commits, err)
 	}
@@ -280,16 +280,16 @@ func TestHistorySearchRejectsInvalidParameters(t *testing.T) {
 	repo, dir := fixture(t)
 	ctx := context.Background()
 	for _, skip := range []int{-1, int(1 << 31)} {
-		if _, err := repo.SearchHistory(ctx, "", "", skip); err == nil {
+		if _, err := repo.SearchHistory(ctx, "", "", skip, HistoryFilter{}); err == nil {
 			t.Fatalf("accepted invalid skip: %d", skip)
 		}
 	}
-	if _, err := repo.SearchHistory(ctx, "bad\x00query", "", 0); err == nil {
+	if _, err := repo.SearchHistory(ctx, "bad\x00query", "", 0, HistoryFilter{}); err == nil {
 		t.Fatal("accepted NUL in query")
 	}
 	for _, path := range []string{"", "../escape", "/tmp/escape", ".git/config", "a/../../escape", "bad\x00path"} {
 		if path != "" {
-			if _, err := repo.SearchHistory(ctx, "", path, 0); err == nil {
+			if _, err := repo.SearchHistory(ctx, "", path, 0, HistoryFilter{}); err == nil {
 				t.Fatalf("accepted invalid search path: %q", path)
 			}
 		}
@@ -323,7 +323,7 @@ func TestHistorySearchEmptyRepositoryAndCancellation(t *testing.T) {
 	repo, dir := fixture(t)
 	ctx := context.Background()
 	for _, parameters := range []struct{ query, path string }{{}, {query: "missing"}, {path: "missing.txt"}} {
-		commits, err := repo.SearchHistory(ctx, parameters.query, parameters.path, 0)
+		commits, err := repo.SearchHistory(ctx, parameters.query, parameters.path, 0, HistoryFilter{})
 		if err != nil || commits == nil || len(commits) != 0 {
 			t.Fatalf("empty search: %+v, %v", commits, err)
 		}
@@ -342,7 +342,7 @@ func TestHistorySearchEmptyRepositoryAndCancellation(t *testing.T) {
 		want error
 	}{{"canceled", canceled, context.Canceled}, {"expired", expired, context.DeadlineExceeded}} {
 		t.Run(check.name, func(t *testing.T) {
-			if _, err := repo.SearchHistory(check.ctx, "base", "", 0); !errors.Is(err, check.want) {
+			if _, err := repo.SearchHistory(check.ctx, "base", "", 0, HistoryFilter{}); !errors.Is(err, check.want) {
 				t.Fatalf("search context: %v", err)
 			}
 			if _, err := repo.CommitFiles(check.ctx, hash); !errors.Is(err, check.want) {
@@ -366,15 +366,15 @@ func TestHistorySearchCancellationWhileRepositoryBusy(t *testing.T) {
 		run  func(context.Context) error
 	}{
 		{"empty search", func(ctx context.Context) error {
-			_, err := repo.SearchHistory(ctx, "", "", 0)
+			_, err := repo.SearchHistory(ctx, "", "", 0, HistoryFilter{})
 			return err
 		}},
 		{"path search", func(ctx context.Context) error {
-			_, err := repo.SearchHistory(ctx, "", "file.txt", 0)
+			_, err := repo.SearchHistory(ctx, "", "file.txt", 0, HistoryFilter{})
 			return err
 		}},
 		{"search", func(ctx context.Context) error {
-			_, err := repo.SearchHistory(ctx, "base", "", 0)
+			_, err := repo.SearchHistory(ctx, "base", "", 0, HistoryFilter{})
 			return err
 		}},
 		{"files", func(ctx context.Context) error {
@@ -531,7 +531,7 @@ func TestHistoryStreamCommandErrorsAndUserCancellation(t *testing.T) {
 	t.Run("command failure", func(t *testing.T) {
 		repo, _ := fixture(t)
 		installHistoryGitWrapper(t, "printf 'history failure\\n' >&2\nexit 73\n")
-		_, err := repo.SearchHistory(context.Background(), "query", "", 0)
+		_, err := repo.SearchHistory(context.Background(), "query", "", 0, HistoryFilter{})
 		if !exitCode(err, 73) || !strings.Contains(err.Error(), "history failure") {
 			t.Fatalf("stream command error: %v", err)
 		}
@@ -545,7 +545,7 @@ func TestHistoryStreamCommandErrorsAndUserCancellation(t *testing.T) {
 		defer cancel()
 		done := make(chan error, 1)
 		go func() {
-			_, err := repo.SearchHistory(ctx, "query", "", 0)
+			_, err := repo.SearchHistory(ctx, "query", "", 0, HistoryFilter{})
 			done <- err
 		}()
 		for {
@@ -571,7 +571,7 @@ func TestHistoryStreamCommandErrorsAndUserCancellation(t *testing.T) {
 	t.Run("bounded stderr", func(t *testing.T) {
 		repo, _ := fixture(t)
 		installHistoryGitWrapper(t, "head -c 4194305 /dev/zero >&2\n")
-		_, err := repo.SearchHistory(context.Background(), "query", "", 0)
+		_, err := repo.SearchHistory(context.Background(), "query", "", 0, HistoryFilter{})
 		if err == nil || !strings.Contains(err.Error(), "4 MiB") {
 			t.Fatalf("oversized stderr was accepted: %v", err)
 		}
@@ -619,7 +619,7 @@ func TestHistoryCommandsDisableSignatureVerification(t *testing.T) {
 		t.Fatalf("signed initial history: %+v, %v", commits, err)
 	}
 	for _, query := range []string{"", "SIGNED"} {
-		commits, err := repo.SearchHistory(context.Background(), query, "", 0)
+		commits, err := repo.SearchHistory(context.Background(), query, "", 0, HistoryFilter{})
 		if err != nil || len(commits) != 1 || commits[0].Hash != hash {
 			t.Fatalf("signed history: %+v, %v", commits, err)
 		}

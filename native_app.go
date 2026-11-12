@@ -78,6 +78,8 @@ type nativeApp struct {
 	historyQuery          string
 	historyFile           string
 	historyMore           bool
+	historyFilter         gitrepo.HistoryFilter
+	historyResult         nativeHistoryRequest
 	commitHash            string
 	commitFiles           []gitrepo.CommitFile
 	commitFile            string
@@ -365,7 +367,7 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 		app.stopCommitAI()
 	}
 	path, screen, file, staged := app.repository.snapshot.Path, app.screen, app.selectedFile, app.staged
-	query, historyFile := app.historyQuery, app.historyFile
+	historyRequest := app.historyRequest()
 	conflict, conflictEdit := app.conflict, app.conflictEdit
 	conflictBase := app.conflictBase
 	dirty := app.conflictDirty()
@@ -377,7 +379,7 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 		result, refreshErr := app.readRepository(ctx, path, false)
 		var history []gitrepo.Commit
 		if refreshErr == nil && screen == "history" {
-			history, refreshErr = app.service.SearchHistory(ctx, path, query, historyFile, 0)
+			history, refreshErr = app.service.SearchHistory(ctx, path, historyRequest.query, historyRequest.file, 0, historyRequest.filter)
 		}
 		var selection *nativeSelection
 		if refreshErr == nil && screen == "changes" && file != "" && fileExists(result.snapshot.Files, file, staged) {
@@ -390,6 +392,7 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 			app.writable = refreshErr == nil
 			if screen == "history" && refreshErr == nil {
 				app.history, app.historyMore = history, len(history) == 100
+				app.historyResult = historyRequest
 				app.commitHash, app.commitFile, app.commitFiles = "", "", nil
 				app.historySelected, app.commitSelected = -1, -1
 				app.historyList, app.commitList = &ui.ListState{}, &ui.ListState{}

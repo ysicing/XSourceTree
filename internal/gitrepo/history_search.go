@@ -18,7 +18,12 @@ type CommitFile struct {
 	OriginalPath string `json:"originalPath"`
 }
 
-func (repo *Repository) SearchHistory(ctx context.Context, query string, path string, skip int) ([]Commit, error) {
+type HistoryFilter struct {
+	CurrentBranch bool
+	HideRemotes   bool
+}
+
+func (repo *Repository) SearchHistory(ctx context.Context, query string, path string, skip int, filter HistoryFilter) ([]Commit, error) {
 	if skip < 0 || skip > 1<<31-1 {
 		return nil, errors.New("历史分页无效")
 	}
@@ -36,7 +41,7 @@ func (repo *Repository) SearchHistory(ctx context.Context, query string, path st
 		return nil, err
 	}
 	defer repo.mu.Unlock()
-	if query == "" && path == "" {
+	if filter.CurrentBranch {
 		head, err := repo.head(ctx)
 		if err != nil {
 			return nil, err
@@ -45,7 +50,7 @@ func (repo *Repository) SearchHistory(ctx context.Context, query string, path st
 			return []Commit{}, nil
 		}
 	}
-	return repo.streamHistory(ctx, query, path, skip)
+	return repo.streamHistory(ctx, query, path, skip, filter)
 }
 
 func validCommitHash(hash string) error {

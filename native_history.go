@@ -188,6 +188,30 @@ func (app *nativeApp) historyWorkspace(c *ui.Context) {
 }
 
 func (app *nativeApp) historyPanel(c *ui.Context) {
+	ui.Row(c).FillWidth().Padding(4, 10).Gap(8).AlignItems(ui.Center).Children(func() {
+		scopes := []string{locales.AllBranches(), locales.CurrentBranch()}
+		scope := scopes[0]
+		if app.historyFilter.CurrentBranch {
+			scope = scopes[1]
+		}
+		c.Key("history-scope")
+		ui.Select(c, &scope, scopes).Label(locales.HistoryBranchScope()).Width(140).Height(26).FontSize(12).
+			Disabled(app.busy).OnChange(func() {
+			app.historyFilter.CurrentBranch = scope == scopes[1]
+			app.searchHistory(false)
+		})
+		remotes := []string{locales.ShowRemoteBranches(), locales.HideRemoteBranches()}
+		remote := remotes[0]
+		if app.historyFilter.HideRemotes {
+			remote = remotes[1]
+		}
+		c.Key("history-remotes")
+		ui.Select(c, &remote, remotes).Label(locales.HistoryRemoteVisibility()).Width(190).Height(26).FontSize(12).
+			Disabled(app.busy).OnChange(func() {
+			app.historyFilter.HideRemotes = remote == remotes[1]
+			app.searchHistory(false)
+		})
+	})
 	ui.Row(c).FillWidth().Padding(8, 10).Gap(8).AlignItems(ui.Center).Children(func() {
 		submitted := ui.TextInput(c, &app.historyQuery).Search().Placeholder(locales.SearchHistory()).Grow(1).MinWidth(100).Submitted()
 		submitted = ui.TextInput(c, &app.historyFile).Placeholder(locales.OptionalFilePath()).Width(160).Submitted() || submitted
@@ -265,7 +289,9 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 			case 4:
 				ui.Text(c, shortHash(commit.Hash)).Font("monospace").FontSize(12).TextColor(theme.TextMuted).SingleLine()
 			}
-		}).Fill().Label(locales.HistoryTable()).Changed() && app.historySelected >= 0 && app.historySelected < len(app.history) {
+		}).Fill().Label(locales.HistoryTable()).
+			Disabled(app.busy || app.readTask != nil && app.readTask.kind == nativeReadHistory).
+			Changed() && app.historySelected >= 0 && app.historySelected < len(app.history) {
 			hash := app.history[app.historySelected].Hash
 			if hash != app.commitHash || app.readTask != nil || app.problem != "" {
 				app.selectCommit(hash)
@@ -273,7 +299,8 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 		}
 	})
 	if app.historyMore {
-		if ui.Button(c, locales.LoadMore()).FillWidth().Clicked() {
+		if ui.Button(c, locales.LoadMore()).FillWidth().
+			Disabled(app.busy || app.readTask != nil && app.readTask.kind == nativeReadHistory).Clicked() {
 			app.searchHistory(true)
 		}
 	}

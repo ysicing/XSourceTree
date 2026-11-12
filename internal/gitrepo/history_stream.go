@@ -124,12 +124,23 @@ func (writer *historyLogWriter) finish() error {
 	return nil
 }
 
-func (repo *Repository) streamHistory(ctx context.Context, query, path string, skip int) ([]Commit, error) {
+func (repo *Repository) streamHistory(ctx context.Context, query, path string, skip int, filter HistoryFilter) ([]Commit, error) {
 	processCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	args := []string{"--no-pager", "--literal-pathspecs", "-C", repo.Path, "-c", "color.ui=false",
-		"log", "--no-show-signature", "--all", "--topo-order", "-z",
+		"log", "--no-show-signature", "--decorate=short", "--topo-order", "-z",
 		"--format=%H%x00%P%x00%s%x00%an%x00%aI%x00%D%x00%B%x00%ae"}
+	if filter.HideRemotes {
+		args = append(args, "--decorate-refs-exclude=refs/remotes/*")
+	}
+	if filter.CurrentBranch {
+		args = append(args, "HEAD")
+	} else {
+		if filter.HideRemotes {
+			args = append(args, "--exclude=refs/remotes/*")
+		}
+		args = append(args, "--all")
+	}
 	if path != "" {
 		args = append(args, "--full-history")
 	}

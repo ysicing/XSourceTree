@@ -1,5 +1,10 @@
 {
   "@@locale": "zh-Hans",
+  "allBranches": "所有分支",
+  "showRemoteBranches": "显示远程分支",
+  "hideRemoteBranches": "隐藏远程分支",
+  "historyBranchScope": "历史分支范围",
+  "historyRemoteVisibility": "历史远程分支显示",
   "general": "通用",
   "manageGroup": "管理仓库组 {name}",
   "stagedDirectory": "已暂存目录 {path}",

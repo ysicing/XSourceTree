@@ -1,5 +1,10 @@
 {
   "@@locale": "zh-Hant",
+  "allBranches": "所有分支",
+  "showRemoteBranches": "顯示遠端分支",
+  "hideRemoteBranches": "隱藏遠端分支",
+  "historyBranchScope": "歷史分支範圍",
+  "historyRemoteVisibility": "歷史遠端分支顯示",
   "general": "一般",
   "manageGroup": "管理儲存庫群組 {name}",
   "stagedDirectory": "已暫存目錄 {path}",

@@ -85,6 +85,9 @@ func (app *nativeApp) load(label string, kind nativeReadKind, task func(context.
 				apply()
 			}
 			if err != nil {
+				if kind == nativeReadHistory {
+					app.historyFilter = app.historyResult.filter
+				}
 				app.problem = err.Error()
 			}
 		})
@@ -235,22 +238,35 @@ func (app *nativeApp) goToPatchHunk() {
 	}
 }
 
+type nativeHistoryRequest struct {
+	query, file string
+	filter      gitrepo.HistoryFilter
+}
+
+func (app *nativeApp) historyRequest() nativeHistoryRequest {
+	return nativeHistoryRequest{query: app.historyQuery, file: app.historyFile, filter: app.historyFilter}
+}
+
 func (app *nativeApp) searchHistory(more bool) {
 	if app.repository == nil || app.busy {
 		return
 	}
-	path, query, file := app.repository.snapshot.Path, app.historyQuery, app.historyFile
+	path, request := app.repository.snapshot.Path, app.historyRequest()
+	more = more && request == app.historyResult
 	skip := 0
 	if more {
 		skip = len(app.history)
 	}
 	app.load(locales.SearchingHistory(), nativeReadHistory, func(ctx context.Context) (func(), error) {
-		commits, err := app.service.SearchHistory(ctx, path, query, file, skip)
+		commits, err := app.service.SearchHistory(ctx, path, request.query, request.file, skip, request.filter)
 		return func() {
 			// 搜索取消或超时时保留已读取结果。
+			if err != nil {
+				return
+			}
 			if more {
 				app.history = append(app.history, commits...)
-			} else if err == nil || len(commits) > 0 {
+			} else {
 				app.history = commits
 				app.historySelected, app.commitSelected = -1, -1
 				// 旧界面的辅助功能节点仍引用列表状态，替换指针而非原地清零。
@@ -258,6 +274,7 @@ func (app *nativeApp) searchHistory(more bool) {
 				app.commitHash, app.commitFiles, app.commitFile = "", nil, ""
 				app.clearDiff()
 			}
+			app.historyResult = request
 			app.historyMore = len(commits) == 100
 		}, err
 	})

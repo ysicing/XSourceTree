@@ -1,5 +1,10 @@
 {
   "@@locale": "en",
+  "allBranches": "All branches",
+  "showRemoteBranches": "Show remote branches",
+  "hideRemoteBranches": "Hide remote branches",
+  "historyBranchScope": "History branch scope",
+  "historyRemoteVisibility": "History remote branches",
   "general": "General",
   "manageGroup": "Manage repository group {name}",
   "stagedDirectory": "Staged directory {path}",

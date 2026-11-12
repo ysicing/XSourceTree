@@ -36,6 +36,56 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// AllBranches says "所有分支"
+// in the language the app shows.
+func AllBranches() string { return In(i18n.Locale()).AllBranches() }
+
+// AllBranches says "所有分支"
+// in the language of msgs.
+func (msgs Messages) AllBranches() string {
+	return Catalog.Format(msgs.locale, "allBranches", nil)
+}
+
+// ShowRemoteBranches says "显示远程分支"
+// in the language the app shows.
+func ShowRemoteBranches() string { return In(i18n.Locale()).ShowRemoteBranches() }
+
+// ShowRemoteBranches says "显示远程分支"
+// in the language of msgs.
+func (msgs Messages) ShowRemoteBranches() string {
+	return Catalog.Format(msgs.locale, "showRemoteBranches", nil)
+}
+
+// HideRemoteBranches says "隐藏远程分支"
+// in the language the app shows.
+func HideRemoteBranches() string { return In(i18n.Locale()).HideRemoteBranches() }
+
+// HideRemoteBranches says "隐藏远程分支"
+// in the language of msgs.
+func (msgs Messages) HideRemoteBranches() string {
+	return Catalog.Format(msgs.locale, "hideRemoteBranches", nil)
+}
+
+// HistoryBranchScope says "历史分支范围"
+// in the language the app shows.
+func HistoryBranchScope() string { return In(i18n.Locale()).HistoryBranchScope() }
+
+// HistoryBranchScope says "历史分支范围"
+// in the language of msgs.
+func (msgs Messages) HistoryBranchScope() string {
+	return Catalog.Format(msgs.locale, "historyBranchScope", nil)
+}
+
+// HistoryRemoteVisibility says "历史远程分支显示"
+// in the language the app shows.
+func HistoryRemoteVisibility() string { return In(i18n.Locale()).HistoryRemoteVisibility() }
+
+// HistoryRemoteVisibility says "历史远程分支显示"
+// in the language of msgs.
+func (msgs Messages) HistoryRemoteVisibility() string {
+	return Catalog.Format(msgs.locale, "historyRemoteVisibility", nil)
+}
+
 // General says "通用"
 // in the language the app shows.
 func General() string { return In(i18n.Locale()).General() }

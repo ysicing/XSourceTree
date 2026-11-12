@@ -25,6 +25,9 @@ type historyLogWriter struct {
 	recordBytes int
 	stopped     bool
 	err         error
+	target      string
+	found       bool
+	offset      int
 }
 
 func newHistoryLogWriter(ctx context.Context, query string, skip int, cancel context.CancelFunc) *historyLogWriter {
@@ -94,11 +97,17 @@ func (writer *historyLogWriter) accept() {
 		writer.skip--
 		return
 	}
+	if writer.target != "" && len(writer.commits) == 100 {
+		// 定位只保留目标所在的一页，避免把标签之前的全部历史装入内存。
+		writer.commits = writer.commits[:0]
+		writer.offset += 100
+	}
 	writer.commits = append(writer.commits, Commit{
 		Hash: writer.fields[0], Parents: strings.Fields(writer.fields[1]), Subject: writer.fields[2],
 		Author: writer.fields[3], Date: writer.fields[4], Refs: writer.fields[5],
 	})
-	if len(writer.commits) == 100 {
+	writer.found = writer.found || writer.fields[0] == writer.target
+	if len(writer.commits) == 100 && (writer.target == "" || writer.found) {
 		// 仅停止本次日志子进程；调用方 Context 的取消仍须作为失败返回。
 		writer.stopped = true
 		writer.cancel()
@@ -125,11 +134,22 @@ func (writer *historyLogWriter) finish() error {
 }
 
 func (repo *Repository) streamHistory(ctx context.Context, query, path string, skip int, filter HistoryFilter) ([]Commit, error) {
+	writer := newHistoryLogWriter(ctx, query, skip, nil)
+	if err := repo.readHistory(ctx, path, filter, writer); err != nil {
+		return nil, err
+	}
+	return writer.commits, nil
+}
+
+const historyFormat = "--format=%H%x00%P%x00%s%x00%an%x00%aI%x00%D%x00%B%x00%ae"
+
+func (repo *Repository) readHistory(ctx context.Context, path string, filter HistoryFilter, stdout *historyLogWriter) error {
 	processCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	stdout.cancel = cancel
 	args := []string{"--no-pager", "--literal-pathspecs", "-C", repo.Path, "-c", "color.ui=false",
 		"log", "--no-show-signature", "--decorate=short", "--topo-order", "-z",
-		"--format=%H%x00%P%x00%s%x00%an%x00%aI%x00%D%x00%B%x00%ae"}
+		historyFormat}
 	if filter.HideRemotes {
 		args = append(args, "--decorate-refs-exclude=refs/remotes/*")
 	}
@@ -152,19 +172,18 @@ func (repo *Repository) streamHistory(ctx context.Context, query, path string, s
 	cmd.Env = gitEnvironment()
 	cmd.Stdin = strings.NewReader("")
 	cmd.WaitDelay = 2 * time.Second
-	stdout := newHistoryLogWriter(ctx, query, skip, cancel)
 	var stderr limitedBuffer
 	cmd.Stdout, cmd.Stderr = stdout, &stderr
 	// runProcess 等待进程及输出复制结束，同时沿用平台进程树取消机制。
 	err := runProcess(processCtx, cmd)
 	if ctx.Err() != nil {
-		return nil, fmt.Errorf("Git 操作已取消或超时：%w", ctx.Err())
+		return fmt.Errorf("Git 操作已取消或超时：%w", ctx.Err())
 	}
 	if stdout.err != nil {
-		return nil, stdout.err
+		return stdout.err
 	}
 	if stderr.overflow {
-		return nil, errors.New("Git 输出超过 4 MiB，请使用命令行查看完整结果")
+		return errors.New("Git 输出超过 4 MiB，请使用命令行查看完整结果")
 	}
 	if err != nil && !stdout.stopped {
 		code := -1
@@ -176,10 +195,10 @@ func (repo *Repository) streamHistory(ctx context.Context, query, path string, s
 		if message == "" {
 			message = err.Error()
 		}
-		return nil, &commandError{code: code, message: message}
+		return &commandError{code: code, message: message}
 	}
 	if err := stdout.finish(); err != nil {
-		return nil, err
+		return err
 	}
-	return stdout.commits, nil
+	return nil
 }

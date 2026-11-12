@@ -228,6 +228,21 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 			}
 		}
 	})
+	if app.viewedTag != "" {
+		ui.Row(c).FillWidth().Padding(4, 10).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Icon(c, nativeIcons["tag"]).FontSize(12).Shrink(0)
+			ui.Text(c, app.viewedTag).FontSize(12).SingleLine().Tooltip(app.viewedTag).MinWidth(0).Shrink(1)
+			if app.historySelected < 0 {
+				ui.Text(c, locales.TagOutsideHistoryFilter()).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine().MinWidth(0).Shrink(1)
+				ui.Button(c, locales.ViewInAllHistory()).FontSize(12).Disabled(app.busy || app.readTask != nil).
+					OnClick(func() { app.selectTag(app.viewedTag, true) })
+			}
+		})
+	}
+	if app.historyOffset > 0 {
+		ui.Button(c, locales.BackToLatestCommits()).FontSize(12).Disabled(app.busy || app.readTask != nil).
+			OnClick(func() { app.searchHistory(false) })
+	}
 	ui.Divider(c)
 	if len(app.history) == 0 {
 		app.historyGraph, app.historyGraphSource = nil, nil
@@ -326,6 +341,9 @@ func (app *nativeApp) historyDetails(c *ui.Context) {
 			return
 		}
 		var selected *gitrepo.Commit
+		if app.viewedCommit.Hash == app.commitHash {
+			selected = &app.viewedCommit
+		}
 		for index := range app.history {
 			if app.history[index].Hash == app.commitHash {
 				selected = &app.history[index]

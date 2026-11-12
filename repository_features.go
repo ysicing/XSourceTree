@@ -42,6 +42,14 @@ func (service *RepositoryService) CancelHistory() {
 	}
 }
 
+func (service *RepositoryService) LocateHistory(ctx context.Context, path, hash, query, file string, filter gitrepo.HistoryFilter) (gitrepo.HistoryLocation, error) {
+	repo, err := service.manager.Get(path)
+	if err != nil {
+		return gitrepo.HistoryLocation{}, err
+	}
+	return repo.LocateHistory(ctx, hash, query, file, filter)
+}
+
 func (service *RepositoryService) CommitFiles(ctx context.Context, path, hash string) ([]gitrepo.CommitFile, error) {
 	repo, err := service.manager.Get(path)
 	if err != nil {

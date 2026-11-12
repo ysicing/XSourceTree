@@ -86,6 +86,56 @@ func (msgs Messages) BranchFromTag() string {
 	return Catalog.Format(msgs.locale, "branchFromTag", nil)
 }
 
+// CopyTagName says "复制标签名"
+// in the language the app shows.
+func CopyTagName() string { return In(i18n.Locale()).CopyTagName() }
+
+// CopyTagName says "复制标签名"
+// in the language of msgs.
+func (msgs Messages) CopyTagName() string {
+	return Catalog.Format(msgs.locale, "copyTagName", nil)
+}
+
+// ViewTagCommit says "查看标签提交"
+// in the language the app shows.
+func ViewTagCommit() string { return In(i18n.Locale()).ViewTagCommit() }
+
+// ViewTagCommit says "查看标签提交"
+// in the language of msgs.
+func (msgs Messages) ViewTagCommit() string {
+	return Catalog.Format(msgs.locale, "viewTagCommit", nil)
+}
+
+// TagOutsideHistoryFilter says "此提交不在当前筛选结果中"
+// in the language the app shows.
+func TagOutsideHistoryFilter() string { return In(i18n.Locale()).TagOutsideHistoryFilter() }
+
+// TagOutsideHistoryFilter says "此提交不在当前筛选结果中"
+// in the language of msgs.
+func (msgs Messages) TagOutsideHistoryFilter() string {
+	return Catalog.Format(msgs.locale, "tagOutsideHistoryFilter", nil)
+}
+
+// ViewInAllHistory says "在全部历史中查看"
+// in the language the app shows.
+func ViewInAllHistory() string { return In(i18n.Locale()).ViewInAllHistory() }
+
+// ViewInAllHistory says "在全部历史中查看"
+// in the language of msgs.
+func (msgs Messages) ViewInAllHistory() string {
+	return Catalog.Format(msgs.locale, "viewInAllHistory", nil)
+}
+
+// BackToLatestCommits says "返回最新提交"
+// in the language the app shows.
+func BackToLatestCommits() string { return In(i18n.Locale()).BackToLatestCommits() }
+
+// BackToLatestCommits says "返回最新提交"
+// in the language of msgs.
+func (msgs Messages) BackToLatestCommits() string {
+	return Catalog.Format(msgs.locale, "backToLatestCommits", nil)
+}
+
 // ReferenceBranch says "分支"
 // in the language the app shows.
 func ReferenceBranch() string { return In(i18n.Locale()).ReferenceBranch() }

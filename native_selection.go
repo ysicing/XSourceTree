@@ -255,7 +255,7 @@ func (app *nativeApp) searchHistory(more bool) {
 	more = more && request == app.historyResult
 	skip := 0
 	if more {
-		skip = len(app.history)
+		skip = app.historyOffset + len(app.history)
 	}
 	app.load(locales.SearchingHistory(), nativeReadHistory, func(ctx context.Context) (func(), error) {
 		commits, err := app.service.SearchHistory(ctx, path, request.query, request.file, skip, request.filter)
@@ -268,6 +268,7 @@ func (app *nativeApp) searchHistory(more bool) {
 				app.history = append(app.history, commits...)
 			} else {
 				app.history = commits
+				app.historyOffset, app.viewedTag, app.viewedCommit = 0, "", gitrepo.Commit{}
 				app.historySelected, app.commitSelected = -1, -1
 				// 旧界面的辅助功能节点仍引用列表状态，替换指针而非原地清零。
 				app.historyList, app.commitList = &ui.ListState{}, &ui.ListState{}
@@ -300,24 +301,86 @@ func (app *nativeApp) selectCommit(hash string) {
 			diff, diffErr = app.service.CommitFileDiff(ctx, path, hash, file)
 		}
 		return func() {
-			app.clearDiff()
-			app.commitHash, app.commitFiles, app.commitFile = hash, files, file
-			app.historySelected = -1
-			for index, commit := range app.history {
-				if commit.Hash == hash {
-					app.historySelected = index
-					break
-				}
-			}
-			app.commitSelected = -1
-			if len(files) > 0 {
-				app.commitSelected = 0
-			}
-			app.commitList = &ui.ListState{}
+			app.viewedTag, app.viewedCommit = "", gitrepo.Commit{}
+			app.applyCommitSelection(hash, files, file)
 			if diffErr == nil {
 				app.setDiff(diff)
 			}
 		}, diffErr
+	})
+}
+
+func (app *nativeApp) applyCommitSelection(hash string, files []gitrepo.CommitFile, file string) {
+	app.clearDiff()
+	app.commitHash, app.commitFiles, app.commitFile = hash, files, file
+	app.historySelected = slices.IndexFunc(app.history, func(commit gitrepo.Commit) bool { return commit.Hash == hash })
+	if app.historySelected >= 0 {
+		app.historyList.ScrollIntoView(app.historySelected)
+	}
+	app.commitSelected = -1
+	if len(files) > 0 {
+		app.commitSelected = 0
+	}
+	app.commitList = &ui.ListState{}
+}
+
+func (app *nativeApp) selectTag(name string, all bool) {
+	if app.repository == nil || app.busy {
+		return
+	}
+	app.leaveConflict(func() {
+		path, request := app.repository.snapshot.Path, app.historyResult
+		if len(app.history) == 0 {
+			request = app.historyRequest()
+		}
+		if all {
+			request = nativeHistoryRequest{}
+		}
+		app.screen = "history"
+		app.load(locales.ReadingCommit(), nativeReadHistory, func(ctx context.Context) (func(), error) {
+			hash, err := app.service.ResolveCreationTarget(ctx, path, "refs/tags/"+name)
+			if err != nil {
+				return nil, err
+			}
+			location, err := app.service.LocateHistory(ctx, path, hash, request.query, request.file, request.filter)
+			if err != nil {
+				return nil, err
+			}
+			files, err := app.service.CommitFiles(ctx, path, hash)
+			if err != nil {
+				return nil, err
+			}
+			file := ""
+			var diff gitrepo.Diff
+			if len(files) > 0 {
+				file = files[0].Path
+				diff, err = app.service.CommitFileDiff(ctx, path, hash, file)
+			}
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			return func() {
+				if len(location.Commits) > 0 {
+					// 已加载目标时保留当前页与滚动状态，否则切换到目标所在页。
+					index := slices.IndexFunc(app.history, func(commit gitrepo.Commit) bool { return commit.Hash == hash })
+					if all || request != app.historyResult || index < 0 {
+						app.history, app.historyOffset = location.Commits, location.Offset
+						app.historyMore = len(location.Commits) == 100
+						app.historyList = &ui.ListState{}
+					}
+					app.historyResult = request
+					if all {
+						app.historyQuery, app.historyFile, app.historyFilter = "", "", request.filter
+					}
+				}
+				app.viewedTag, app.viewedCommit = name, location.Commit
+				app.refSelected = nativeRefKey{repository: path, kind: "标签", reference: name}
+				app.applyCommitSelection(hash, files, file)
+				if err == nil {
+					app.setDiff(diff)
+				}
+			}, err
+		})
 	})
 }
 

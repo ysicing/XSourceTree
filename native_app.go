@@ -78,9 +78,12 @@ type nativeApp struct {
 	historyQuery          string
 	historyFile           string
 	historyMore           bool
+	historyOffset         int
 	historyFilter         gitrepo.HistoryFilter
 	historyResult         nativeHistoryRequest
 	commitHash            string
+	viewedTag             string
+	viewedCommit          gitrepo.Commit
 	commitFiles           []gitrepo.CommitFile
 	commitFile            string
 	stashHash             string
@@ -334,6 +337,7 @@ func (app *nativeApp) openRepository(path string) {
 				app.adopt(result)
 				app.screen, app.selectedFile = "changes", ""
 				app.history, app.commitHash, app.commitFiles, app.stashHash = nil, "", nil, ""
+				app.historyOffset, app.viewedTag, app.viewedCommit = 0, "", gitrepo.Commit{}
 				app.historyGraph, app.historyGraphSource = nil, nil
 				app.historySelected, app.commitSelected = -1, -1
 			}, nil
@@ -368,6 +372,10 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 	}
 	path, screen, file, staged := app.repository.snapshot.Path, app.screen, app.selectedFile, app.staged
 	historyRequest := app.historyRequest()
+	historyOffset := app.historyOffset
+	if historyRequest != app.historyResult {
+		historyOffset = 0
+	}
 	conflict, conflictEdit := app.conflict, app.conflictEdit
 	conflictBase := app.conflictBase
 	dirty := app.conflictDirty()
@@ -379,7 +387,7 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 		result, refreshErr := app.readRepository(ctx, path, false)
 		var history []gitrepo.Commit
 		if refreshErr == nil && screen == "history" {
-			history, refreshErr = app.service.SearchHistory(ctx, path, historyRequest.query, historyRequest.file, 0, historyRequest.filter)
+			history, refreshErr = app.service.SearchHistory(ctx, path, historyRequest.query, historyRequest.file, historyOffset, historyRequest.filter)
 		}
 		var selection *nativeSelection
 		if refreshErr == nil && screen == "changes" && file != "" && fileExists(result.snapshot.Files, file, staged) {
@@ -395,8 +403,10 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 					}
 				}
 			}
+			preserveDetails := dialog != nil && dialog.preserveHistory && screen == "history" &&
+				refreshErr == nil && (retained >= 0 || app.viewedTag != "" && app.viewedCommit.Hash == app.commitHash)
 			if result != nil {
-				if retained >= 0 {
+				if preserveDetails {
 					app.repository = result
 					app.library = app.service.Library()
 				} else {
@@ -406,10 +416,12 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 			app.writable = refreshErr == nil
 			if screen == "history" && refreshErr == nil {
 				app.history, app.historyMore = history, len(history) == 100
+				app.historyOffset = historyOffset
 				app.historyResult = historyRequest
-				if retained >= 0 {
+				if preserveDetails {
 					app.historySelected = retained
 				} else {
+					app.viewedTag, app.viewedCommit = "", gitrepo.Commit{}
 					app.commitHash, app.commitFile, app.commitFiles = "", "", nil
 					app.historySelected, app.commitSelected = -1, -1
 					app.historyList, app.commitList = &ui.ListState{}, &ui.ListState{}

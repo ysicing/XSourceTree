@@ -53,6 +53,24 @@ func TestSearchHistoryBeyondLoadedPage(t *testing.T) {
 			t.Fatal("test commit unexpectedly present in loaded history")
 		}
 	}
+	location, err := repo.LocateHistory(ctx, oldest, "", "", HistoryFilter{})
+	if err != nil || location.Commit.Hash != oldest || location.Offset != 300 ||
+		len(location.Commits) != 11 || location.Commits[10].Hash != oldest {
+		t.Fatalf("定位旧提交未返回目标所在页: %+v, %v", location, err)
+	}
+	location, err = repo.LocateHistory(ctx, loaded[5].Hash, "", "", HistoryFilter{})
+	if err != nil || location.Offset != 0 || len(location.Commits) != 100 ||
+		location.Commits[5].Hash != loaded[5].Hash {
+		t.Fatalf("定位首屏提交异常: %+v, %v", location, err)
+	}
+	location, err = repo.LocateHistory(ctx, oldest, "recent", "", HistoryFilter{})
+	if err != nil || len(location.Commits) != 0 || location.Commit.Subject != "old [literal].* subject" {
+		t.Fatalf("筛选排除目标时未保留详情: %+v, %v", location, err)
+	}
+	location, err = repo.LocateHistory(ctx, oldest, "hidden BODY", "tracked.txt", HistoryFilter{})
+	if err != nil || len(location.Commits) != 1 || location.Offset != 0 || location.Commits[0].Hash != oldest {
+		t.Fatalf("定位未遵循正文与路径筛选: %+v, %v", location, err)
+	}
 	calls := filepath.Join(t.TempDir(), "log-calls")
 	t.Setenv("XSOURCE_LOG_CALLS", calls)
 	installHistoryGitWrapper(t, `for argument do

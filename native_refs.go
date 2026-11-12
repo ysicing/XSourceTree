@@ -254,14 +254,20 @@ func (app *nativeApp) localBranchSidebar(c *ui.Context) {
 
 func (app *nativeApp) tagSidebar(c *ui.Context) {
 	var names []string
-	tags := make(map[string]gitrepo.Tag)
 	for _, tag := range app.repository.tags {
 		names = append(names, tag.Name)
-		tags[tag.Name] = tag
 	}
+	services := c.Services()
 	app.referenceSidebar(c, "标签", "标签树", nativeIcons["tag"], nativeReferenceNodes(names, "", ""), func(name string, item ui.Element) {
-		tag := tags[name]
 		item.ContextMenu(func(menu *ui.Menu) {
+			app.refSelected = nativeRefKey{repository: app.repository.snapshot.Path, kind: "标签", reference: name}
+			if menu.Item(locales.CopyTagName()).Chosen() {
+				services.WriteClipboard(name)
+			}
+			if menu.Item(locales.ViewTagCommit()).Disabled(app.busy).Chosen() {
+				app.selectTag(name, false)
+			}
+			menu.Separator()
 			if menu.Item(locales.BranchFromTag()).Disabled(!app.canCreateReference()).Chosen() {
 				app.referenceFrom(false, "tag", name)
 			}
@@ -271,7 +277,7 @@ func (app *nativeApp) tagSidebar(c *ui.Context) {
 			}
 		})
 		if item.Clicked() {
-			app.leaveConflict(func() { app.screen = "history"; app.selectCommit(tag.Hash) })
+			app.selectTag(name, false)
 		}
 	})
 }

@@ -4,6 +4,8 @@
 package main
 
 import (
+	"fmt"
+	"math"
 	"os"
 	"testing"
 
@@ -100,12 +102,32 @@ func TestNativeLocalizedSettingsLayout(t *testing.T) {
 							t.Fatalf("语言 %s 的设置内容超出窗口: %s %+v", language, label, bounds)
 						}
 					}
+					languageControl, found := tester.AccessByRole(ui.RolePopUpButton, locales.Language())
+					if !found {
+						t.Fatal("缺少语言选择控件")
+					}
+					var previous ui.Rect
+					for index, label := range []string{locales.SystemAppearance(), locales.LightAppearance(), locales.DarkAppearance()} {
+						option, found := tester.AccessByRole(ui.RoleRadio, label)
+						if !found || option.Bounds.W < 110 || option.Bounds.H < 90 ||
+							option.Bounds.X+option.Bounds.W > float32(size[0]) ||
+							option.Bounds.Y+option.Bounds.H > languageControl.Bounds.Y {
+							t.Fatalf("语言 %s 的外观预览被裁切或挤压: %s %+v", language, label, option.Bounds)
+						}
+						if index == 0 && math.Abs(float64(option.Bounds.X-languageControl.Bounds.X)) > 1 {
+							t.Fatalf("语言与外观控件未左对齐: %+v, %+v", option.Bounds, languageControl.Bounds)
+						}
+						if index > 0 && option.Bounds.X < previous.X+previous.W {
+							t.Fatalf("语言 %s 的外观选项重叠: %+v, %+v", language, previous, option.Bounds)
+						}
+						previous = option.Bounds
+					}
 					if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
 						suffix := "light"
 						if dark {
 							suffix = "dark"
 						}
-						saveNativeScreenshot(t, tester, directory, "settings-general-"+language+"-"+suffix+".png")
+						saveNativeScreenshot(t, tester, directory, fmt.Sprintf("settings-general-%s-%s-%d.png", language, suffix, size[0]))
 					}
 				}
 			}

@@ -118,6 +118,9 @@ func TestNativeApplicationSettingsCategories(t *testing.T) {
 			t.Fatal(err)
 		}
 		tester.Frame()
+		if info, found := tester.AccessByRole(ui.RoleRadio, appearance.label); !found || !info.Checked {
+			t.Fatalf("外观选项没有暴露选中状态: %+v", info)
+		}
 		restored := newNativeApp(app.service, app.stateFile)
 		restored.cancel()
 		if app.prefs.Appearance != appearance.label || restored.prefs.Appearance != appearance.label || app.settingsError != "" {
@@ -131,6 +134,30 @@ func TestNativeApplicationSettingsCategories(t *testing.T) {
 	tester.Frame()
 	if app.prefs.Appearance != appearanceDark {
 		t.Fatal("外观选择不支持方向键")
+	}
+	tester.Key(0, ui.KeyTab)
+	if info, found := tester.AccessByRole(ui.RolePopUpButton, "语言"); !found || !info.Focused {
+		t.Fatalf("外观选择应只有一个 Tab 停留点，下一项应为语言: %+v", info)
+	}
+	tester.Key(ui.Shift, ui.KeyTab)
+	if info, found := tester.AccessByRole(ui.RoleRadio, appearanceDark); !found || !info.Focused {
+		t.Fatalf("返回外观选择时未聚焦当前选项: %+v", info)
+	}
+	for _, choice := range []struct {
+		key        ui.Key
+		appearance string
+	}{
+		{ui.KeyHome, appearanceSystem},
+		{ui.KeyEnd, appearanceDark},
+		{ui.KeyLeft, appearanceLight},
+	} {
+		tester.Key(0, choice.key)
+		tester.Frame()
+		restored := newNativeApp(app.service, app.stateFile)
+		restored.cancel()
+		if app.prefs.Appearance != choice.appearance || restored.prefs.Appearance != choice.appearance {
+			t.Fatalf("键盘选择没有即时保存外观: %s, %s", app.prefs.Appearance, restored.prefs.Appearance)
+		}
 	}
 	if err := tester.Click(appearanceSystem); err != nil {
 		t.Fatal(err)

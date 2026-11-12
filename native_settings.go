@@ -297,7 +297,26 @@ func (app *nativeApp) appearancePreferences(c *ui.Context) {
 	appearances := []string{appearanceSystem, appearanceLight, appearanceDark}
 	labels := []string{locales.SystemAppearance(), locales.LightAppearance(), locales.DarkAppearance()}
 	selected := slices.Index(appearances, app.prefs.Appearance)
-	if ui.Segmented(c, &selected, labels...).Label(locales.AppearanceMode()).AlignSelf(ui.Start).Changed() {
+	c.Key("application-appearance")
+	choices := ui.SegmentedBase(c, &selected, len(appearances))
+	choices.Track.Label(locales.AppearanceMode()).Gap(16).AlignSelf(ui.Start).Children(func() {
+		for index, appearance := range appearances {
+			option := choices.Segment(index).Label(labels[index]).Column().Gap(8).Padding(3).Radius(8)
+			chosen := selected == index
+			accent := c.Theme().Accent
+			textColor := c.Theme().Text
+			if chosen {
+				textColor = accent
+			}
+			option.Children(func() {
+				ui.Box(c).Size(116, 70).Draw(func(p *ui.Painter, bounds ui.Rect) {
+					drawAppearancePreview(p, bounds, appearance, chosen, accent)
+				})
+				ui.Text(c, labels[index]).FontSize(13).TextColor(textColor).SingleLine().AlignSelf(ui.Center)
+			})
+		}
+	})
+	if choices.Track.Changed() {
 		app.prefs.Appearance = appearances[selected]
 		app.settingsError = ""
 		app.applyAppearance()
@@ -305,16 +324,69 @@ func (app *nativeApp) appearancePreferences(c *ui.Context) {
 	}
 }
 
+func drawAppearancePreview(p *ui.Painter, bounds ui.Rect, appearance string, selected bool, accent ui.Color) {
+	window := ui.Rect{X: bounds.X + 3, Y: bounds.Y + 3, W: bounds.W - 6, H: bounds.H - 6}
+	p.Clip(window, 6, func() {
+		for _, dark := range []bool{false, true} {
+			if appearance == appearanceLight && dark || appearance == appearanceDark && !dark {
+				continue
+			}
+			background, toolbar, sidebar, ink := ui.Hex("#ffffff"), ui.Hex("#f0f0f2"), ui.Hex("#f4f4f6"), ui.Hex("#c8cbd0")
+			selection := ui.Hex("#cce2ff")
+			if dark {
+				background, toolbar, sidebar, ink = ui.Hex("#25272b"), ui.Hex("#383a3e"), ui.Hex("#303236"), ui.Hex("#62656b")
+				selection = ui.Hex("#365779")
+			}
+			clip := window
+			if appearance == appearanceSystem {
+				clip.W /= 2
+				if dark {
+					clip.X += clip.W
+				}
+			}
+			p.Clip(clip, 0, func() {
+				p.Fill(window, background, 0)
+				p.Fill(ui.Rect{X: window.X, Y: window.Y, W: window.W, H: 17}, toolbar, 0)
+				p.Fill(ui.Rect{X: window.X, Y: window.Y + 17, W: 33, H: window.H - 17}, sidebar, 0)
+				p.Fill(ui.Rect{X: window.X + 4, Y: window.Y + 22, W: 25, H: 11}, selection, 3)
+				for index, color := range []ui.Color{ui.Hex("#ff6058"), ui.Hex("#ffbd2e"), ui.Hex("#28c840")} {
+					p.Fill(ui.Rect{X: window.X + 7 + float32(index)*8, Y: window.Y + 6, W: 5, H: 5}, color, 2.5)
+				}
+				for index := range 3 {
+					top := window.Y + 25 + float32(index)*12
+					p.Stroke(ui.Rect{X: window.X + 10, Y: top, W: 10, H: 6}, ink, 1, 1)
+					p.Fill(ui.Rect{X: window.X + 40, Y: top + 1, W: 4, H: 4}, ink, 2)
+					p.Fill(ui.Rect{X: window.X + 49, Y: top + 1, W: 48 - float32(index%2)*10, H: 4}, ink, 2)
+				}
+			})
+		}
+	})
+	border, width := ui.Hex("#a0a3aa"), float32(0.75)
+	if selected {
+		border, width = accent, 2
+	}
+	p.Stroke(bounds, border, 8, width)
+	if selected {
+		badge := ui.Rect{X: window.X + window.W - 17, Y: window.Y + window.H - 17, W: 14, H: 14}
+		p.Fill(badge, accent, 7)
+		p.StrokePolyline([][2]float32{
+			{badge.X + 3, badge.Y + 7},
+			{badge.X + 6, badge.Y + 10},
+			{badge.X + 11, badge.Y + 4},
+		}, 1.8, ui.Hex("#ffffff"))
+	}
+}
+
 var nativeLanguageTags = []string{"", "zh-Hans", "zh-Hant", "en"}
 
 func (app *nativeApp) generalPreferences(c *ui.Context) {
-	ui.Column(c).FillWidth().Gap(8).Children(func() {
-		ui.Text(c, locales.Appearance()).FontSize(13)
+	ui.Row(c).FillWidth().Gap(20).AlignItems(ui.Start).Children(func() {
+		ui.Text(c, locales.Appearance()).FontSize(13).Width(92).Shrink(0).Margin(10, 0, 0)
 		app.appearancePreferences(c)
 	})
 	ui.Divider(c)
-	ui.Row(c).FillWidth().Gap(16).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, locales.Language()).FontSize(13).Grow(1)
+	ui.Row(c).FillWidth().Gap(20).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, locales.Language()).FontSize(13).Width(92).Shrink(0)
 		labels := []string{locales.AutomaticLanguage(), "简体中文", "繁體中文", "English"}
 		tag := app.chosenLanguage
 		if tag != "" {
@@ -323,7 +395,7 @@ func (app *nativeApp) generalPreferences(c *ui.Context) {
 		index := max(0, slices.Index(nativeLanguageTags, tag))
 		selected := labels[index]
 		c.Key("application-language")
-		if ui.Select(c, &selected, labels).Label(locales.Language()).Width(200).Changed() {
+		if ui.Select(c, &selected, labels).Label(locales.Language()).Width(210).Changed() {
 			app.chosenLanguage = nativeLanguageTags[slices.Index(labels, selected)]
 			app.chooseLanguage(app.chosenLanguage)
 		}

@@ -365,6 +365,95 @@ func TestNativeBusyPreventsOverlappingTasks(t *testing.T) {
 	}
 }
 
+func TestNativeRefreshAllowsClose(t *testing.T) {
+	for _, screen := range []string{"library", "changes"} {
+		t.Run(screen, func(t *testing.T) {
+			app, path, finish := nativeFixture(t)
+			app.screen = screen
+			app.prefs.Drafts[path] = "退出时保留草稿"
+			app.refresh()
+			defer finish()
+			if !app.busy {
+				t.Fatal("测试必须覆盖刷新仍在进行的时刻")
+			}
+			if reason := app.closeBlockReason(); reason != "" {
+				t.Fatalf("只读刷新被误判为需要等待的写操作: %s", reason)
+			}
+			if !app.prepareClose() {
+				t.Fatal("只读刷新不应阻止关闭窗口或退出应用")
+			}
+			restored := newNativeApp(app.service, app.stateFile)
+			defer restored.cancel()
+			if restored.prefs.Drafts[path] != "退出时保留草稿" {
+				t.Fatal("退出前应保存草稿")
+			}
+			app.closed = true
+			app.cancel()
+		})
+	}
+}
+
+func TestNativeReadOnlyCloseCancelsWithoutApplyingResult(t *testing.T) {
+	app, _, finish := nativeFixture(t)
+	started, stopped := make(chan struct{}), make(chan struct{})
+	app.runTask("扫描文件夹", true, func(ctx context.Context) (func(), error) {
+		close(started)
+		<-ctx.Done()
+		close(stopped)
+		return func() { t.Error("关闭后不应回填扫描结果") }, ctx.Err()
+	})
+	<-started
+	if reason := app.closeBlockReason(); reason != "" {
+		t.Fatalf("可取消的只读任务不应阻止退出: %s", reason)
+	}
+	if !app.prepareClose() {
+		t.Fatal("只读任务应允许准备关闭")
+	}
+	if app.ctx.Err() != nil {
+		t.Fatal("允许关闭前的检查不应提前取消仍在运行的任务")
+	}
+	app.closed = true
+	app.cancel()
+	finish()
+	select {
+	case <-stopped:
+	default:
+		t.Fatal("关闭窗口应取消正在进行的只读任务")
+	}
+	if app.problem != "" {
+		t.Fatal("关闭后的取消错误不应回填界面")
+	}
+}
+
+func TestNativeWriteStillBlocksClose(t *testing.T) {
+	app, _, finish := nativeFixture(t)
+	release := make(chan struct{})
+	app.run("正在提交…", func(ctx context.Context) (func(), error) {
+		select {
+		case <-release:
+			return nil, nil
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	})
+	app.refresh()
+	app.runTask("不应启动的刷新", true, func(context.Context) (func(), error) {
+		t.Error("写入期间不应启动新任务")
+		return nil, nil
+	})
+	if reason := app.closeBlockReason(); !strings.Contains(reason, "正在提交…") {
+		t.Fatalf("写入必须阻止退出并显示实际任务: %s", reason)
+	}
+	if app.ctx.Err() != nil {
+		t.Fatal("退出保护不应取消正在进行的写操作")
+	}
+	close(release)
+	finish()
+	if app.busy || app.readOnlyBusy || app.closeBlockReason() != "" || !app.prepareClose() {
+		t.Fatal("写入完成后应恢复正常退出")
+	}
+}
+
 func TestNativeReadDoesNotBlockNavigation(t *testing.T) {
 	for _, kind := range []string{"file", "history", "commit", "commit-file", "stash"} {
 		t.Run(kind, func(t *testing.T) {

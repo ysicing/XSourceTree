@@ -85,7 +85,7 @@
   "discardConflictDetail": "尚未儲存的合併結果將遺失，磁碟檔案不會變更。",
   "discardConflictEdits": "放棄編輯",
   "operationBusyTitle": "目前操作尚未完成",
-  "operationBusyDetail": "請等待操作結束，或先取消掃描、歷史搜尋。",
+  "operationBusyDetail": "請等待目前操作結束後再結束應用程式。",
   "ok": "好",
   "quitWithConflictTitle": "要捨棄衝突編輯並結束嗎？",
   "quitWithConflictDetail": "提交說明會儲存；未儲存的衝突編輯將遺失。",

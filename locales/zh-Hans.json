@@ -85,7 +85,7 @@
   "discardConflictDetail": "尚未保存的合并结果将丢失，磁盘文件不会改变。",
   "discardConflictEdits": "放弃编辑",
   "operationBusyTitle": "当前操作尚未完成",
-  "operationBusyDetail": "请等待操作结束，或先取消扫描、历史搜索。",
+  "operationBusyDetail": "请等待当前操作结束后再退出。",
   "ok": "好",
   "quitWithConflictTitle": "要丢弃冲突编辑并退出吗？",
   "quitWithConflictDetail": "提交说明会保存；未保存的冲突编辑将丢失。",

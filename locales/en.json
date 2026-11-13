@@ -85,7 +85,7 @@
   "discardConflictDetail": "Unsaved merge results will be lost. Files on disk will be kept.",
   "discardConflictEdits": "Discard Edits",
   "operationBusyTitle": "An operation is still in progress",
-  "operationBusyDetail": "Wait for it to finish, or cancel the scan or history search first.",
+  "operationBusyDetail": "Wait for the current operation to finish before quitting.",
   "ok": "OK",
   "quitWithConflictTitle": "Discard conflict edits and quit?",
   "quitWithConflictDetail": "Commit messages will be saved. Unsaved conflict edits will be lost.",

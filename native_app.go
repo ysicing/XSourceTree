@@ -65,6 +65,7 @@ type nativeApp struct {
 	post                  func(func())
 	closed                bool
 	busy                  bool
+	readOnlyBusy          bool
 	scanning              bool
 	readTask              *nativeRead
 	readDone              <-chan struct{}
@@ -244,12 +245,18 @@ func (app *nativeApp) savePreferences() error {
 
 // 后台任务只返回结果；界面状态统一经 Window.Update 在主线程修改。
 func (app *nativeApp) run(label string, task func(context.Context) (func(), error)) {
+	app.runTask(label, false, task)
+}
+
+// 只读任务可在窗口关闭后随 app.ctx 取消；写操作必须完成后才能退出。
+func (app *nativeApp) runTask(label string, readOnly bool, task func(context.Context) (func(), error)) {
 	if app.busy || app.closed {
 		return
 	}
 	app.cancelRead()
 	previous := app.readDone
 	app.busy, app.status, app.problem = true, label, ""
+	app.readOnlyBusy = readOnly
 	dialog := app.dialog
 	go func() {
 		if previous != nil {
@@ -260,7 +267,7 @@ func (app *nativeApp) run(label string, task func(context.Context) (func(), erro
 			if app.closed {
 				return
 			}
-			app.busy, app.status = false, ""
+			app.busy, app.readOnlyBusy, app.status = false, false, ""
 			if apply != nil {
 				apply()
 			}
@@ -346,7 +353,7 @@ func (app *nativeApp) refresh() {
 		return
 	}
 	if app.screen == "library" || app.repository == nil {
-		app.run(locales.RefreshingLibrary(), func(ctx context.Context) (func(), error) {
+		app.runTask(locales.RefreshingLibrary(), true, func(ctx context.Context) (func(), error) {
 			library, err := app.service.RefreshLibrary(ctx)
 			return func() { app.library = library }, err
 		})
@@ -384,7 +391,7 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 	if blockedAI != nil && blockedAI.tooLarge {
 		blockedToken = blockedAI.token
 	}
-	app.run(label, func(ctx context.Context) (func(), error) {
+	app.runTask(label, operation == nil, func(ctx context.Context) (func(), error) {
 		var operationErr error
 		if operation != nil {
 			operationErr = operation(ctx, path)
@@ -608,10 +615,20 @@ func (app *nativeApp) leaveConflict(action func()) {
 	}
 }
 
+func (app *nativeApp) closeBlockReason() string {
+	if !app.busy || app.readOnlyBusy {
+		return ""
+	}
+	if app.status != "" {
+		return app.status + "\n" + locales.OperationBusyDetail()
+	}
+	return locales.OperationBusyDetail()
+}
+
 func (app *nativeApp) prepareClose() bool {
-	if app.busy {
+	if reason := app.closeBlockReason(); reason != "" {
 		_, _ = mygo.Dialog.Message(mygo.MessageOptions{
-			Parent: app.win, Message: locales.OperationBusyTitle(), Detail: locales.OperationBusyDetail(),
+			Parent: app.win, Message: locales.OperationBusyTitle(), Detail: reason,
 			Buttons: []string{locales.Ok()},
 		})
 		return false

@@ -892,11 +892,11 @@ func (msgs Messages) OperationBusyTitle() string {
 	return Catalog.Format(msgs.locale, "operationBusyTitle", nil)
 }
 
-// OperationBusyDetail says "请等待操作结束，或先取消扫描、历史搜索。"
+// OperationBusyDetail says "请等待当前操作结束后再退出。"
 // in the language the app shows.
 func OperationBusyDetail() string { return In(i18n.Locale()).OperationBusyDetail() }
 
-// OperationBusyDetail says "请等待操作结束，或先取消扫描、历史搜索。"
+// OperationBusyDetail says "请等待当前操作结束后再退出。"
 // in the language of msgs.
 func (msgs Messages) OperationBusyDetail() string {
 	return Catalog.Format(msgs.locale, "operationBusyDetail", nil)

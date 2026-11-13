@@ -354,7 +354,7 @@ func (app *nativeApp) chooseScan() {
 		return
 	}
 	app.scanning = true
-	app.run(locales.ScanningFolders(), func(ctx context.Context) (func(), error) {
+	app.runTask(locales.ScanningFolders(), true, func(ctx context.Context) (func(), error) {
 		result, err := app.service.Scan(ctx, paths[0])
 		return func() {
 			app.scanning = false

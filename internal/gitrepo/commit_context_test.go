@@ -5,6 +5,7 @@ package gitrepo
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -53,8 +54,13 @@ func TestCommitContextEmptyBinaryAndLimit(t *testing.T) {
 	}
 	write(t, path, "large.txt", strings.Repeat("large content\n", 10000))
 	git(t, path, "add", ".")
-	if _, err := repo.CommitContext(ctx); err == nil || !strings.Contains(err.Error(), "96 KiB") {
+	limited, err := repo.CommitContext(ctx)
+	if !errors.Is(err, ErrCommitContextTooLarge) || !strings.Contains(err.Error(), "96 KiB") {
 		t.Fatalf("超大差异必须明确拒绝，不能静默截断: %v", err)
+	}
+	token, tokenErr := repo.CommitToken(ctx)
+	if tokenErr != nil || limited.Token != token || limited.Diff != "" {
+		t.Fatal("超限时应仅返回暂存快照令牌，不返回部分差异")
 	}
 }
 

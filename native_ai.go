@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/ysicing/XSourceTree/internal/commitai"
+	"github.com/ysicing/XSourceTree/internal/gitrepo"
 	"github.com/ysicing/XSourceTree/locales"
 
 	"github.com/egoist/mygo/ui"
@@ -26,6 +27,8 @@ type nativeCommitAI struct {
 	previous  string
 	generated string
 	problem   string
+	tooLarge  bool
+	settings  bool
 	running   bool
 	applied   bool
 	revision  uint64
@@ -47,7 +50,8 @@ func (app *nativeApp) commitAIOptions(path string) commitai.Options {
 
 func (app *nativeApp) canGenerateCommit() bool {
 	if app.closed || app.busy || !app.writable || app.repository == nil ||
-		app.screen != "changes" || app.repository.snapshot.Operation.Kind != "" {
+		app.screen != "changes" || app.repository.snapshot.Operation.Kind != "" ||
+		app.ai != nil && (app.ai.running || app.ai.tooLarge) {
 		return false
 	}
 	staged := false
@@ -116,25 +120,29 @@ func (app *nativeApp) generateCommitAI() {
 	go func() {
 		defer cancel()
 		var token, message string
+		var settings bool
 		err := func() error {
 			repo, err := app.service.manager.Get(path)
 			if err != nil {
 				return err
 			}
 			staged, err := repo.CommitContext(ctx)
+			token = staged.Token
 			if err != nil {
 				return err
 			}
 			client, err := commitai.New(options.Endpoint)
 			if err != nil {
+				settings = true
 				return err
 			}
 			defer client.Close()
 			message, err = client.Generate(ctx, options, staged.Diff)
 			if err != nil {
+				var settingsError *commitai.SettingsError
+				settings = errors.As(err, &settingsError)
 				return err
 			}
-			token = staged.Token
 			current, err := repo.CommitToken(ctx)
 			if err != nil {
 				return err
@@ -151,6 +159,10 @@ func (app *nativeApp) generateCommitAI() {
 			state.running, state.cancel = false, nil
 			if err != nil {
 				state.problem = commitAIError(err)
+				state.token, state.tooLarge, state.settings = token, errors.Is(err, gitrepo.ErrCommitContextTooLarge), settings
+				if state.tooLarge {
+					state.problem = locales.AiContextTooLarge()
+				}
 				return
 			}
 			state.token, state.generated = token, message
@@ -242,16 +254,29 @@ func (app *nativeApp) commitAIHeader(c *ui.Context) {
 			if ui.Button(c, locales.CancelGeneration()).FontSize(12).Clicked() {
 				app.stopCommitAI()
 			}
-			return
+		} else {
+			label, tooltip := locales.GenerateAi(), locales.GenerateTooltip()
+			if app.ai != nil {
+				switch {
+				case app.ai.tooLarge:
+					tooltip = locales.AiContextLimitDetail()
+				case app.ai.generated != "":
+					label = locales.Regenerate()
+				case app.ai.problem != "":
+					label = locales.Retry()
+				}
+			}
+			if ui.Button(c, label).FontSize(12).Disabled(!app.canGenerateCommit()).
+				Tooltip(tooltip).Clicked() {
+				app.requestCommitAI()
+			}
 		}
-		label := locales.GenerateAi()
-		if app.ai != nil {
-			label = locales.Regenerate()
-		}
-		if ui.Button(c, label).FontSize(12).Disabled(!app.canGenerateCommit()).
-			Tooltip(locales.GenerateTooltip()).Clicked() {
-			app.requestCommitAI()
-		}
+		iconButton(c, locales.AiGenerationOptions(), nativeIcons["more"]).
+			Disabled(app.ai != nil && app.ai.running).Menu(func(menu *ui.Menu) {
+			if menu.Item(locales.AiSettingsMenu()).Chosen() {
+				app.aiSettingsDialog()
+			}
+		})
 	})
 }
 
@@ -261,10 +286,20 @@ func (app *nativeApp) commitAIResult(c *ui.Context) {
 		return
 	}
 	if state.problem != "" {
-		ui.Text(c, state.problem).FontSize(12).TextColor(c.Theme().Danger).MaxLines(3).Tooltip(state.problem)
-		if ui.Button(c, locales.AiSettings()).FontSize(12).Clicked() {
-			app.aiSettingsDialog()
-		}
+		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
+			problem, color, detail := state.problem, c.Theme().Danger, state.problem
+			if state.tooLarge {
+				problem, color, detail = locales.AiContextTooLarge(), c.Theme().TextMuted, locales.AiContextLimitDetail()
+			}
+			ui.Text(c, problem).FontSize(12).TextColor(color).Grow(1).MinWidth(0).MaxLines(3).Tooltip(detail)
+			if state.tooLarge {
+				ui.Button(c, locales.WriteManually()).FontSize(12).OnClick(func() { app.commitInput.Focus(c) })
+			} else if state.settings {
+				if ui.Button(c, locales.GoToAiSettings()).FontSize(12).Clicked() {
+					app.aiSettingsDialog()
+				}
+			}
+		})
 	}
 	if state.generated == "" || state.running {
 		return

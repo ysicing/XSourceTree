@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/ysicing/XSourceTree/internal/commitai"
+	"github.com/ysicing/XSourceTree/locales"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/updater"
@@ -252,6 +253,12 @@ func TestNativeAIFailureLeavesManualCommitAvailable(t *testing.T) {
 		t.Fatal("AI 失败不应影响手动提交")
 	}
 	tester := ui.NewTester(app.view, 1024, 680)
+	if _, found := tester.AccessByRole(ui.RoleButton, "重试"); !found {
+		t.Fatal("连接失败应显示重试，而不是重新生成")
+	}
+	if info, found := tester.AccessByRole(ui.RoleButton, "前往设置"); !found || info.Bounds.W >= 160 {
+		t.Fatal("连接失败应提供紧凑的设置入口")
+	}
 	if info, found := tester.AccessByRole(ui.RoleButton, "提交 1 个文件"); !found || info.Disabled {
 		t.Fatal("AI 失败后应保留可用的提交按钮")
 	}
@@ -259,6 +266,186 @@ func TestNativeAIFailureLeavesManualCommitAvailable(t *testing.T) {
 	finish()
 	if app.problem != "" || nativeGit(t, path, "log", "-1", "--format=%s") != "手动提交" {
 		t.Fatalf("手动提交失败: %s", app.problem)
+	}
+}
+
+func TestNativeAILargeContextRecovery(t *testing.T) {
+	app, path, finish, entered, _ := nativeAIFixture(t, false)
+	writeNativeFile(t, path, "large.txt", strings.Repeat("large content\n", 10000))
+	nativeGit(t, path, "add", ".")
+	app.refresh()
+	finish()
+	tester := ui.NewTester(app.view, 1024, 680)
+	if err := tester.Click("AI 生成"); err != nil {
+		t.Fatal(err)
+	}
+	finish()
+	tester.Frame()
+	warning := "暂存改动较多，暂时无法生成提交说明。可手动填写并提交。"
+	if _, found := tester.Find(warning); !found {
+		t.Fatal("超限应说明仅 AI 生成受限，仍可手动提交")
+	}
+	if info, found := tester.AccessByRole(ui.RoleButton, "AI 生成"); !found || !info.Disabled {
+		t.Fatal("暂存内容未变化时不应允许重复触发超限失败")
+	}
+	blocked := app.ai
+	app.requestCommitAI()
+	if app.ai != blocked {
+		t.Fatal("生成入口本身也应阻止相同内容的超限重试")
+	}
+	for _, label := range []string{"重新生成", "AI 设置", "前往设置"} {
+		if _, found := tester.AccessByRole(ui.RoleButton, label); found {
+			t.Fatalf("超限时不应显示无效操作 %s", label)
+		}
+	}
+	if err := tester.Click("手动填写"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Frame()
+	if !tester.Focused("提交说明") {
+		t.Fatal("手动填写应聚焦提交说明输入框")
+	}
+	tester.Type("手动提交大改动")
+	tester.Frame()
+	if app.prefs.Drafts[path] != "手动提交大改动" {
+		t.Fatal("超限后应继续保留手动编辑")
+	}
+	if info, found := tester.AccessByRole(ui.RoleButton, "提交 2 个文件"); !found || info.Disabled {
+		t.Fatal("AI 超限不应禁用手动提交")
+	}
+	if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+		saveNativeScreenshot(t, tester, directory, "ai-limit-light.png")
+		tester.SetDark(true)
+		saveNativeScreenshot(t, tester, directory, "ai-limit-dark.png")
+		tester.SetDark(false)
+	}
+	app.refresh()
+	finish()
+	tester.Frame()
+	if info, _ := tester.AccessByRole(ui.RoleButton, "AI 生成"); !info.Disabled {
+		t.Fatal("刷新相同暂存内容不应解除超限状态")
+	}
+	select {
+	case <-entered:
+		t.Fatal("超限差异不应发送到 AI")
+	default:
+	}
+	writeNativeFile(t, path, "large.txt", "smaller change\n")
+	nativeGit(t, path, "add", ".")
+	app.refresh()
+	finish()
+	tester.Frame()
+	if info, found := tester.AccessByRole(ui.RoleButton, "AI 生成"); !found || info.Disabled {
+		t.Fatal("外部暂存内容变化后刷新应恢复生成入口")
+	}
+	if _, found := tester.Find(warning); found {
+		t.Fatal("暂存内容变化后应清除旧超限提示")
+	}
+	if err := tester.Click("AI 生成"); err != nil {
+		t.Fatal(err)
+	}
+	finish()
+	tester.Frame()
+	if app.prefs.Drafts[path] != "手动提交大改动" || app.ai.generated == "" {
+		t.Fatal("恢复生成后应保留手动草稿，先展示建议")
+	}
+	if _, found := tester.AccessByRole(ui.RoleButton, "重新生成"); !found {
+		t.Fatal("成功生成后才应显示重新生成")
+	}
+	awaitNativeAI(t, entered)
+}
+
+func TestNativeAIErrorRecoveryActions(t *testing.T) {
+	for _, scenario := range []struct {
+		name     string
+		status   int
+		body     string
+		model    string
+		settings bool
+	}{
+		{name: "invalid-message", status: 200, body: `{"status":"completed","output":[]}`},
+		{name: "invalid-response", status: 200, body: "invalid json"},
+		{name: "rate-limited", status: 429},
+		{name: "unavailable", status: 503},
+		{name: "authentication", status: 401, settings: true},
+		{name: "missing-model", status: 200, model: "missing", settings: true},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			app, path, finish, _, _ := nativeAIFixture(t, false)
+			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				if request.URL.Path == "/v1/models" {
+					_, _ = writer.Write([]byte(`{"data":[{"id":"test-model"}]}`))
+					return
+				}
+				writer.WriteHeader(scenario.status)
+				_, _ = writer.Write([]byte(scenario.body))
+			}))
+			defer server.Close()
+			app.prefs.AI.Endpoint, app.prefs.AI.Model = server.URL+"/v1", scenario.model
+			app.prefs.Drafts[path] = "保留草稿"
+			app.generateCommitAI()
+			finish()
+			tester := ui.NewTester(app.view, 1024, 680)
+			if app.ai.problem == "" || app.prefs.Drafts[path] != "保留草稿" {
+				t.Fatal("失败应保留错误和原有草稿")
+			}
+			if _, found := tester.AccessByRole(ui.RoleButton, "前往设置"); found != scenario.settings {
+				t.Fatalf("错误恢复入口不正确: settings=%v, error=%s", found, app.ai.problem)
+			}
+			if info, found := tester.AccessByRole(ui.RoleButton, "重试"); !found || info.Disabled {
+				t.Fatal("失败后应保留可用的重试入口")
+			}
+		})
+	}
+}
+
+func TestNativeAIComposerSettingsMenu(t *testing.T) {
+	app, _, _, _, _ := nativeAIFixture(t, false)
+	mygo.App.SetPath(mygo.PathUserData, t.TempDir())
+	t.Cleanup(func() { mygo.App.SetPath(mygo.PathUserData, "") })
+	settingsTestUpdater.Do(func() {
+		mygo.Use(native.New(updater.Options{DisableAutomaticChecks: true, Language: "zh-Hans"}))
+	})
+	tester := ui.NewTester(app.view, 1024, 680)
+	if _, found := tester.AccessByRole(ui.RoleButton, "AI 设置"); found {
+		t.Fatal("提交区不应常驻全宽 AI 设置按钮")
+	}
+	if err := tester.Click("AI 生成选项"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tester.ChooseMenuItem("AI 设置…"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Frame()
+	if app.dialog == nil || app.dialog.title != "应用设置" {
+		t.Fatal("生成按钮旁的菜单应打开 AI 设置")
+	}
+	if _, found := tester.Find("连接"); !found {
+		t.Fatal("菜单入口应直接进入 AI 分类")
+	}
+}
+
+func TestNativeAIComposerLimitLayout(t *testing.T) {
+	app, path, _ := nativeFixture(t)
+	for _, language := range []string{"zh-Hans", "zh-Hant", "en"} {
+		t.Setenv("MYGO_LOCALE", language)
+		for _, appearance := range []string{appearanceLight, appearanceDark} {
+			app.prefs.Appearance = appearance
+			tester := ui.NewTester(app.view, 1024, 680)
+			tester.SetLocale(language)
+			app.ai = &nativeCommitAI{path: path, tooLarge: true, problem: locales.AiContextTooLarge()}
+			tester.Frame()
+			for _, label := range []string{locales.CommitMessage(), locales.AiGenerationOptions(), locales.WriteManually(), locales.AiContextTooLarge()} {
+				info, found := tester.Access(label)
+				if !found || info.Offscreen || info.Bounds.W <= 0 || info.Bounds.H <= 0 ||
+					info.Bounds.X+info.Bounds.W > 1024 || info.Bounds.Y+info.Bounds.H > 680 {
+					t.Fatalf("%s %s 控件 %s 被裁切: %+v", language, appearance, label, info)
+				}
+			}
+			if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+				saveNativeScreenshot(t, tester, directory, "ai-limit-"+language+"-"+appearance+".png")
+			}
+		}
 	}
 }
 

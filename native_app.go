@@ -109,6 +109,7 @@ type nativeApp struct {
 	chosenLanguage        string
 	chooseLanguage        func(string)
 	ai                    *nativeCommitAI
+	commitInput           ui.Handle
 	draftRevision         uint64
 
 	refCollapsed map[nativeRefKey]bool
@@ -379,12 +380,22 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 	conflict, conflictEdit := app.conflict, app.conflictEdit
 	conflictBase := app.conflictBase
 	dirty := app.conflictDirty()
+	blockedAI, blockedToken := app.ai, ""
+	if blockedAI != nil && blockedAI.tooLarge {
+		blockedToken = blockedAI.token
+	}
 	app.run(label, func(ctx context.Context) (func(), error) {
 		var operationErr error
 		if operation != nil {
 			operationErr = operation(ctx, path)
 		}
 		result, refreshErr := app.readRepository(ctx, path, false)
+		var refreshedAIToken string
+		if refreshErr == nil && blockedToken != "" {
+			if repo, err := app.service.manager.Get(path); err == nil {
+				refreshedAIToken, _ = repo.CommitToken(ctx)
+			}
+		}
 		var history []gitrepo.Commit
 		if refreshErr == nil && historyScreen {
 			history, refreshErr = app.service.SearchHistory(ctx, path, historyRequest.query, historyRequest.file, historyOffset, historyRequest.filter)
@@ -425,6 +436,9 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 			}
 		}
 		return func() {
+			if app.ai == blockedAI && refreshedAIToken != "" && refreshedAIToken != blockedToken {
+				app.stopCommitAI()
+			}
 			retained := -1
 			preserveHistory := operation == nil || dialog != nil && dialog.preserveHistory
 			if preserveHistory && historyScreen && refreshErr == nil {

@@ -34,6 +34,11 @@ const (
 // ErrNoModels 表示网关可连接，但尚未提供可用模型。
 var ErrNoModels = errors.New("Magpie 未提供可用模型")
 
+// SettingsError 表示可通过调整连接或模型配置恢复的错误，保留原始提示及错误链。
+type SettingsError struct{ error }
+
+func (err *SettingsError) Unwrap() error { return err.error }
+
 type Options struct {
 	Endpoint string `json:"endpoint,omitempty"`
 	Model    string `json:"model,omitempty"`
@@ -150,11 +155,19 @@ func (client *Client) request(ctx context.Context, method, route string, payload
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		return errors.New("无法连接 Magpie，请检查 Magpie 是否运行及 AI 设置中的地址")
+		if errors.Is(err, context.DeadlineExceeded) {
+			return context.DeadlineExceeded
+		}
+		return &SettingsError{errors.New("无法连接 Magpie，请检查 Magpie 是否运行及 AI 设置中的地址")}
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("Magpie 请求失败（HTTP %d），请检查模型及连接配置", response.StatusCode)
+		switch response.StatusCode {
+		case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusUnprocessableEntity:
+			return &SettingsError{fmt.Errorf("Magpie 请求失败（HTTP %d），请检查模型及连接配置", response.StatusCode)}
+		default:
+			return fmt.Errorf("Magpie 请求失败（HTTP %d），请稍后重试", response.StatusCode)
+		}
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, responseLimit+1))
 	if err != nil {
@@ -189,7 +202,7 @@ func (client *Client) Models(ctx context.Context) ([]string, error) {
 	slices.Sort(models)
 	models = slices.Compact(models)
 	if len(models) == 0 {
-		return nil, ErrNoModels
+		return nil, &SettingsError{ErrNoModels}
 	}
 	return models, nil
 }
@@ -197,7 +210,7 @@ func (client *Client) Models(ctx context.Context) ([]string, error) {
 func SelectModel(models []string, selected string) (string, error) {
 	if selected != "" {
 		if !slices.Contains(models, selected) {
-			return "", errors.New("所选模型已不可用，请在 AI 设置中重新选择")
+			return "", &SettingsError{errors.New("所选模型已不可用，请在 AI 设置中重新选择")}
 		}
 		return selected, nil
 	}
@@ -205,7 +218,7 @@ func SelectModel(models []string, selected string) (string, error) {
 		return "group/codex", nil
 	}
 	if len(models) == 0 {
-		return "", errors.New("Magpie 未提供可用模型")
+		return "", &SettingsError{ErrNoModels}
 	}
 	return models[0], nil
 }

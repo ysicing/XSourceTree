@@ -2260,6 +2260,76 @@ func (msgs Messages) GenerateTooltip() string {
 	return Catalog.Format(msgs.locale, "generateTooltip", nil)
 }
 
+// AiGenerationOptions says "AI 生成选项"
+// in the language the app shows.
+func AiGenerationOptions() string { return In(i18n.Locale()).AiGenerationOptions() }
+
+// AiGenerationOptions says "AI 生成选项"
+// in the language of msgs.
+func (msgs Messages) AiGenerationOptions() string {
+	return Catalog.Format(msgs.locale, "aiGenerationOptions", nil)
+}
+
+// AiSettingsMenu says "AI 设置…"
+// in the language the app shows.
+func AiSettingsMenu() string { return In(i18n.Locale()).AiSettingsMenu() }
+
+// AiSettingsMenu says "AI 设置…"
+// in the language of msgs.
+func (msgs Messages) AiSettingsMenu() string {
+	return Catalog.Format(msgs.locale, "aiSettingsMenu", nil)
+}
+
+// AiContextTooLarge says "暂存改动较多，暂时无法生成提交说明。可手动填写并提交。"
+// in the language the app shows.
+func AiContextTooLarge() string { return In(i18n.Locale()).AiContextTooLarge() }
+
+// AiContextTooLarge says "暂存改动较多，暂时无法生成提交说明。可手动填写并提交。"
+// in the language of msgs.
+func (msgs Messages) AiContextTooLarge() string {
+	return Catalog.Format(msgs.locale, "aiContextTooLarge", nil)
+}
+
+// AiContextLimitDetail says "AI 生成最多读取 96 KiB …"
+// in the language the app shows.
+func AiContextLimitDetail() string { return In(i18n.Locale()).AiContextLimitDetail() }
+
+// AiContextLimitDetail says "AI 生成最多读取 96 KiB …"
+// in the language of msgs.
+func (msgs Messages) AiContextLimitDetail() string {
+	return Catalog.Format(msgs.locale, "aiContextLimitDetail", nil)
+}
+
+// WriteManually says "手动填写"
+// in the language the app shows.
+func WriteManually() string { return In(i18n.Locale()).WriteManually() }
+
+// WriteManually says "手动填写"
+// in the language of msgs.
+func (msgs Messages) WriteManually() string {
+	return Catalog.Format(msgs.locale, "writeManually", nil)
+}
+
+// GoToAiSettings says "前往设置"
+// in the language the app shows.
+func GoToAiSettings() string { return In(i18n.Locale()).GoToAiSettings() }
+
+// GoToAiSettings says "前往设置"
+// in the language of msgs.
+func (msgs Messages) GoToAiSettings() string {
+	return Catalog.Format(msgs.locale, "goToAiSettings", nil)
+}
+
+// CommitMessageHint says "概述本次修改…"
+// in the language the app shows.
+func CommitMessageHint() string { return In(i18n.Locale()).CommitMessageHint() }
+
+// CommitMessageHint says "概述本次修改…"
+// in the language of msgs.
+func (msgs Messages) CommitMessageHint() string {
+	return Catalog.Format(msgs.locale, "commitMessageHint", nil)
+}
+
 // AiConsentTitle says "使用 AI 生成提交说明？"
 // in the language the app shows.
 func AiConsentTitle() string { return In(i18n.Locale()).AiConsentTitle() }

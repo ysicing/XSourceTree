@@ -6,6 +6,7 @@ package commitai
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -151,6 +152,46 @@ func TestCancelRequestAndRejectRedirect(t *testing.T) {
 	defer redirectClient.Close()
 	if _, err := redirectClient.Models(context.Background()); err == nil || !strings.Contains(err.Error(), "307") {
 		t.Fatalf("不应跟随重定向: %v", err)
+	}
+}
+
+func TestSettingsErrorsPreserveRecoveryReason(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		_, _ = writer.Write([]byte(`{"data":[]}`))
+	}))
+	client, err := New(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	defer server.Close()
+	_, err = client.Models(context.Background())
+	var settingsError *SettingsError
+	if !errors.Is(err, ErrNoModels) || !errors.As(err, &settingsError) || err.Error() != ErrNoModels.Error() {
+		t.Fatalf("模型配置错误应保留原始提示和错误链: %v", err)
+	}
+	server.Close()
+	_, err = client.Models(context.Background())
+	if !errors.As(err, &settingsError) {
+		t.Fatalf("连接失败应提供设置恢复入口: %v", err)
+	}
+}
+
+func TestClientTimeoutDoesNotRequireSettings(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
+		<-request.Context().Done()
+	}))
+	defer server.Close()
+	client, err := New(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	client.http.Timeout = 30 * time.Millisecond
+	_, err = client.Models(context.Background())
+	var settingsError *SettingsError
+	if !errors.Is(err, context.DeadlineExceeded) || errors.As(err, &settingsError) {
+		t.Fatalf("客户端超时应引导重试而不是修改设置: %v", err)
 	}
 }
 

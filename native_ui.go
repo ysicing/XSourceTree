@@ -428,7 +428,7 @@ func (app *nativeApp) changesPanel(c *ui.Context) {
 	ui.Column(c).FillWidth().Padding(12).Gap(8).Disabled(!app.writable).Children(func() {
 		draft := app.prefs.Drafts[app.repository.snapshot.Path]
 		app.commitAIHeader(c)
-		if ui.TextArea(c, &draft).Label(locales.CommitMessage()).Placeholder(locales.CommitMessage()).Lines(3, 6).FillWidth().Changed() {
+		if ui.TextArea(c, &draft).Bind(&app.commitInput).Label(locales.CommitMessage()).Placeholder(locales.CommitMessageHint()).Lines(3, 6).FillWidth().Changed() {
 			app.prefs.Drafts[app.repository.snapshot.Path] = draft
 			app.draftRevision++
 		}

@@ -11,6 +11,9 @@ import (
 
 const commitContextLimit = 96 << 10
 
+// ErrCommitContextTooLarge 只限制 AI 输入，调用方可用返回的令牌识别暂存内容是否已变化。
+var ErrCommitContextTooLarge = errors.New("暂存差异超过 96 KiB，请拆分提交或手动填写提交说明")
+
 type CommitContext struct {
 	Token string
 	Diff  string
@@ -59,7 +62,7 @@ func (repo *Repository) CommitContext(ctx context.Context) (CommitContext, error
 		return CommitContext{}, errors.New("没有已暂存的变更")
 	}
 	if len(diff) > commitContextLimit {
-		return CommitContext{}, errors.New("暂存差异超过 96 KiB，请拆分提交或手动填写提交说明")
+		return CommitContext{Token: token}, ErrCommitContextTooLarge
 	}
 	current, err := repo.commitToken(ctx)
 	if err != nil {

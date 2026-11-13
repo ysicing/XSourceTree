@@ -26,6 +26,7 @@ import (
 func nativeAIFixture(t *testing.T, wait bool) (*nativeApp, string, func(), <-chan struct{}, chan struct{}) {
 	t.Helper()
 	app, _, finish := nativeFixture(t)
+	app.aiKeys = &fakeAIKeys{values: make(map[string]string)}
 	path := app.repository.snapshot.Path
 	writeNativeFile(t, path, "hello.txt", "staged synthetic change\n")
 	nativeGit(t, path, "add", ".")
@@ -780,15 +781,17 @@ func TestNativeAIConnectionModeAndCancellation(t *testing.T) {
 		t.Fatal("缺少连接方式下拉框")
 	}
 	tester.ClickAt(mode.Bounds.X+mode.Bounds.W/2, mode.Bounds.Y+mode.Bounds.H/2)
-	if err := tester.Click("手动输入地址"); err != nil {
+	if err := tester.Click("自定义服务"); err != nil {
 		t.Fatal(err)
 	}
 	if info, found := tester.AccessByRole(ui.RoleButton, "连接"); !found || !info.Disabled {
 		t.Fatal("空手动地址不能连接")
 	}
-	if err := tester.Click("Magpie 地址"); err != nil {
-		t.Fatal(err)
+	address, found := tester.AccessByRole(ui.RoleTextField, "服务地址")
+	if !found {
+		t.Fatal("缺少服务地址输入框")
 	}
+	tester.ClickAt(address.Bounds.X+address.Bounds.W/2, address.Bounds.Y+address.Bounds.H/2)
 	tester.Type(endpoint)
 	if app.prefs.AI.Endpoint != endpoint || editor.connected || len(editor.models) != 0 {
 		t.Fatal("更换地址应保存输入并清除旧连接状态")

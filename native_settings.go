@@ -198,17 +198,33 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 	dialog := &nativeDialog{title: locales.ApplicationSettings(), titleText: locales.ApplicationSettings, width: 620, height: 520, dismiss: locales.Cancel()}
 	tab := initialTab
 	identity := &nativeIdentityEditor{}
-	ai := &nativeAISettings{manual: app.prefs.AI.Endpoint != ""}
+	ai := &nativeAISettings{manual: app.prefs.AI.Endpoint != "" || app.prefs.AI.Protocol != ""}
+	app.aiEditor = ai
 	dialog.onClose = func() {
+		if ai.keySaving {
+			return
+		}
+		if ai.key != "" {
+			app.confirm(locales.DiscardUnsavedTitle(), locales.DiscardApiKey(), locales.DiscardEdits(), func() {
+				ai.key = ""
+				ai.stop()
+				app.aiEditor = nil
+				identity.close(app, dialog)
+			})
+			app.dialog.parent = dialog
+			return
+		}
 		ai.stop()
+		app.aiEditor = nil
 		identity.close(app, dialog)
 	}
 	dialog.submit = func(dialog *nativeDialog) { identity.save(app, dialog) }
 	dialog.canSubmit = func() bool { return tab == 1 && identity.dirty() }
 	dialog.body = func(c *ui.Context) {
+		app.aiEditor = ai
 		categories := []string{locales.General(), "Git", locales.Shortcuts(), locales.Updates(), "AI"}
 		ui.Column(c).Fill().MinHeight(0).Gap(16).Children(func() {
-			if ui.Tabs(c, &tab, categories...).Label(locales.SettingsCategories()).Changed() {
+			if ui.Tabs(c, &tab, categories...).Label(locales.SettingsCategories()).Disabled(ai.keySaving || ai.key != "").Changed() {
 				dialog.problem = ""
 				if tab != 4 {
 					ai.stop()

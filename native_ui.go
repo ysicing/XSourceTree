@@ -416,12 +416,28 @@ func (app *nativeApp) operationBar(c *ui.Context) {
 
 func (app *nativeApp) changesPanel(c *ui.Context) {
 	app.fileControls(c)
-	ui.Column(c).Grow(1).MinHeight(0).FillWidth().Children(func() {
-		for _, staged := range []bool{true, false} {
-			app.changesSection(c, staged)
-			if staged {
-				ui.Divider(c)
-			}
+	area := ui.Column(c).Grow(1).MinHeight(0).FillWidth()
+	area.Children(func() {
+		height := max(1, area.LayoutBounds().H-1)
+		target := app.prefs.ChangesSplit
+		if target == 0 {
+			staged, working := app.changesSectionHeight(c, true), app.changesSectionHeight(c, false)
+			target = 100 * min(staged, max(height/2, height-working)) / height
+		}
+		minimum := min(50, 100*72/height)
+		target = max(minimum, min(100-minimum, target))
+		// 仅在布局目标变化时同步绑定值，避免普通重绘覆盖刚拖动的位置。
+		if target != app.changesSplitTarget {
+			app.changesSplit, app.changesSplitTarget = target, target
+			c.AnimationFrame()
+		}
+		app.changesSplit = max(minimum, min(100-minimum, app.changesSplit))
+		if ui.SplitVerticalPercent(c, &app.changesSplit, func() {
+			app.changesSection(c, true)
+		}, func() {
+			app.changesSection(c, false)
+		}).Grow(1).MinHeight(0).FillWidth().Changed() {
+			app.prefs.ChangesSplit = app.changesSplit
 		}
 	})
 	ui.Divider(c)
@@ -445,6 +461,22 @@ func (app *nativeApp) changesPanel(c *ui.Context) {
 			app.commit()
 		}
 	})
+}
+
+func (app *nativeApp) changesSectionHeight(c *ui.Context, staged bool) float32 {
+	files := app.visibleFiles(staged)
+	if len(files) == 0 {
+		return 72
+	}
+	rows := len(files)
+	if app.prefs.FileTree {
+		rows, _ = app.fileTreeSize(c, nativeFileNodes(files, app.prefs.FileSort, app.prefs.FileDescending, staged), staged, 0)
+	}
+	height := 44 + float32(rows)*28
+	if len(app.checkedFiles(staged)) > 0 {
+		height += 40
+	}
+	return height
 }
 
 func (app *nativeApp) changesSection(c *ui.Context, staged bool) {

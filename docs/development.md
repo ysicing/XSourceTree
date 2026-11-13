@@ -19,6 +19,10 @@ task dev
 
 退出保护区分可取消的读取与写入：仓库列表刷新、仓库状态刷新和目录扫描不阻止关闭，窗口关闭后统一取消上下文并忽略迟到结果。提交、推送等写操作完成前仍阻止退出，并提示正在执行的任务；不能仅凭界面的忙碌状态阻止退出。
 
+AI 协议适配位于 `internal/commitai/`。空协议保留原有 Magpie 自动发现和手动本机地址行为；自定义服务支持 OpenAI Responses、Chat Completions 和 Claude Messages。自定义服务不继承 `MAGPIE_API_KEY`，不跟随重定向，远程端点只允许 HTTPS。显式填写模型 ID 时不依赖模型列表接口；暂存内容发送范围及生成后的差异校验保持一致。
+
+`internal/aikeychain/` 使用已有 purego 依赖调用 macOS Security.framework，不通过命令行传递密钥。钥匙串服务名为 `com.ysicing.xsourcetree.ai`，账号由协议与规范化 Base URL 的 SHA-256 生成。密钥不参与配置 JSON 序列化；读写在后台完成，失败不降级为明文保存或忽略凭证错误发送请求。设置保留未保存的密钥草稿，保存失败允许重试，关闭前确认放弃，写入期间阻止关闭。
+
 构建 macOS 应用与 DMG：
 
 ```sh
@@ -67,6 +71,8 @@ task check
 可用 `task test:go`、`task test:ui`、`task test:release` 或 `task vet` 单独执行检查，`task test` 依次执行 Go 和发布脚本测试。Go 测试使用 `GOMAXPROCS=2`、`-p=1` 和 `-parallel=2`；开发与构建任务同样限制 Go 构建并发。
 
 原生界面测试使用 MyGo `ui.Tester`，覆盖侧栏切换与键盘导航、文件排序菜单、中文文本输入、统一/并排 Diff、提交草稿、失败 hook 后刷新、逐行暂存、冲突版本保护及刷新失败后的写入保护。设置 `XSOURCETREE_TEST_SCREENSHOTS=/tmp/xsourcetree-native-preview` 可导出浅色、深色和窄窗口截图；该测试不验证系统输入法候选窗。
+
+AI 协议测试使用本地 HTTP 服务；设置交互使用内存凭证替身，不读取用户的密钥。可单独执行 `XSOURCETREE_TEST_KEYCHAIN=1 GOMAXPROCS=2 go test -p=1 -parallel=2 ./internal/aikeychain` 验证原生钥匙串读写；该用例只创建独立服务名下的合成测试记录并在结束时清理，不访问已有记录。
 
 真实桌面端集成测试通过 MyGo 的 automation 插件操作应用。插件仅编译进 `e2e` 构建，并且仅在设置 socket 路径时启用。先启动测试用应用，再在另一个终端执行测试：
 

@@ -3654,14 +3654,154 @@ func (msgs Messages) DiscoverMagpie() string {
 	return Catalog.Format(msgs.locale, "discoverMagpie", nil)
 }
 
-// ManualAddress says "手动输入地址"
+// ManualAddress says "自定义服务"
 // in the language the app shows.
 func ManualAddress() string { return In(i18n.Locale()).ManualAddress() }
 
-// ManualAddress says "手动输入地址"
+// ManualAddress says "自定义服务"
 // in the language of msgs.
 func (msgs Messages) ManualAddress() string {
 	return Catalog.Format(msgs.locale, "manualAddress", nil)
+}
+
+// ApiProtocol says "API 协议"
+// in the language the app shows.
+func ApiProtocol() string { return In(i18n.Locale()).ApiProtocol() }
+
+// ApiProtocol says "API 协议"
+// in the language of msgs.
+func (msgs Messages) ApiProtocol() string {
+	return Catalog.Format(msgs.locale, "apiProtocol", nil)
+}
+
+// LocalMagpie says "本机 Magpie"
+// in the language the app shows.
+func LocalMagpie() string { return In(i18n.Locale()).LocalMagpie() }
+
+// LocalMagpie says "本机 Magpie"
+// in the language of msgs.
+func (msgs Messages) LocalMagpie() string {
+	return Catalog.Format(msgs.locale, "localMagpie", nil)
+}
+
+// ApiKey says "API 密钥"
+// in the language the app shows.
+func ApiKey() string { return In(i18n.Locale()).ApiKey() }
+
+// ApiKey says "API 密钥"
+// in the language of msgs.
+func (msgs Messages) ApiKey() string {
+	return Catalog.Format(msgs.locale, "apiKey", nil)
+}
+
+// KeychainKeyHint says "留空则使用钥匙串中的密钥"
+// in the language the app shows.
+func KeychainKeyHint() string { return In(i18n.Locale()).KeychainKeyHint() }
+
+// KeychainKeyHint says "留空则使用钥匙串中的密钥"
+// in the language of msgs.
+func (msgs Messages) KeychainKeyHint() string {
+	return Catalog.Format(msgs.locale, "keychainKeyHint", nil)
+}
+
+// ShowApiKey says "显示"
+// in the language the app shows.
+func ShowApiKey() string { return In(i18n.Locale()).ShowApiKey() }
+
+// ShowApiKey says "显示"
+// in the language of msgs.
+func (msgs Messages) ShowApiKey() string {
+	return Catalog.Format(msgs.locale, "showApiKey", nil)
+}
+
+// SaveApiKey says "保存密钥"
+// in the language the app shows.
+func SaveApiKey() string { return In(i18n.Locale()).SaveApiKey() }
+
+// SaveApiKey says "保存密钥"
+// in the language of msgs.
+func (msgs Messages) SaveApiKey() string {
+	return Catalog.Format(msgs.locale, "saveApiKey", nil)
+}
+
+// ClearApiKey says "清除密钥"
+// in the language the app shows.
+func ClearApiKey() string { return In(i18n.Locale()).ClearApiKey() }
+
+// ClearApiKey says "清除密钥"
+// in the language of msgs.
+func (msgs Messages) ClearApiKey() string {
+	return Catalog.Format(msgs.locale, "clearApiKey", nil)
+}
+
+// ApiKeySaved says "已存入钥匙串"
+// in the language the app shows.
+func ApiKeySaved() string { return In(i18n.Locale()).ApiKeySaved() }
+
+// ApiKeySaved says "已存入钥匙串"
+// in the language of msgs.
+func (msgs Messages) ApiKeySaved() string {
+	return Catalog.Format(msgs.locale, "apiKeySaved", nil)
+}
+
+// ManualModel says "手动填写模型 ID"
+// in the language the app shows.
+func ManualModel() string { return In(i18n.Locale()).ManualModel() }
+
+// ManualModel says "手动填写模型 ID"
+// in the language of msgs.
+func (msgs Messages) ManualModel() string {
+	return Catalog.Format(msgs.locale, "manualModel", nil)
+}
+
+// ModelIdHint says "输入服务支持的模型 ID"
+// in the language the app shows.
+func ModelIdHint() string { return In(i18n.Locale()).ModelIdHint() }
+
+// ModelIdHint says "输入服务支持的模型 ID"
+// in the language of msgs.
+func (msgs Messages) ModelIdHint() string {
+	return Catalog.Format(msgs.locale, "modelIdHint", nil)
+}
+
+// ModelListFailed says "未能获取模型列表，可手动填写模型 ID。{detail}"
+// in the language the app shows.
+func ModelListFailed(detail string) string { return In(i18n.Locale()).ModelListFailed(detail) }
+
+// ModelListFailed says "未能获取模型列表，可手动填写模型 ID。{detail}"
+// in the language of msgs.
+func (msgs Messages) ModelListFailed(detail string) string {
+	return Catalog.Format(msgs.locale, "modelListFailed", map[string]any{"detail": detail})
+}
+
+// CustomAiConsent says "已暂存文件的路径和差异将直接发送至 {endpoint}…"
+// in the language the app shows.
+func CustomAiConsent(endpoint string) string { return In(i18n.Locale()).CustomAiConsent(endpoint) }
+
+// CustomAiConsent says "已暂存文件的路径和差异将直接发送至 {endpoint}…"
+// in the language of msgs.
+func (msgs Messages) CustomAiConsent(endpoint string) string {
+	return Catalog.Format(msgs.locale, "customAiConsent", map[string]any{"endpoint": endpoint})
+}
+
+// DiscardApiKey says "尚未保存的 API 密钥输入将丢失。"
+// in the language the app shows.
+func DiscardApiKey() string { return In(i18n.Locale()).DiscardApiKey() }
+
+// DiscardApiKey says "尚未保存的 API 密钥输入将丢失。"
+// in the language of msgs.
+func (msgs Messages) DiscardApiKey() string {
+	return Catalog.Format(msgs.locale, "discardApiKey", nil)
+}
+
+// SavingApiKey says "正在更新钥匙串中的 API 密钥…"
+// in the language the app shows.
+func SavingApiKey() string { return In(i18n.Locale()).SavingApiKey() }
+
+// SavingApiKey says "正在更新钥匙串中的 API 密钥…"
+// in the language of msgs.
+func (msgs Messages) SavingApiKey() string {
+	return Catalog.Format(msgs.locale, "savingApiKey", nil)
 }
 
 // ServiceAddress says "服务地址"

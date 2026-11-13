@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ysicing/XSourceTree/internal/aikeychain"
 	"github.com/ysicing/XSourceTree/internal/commitai"
 	"github.com/ysicing/XSourceTree/internal/gitrepo"
 	"github.com/ysicing/XSourceTree/internal/workspace"
@@ -28,6 +29,7 @@ type nativePreferences struct {
 	Files                float32                     `json:"files"`
 	History              float32                     `json:"history"`
 	HistoryFiles         float32                     `json:"historyFiles"`
+	ChangesSplit         float32                     `json:"changesSplit,omitempty"`
 	Split                bool                        `json:"split"`
 	Wrap                 bool                        `json:"wrap"`
 	FileSort             string                      `json:"fileSort"`
@@ -110,8 +112,16 @@ type nativeApp struct {
 	chosenLanguage        string
 	chooseLanguage        func(string)
 	ai                    *nativeCommitAI
-	commitInput           ui.Handle
-	draftRevision         uint64
+	aiEditor              *nativeAISettings
+	changesSplit          float32
+	changesSplitTarget    float32
+	aiKeys                interface {
+		Load(string) (string, error)
+		Save(string, string) error
+		Delete(string) error
+	}
+	commitInput   ui.Handle
+	draftRevision uint64
 
 	refCollapsed map[nativeRefKey]bool
 	refSelected  nativeRefKey
@@ -121,6 +131,7 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 	ctx, cancel := context.WithCancel(context.Background())
 	app := &nativeApp{
 		service: service, ctx: ctx, cancel: cancel, stateFile: stateFile,
+		aiKeys: aikeychain.Store{Service: "com.ysicing.xsourcetree.ai"},
 		screen: "library", library: service.Library(), selectedFiles: map[string]bool{},
 		prefs: nativePreferences{
 			Sidebar: 226, Files: 360, History: 56, HistoryFiles: 280, Wrap: true, Drafts: map[string]string{},
@@ -152,6 +163,7 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 	app.prefs.Files = clampSize(app.prefs.Files, 360, 260, 640)
 	app.prefs.History = clampSize(app.prefs.History, 56, 30, 70)
 	app.prefs.HistoryFiles = clampSize(app.prefs.HistoryFiles, 280, 180, 440)
+	app.prefs.ChangesSplit = clampSize(app.prefs.ChangesSplit, 0, 0, 100)
 	if app.prefs.Drafts == nil {
 		app.prefs.Drafts = map[string]string{}
 	}
@@ -616,6 +628,9 @@ func (app *nativeApp) leaveConflict(action func()) {
 }
 
 func (app *nativeApp) closeBlockReason() string {
+	if app.aiEditor != nil && app.aiEditor.keySaving {
+		return locales.SavingApiKey()
+	}
 	if !app.busy || app.readOnlyBusy {
 		return ""
 	}
@@ -638,6 +653,16 @@ func (app *nativeApp) prepareClose() bool {
 			Parent: app.win, Type: mygo.MessageWarning, Message: locales.QuitWithConflictTitle(),
 			Detail:  locales.QuitWithConflictDetail(),
 			Buttons: []string{locales.Cancel(), locales.DiscardAndQuit()}, CancelButton: 0, DestructiveButtons: []int{1},
+		})
+		if err != nil || result.Button != 1 {
+			return false
+		}
+	}
+	if app.aiEditor != nil && app.aiEditor.key != "" {
+		result, err := mygo.Dialog.Message(mygo.MessageOptions{
+			Parent: app.win, Type: mygo.MessageWarning, Message: locales.DiscardUnsavedTitle(),
+			Detail: locales.DiscardApiKey(), Buttons: []string{locales.Cancel(), locales.DiscardAndQuit()},
+			CancelButton: 0, DestructiveButtons: []int{1},
 		})
 		if err != nil || result.Button != 1 {
 			return false

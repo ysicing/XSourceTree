@@ -45,6 +45,7 @@ func TestNativeChangesSectionsKeepStagedVisible(t *testing.T) {
 			app.fileQuery = ""
 			app.prefs.Files = viewport.files
 			tester := ui.NewTester(app.view, viewport.width, viewport.height)
+			tester.Frame()
 			staged, found := tester.Access("已暂存文件操作")
 			if !found || staged.Offscreen || staged.Bounds.H == 0 {
 				t.Fatal("已暂存分区标题不可见")
@@ -117,5 +118,87 @@ func TestNativeChangesSectionsKeepStagedVisible(t *testing.T) {
 				t.Fatal("空暂存分区未收紧")
 			}
 		})
+	}
+}
+
+func TestNativeChangesDividerResizesBothSections(t *testing.T) {
+	app, _, _ := nativeFixture(t)
+	for index := range 24 {
+		app.repository.snapshot.Files = append(app.repository.snapshot.Files,
+			gitrepo.File{Path: fmt.Sprintf("staged/file_%02d.go", index), Index: "M", Working: " "},
+			gitrepo.File{Path: fmt.Sprintf("working/file_%02d.go", index), Index: " ", Working: "M"},
+		)
+	}
+	tester := ui.NewTester(app.view, 1024, 680)
+	staged, found := tester.Access("已暂存文件列表")
+	if !found {
+		t.Fatal("缺少已暂存文件列表")
+	}
+	working, found := tester.Access("未暂存文件操作")
+	if !found {
+		t.Fatal("缺少未暂存文件分区")
+	}
+	x, y := working.Bounds.X+working.Bounds.W/2, working.Bounds.Y-0.5
+	tester.Press(x, y)
+	tester.Move(x, y+60)
+	tester.Release(x, y+60)
+	expanded, _ := tester.Access("已暂存文件列表")
+	moved, _ := tester.Access("未暂存文件操作")
+	if expanded.Bounds.H < staged.Bounds.H+40 || moved.Bounds.Y < working.Bounds.Y+40 {
+		t.Fatal("向下拖动分割线没有扩大已暂存区并移动未暂存区")
+	}
+	x, y = moved.Bounds.X+moved.Bounds.W/2, moved.Bounds.Y-0.5
+	tester.Press(x, y)
+	tester.Move(x, y-90)
+	tester.Release(x, y-90)
+	shrunk, _ := tester.Access("已暂存文件列表")
+	if shrunk.Bounds.H > expanded.Bounds.H-60 {
+		t.Fatal("向上拖动分割线没有缩小已暂存区")
+	}
+	tester.Frame()
+	tester.Frame()
+	stable, _ := tester.Access("已暂存文件列表")
+	if stable.Bounds != shrunk.Bounds {
+		t.Fatal("重绘后分割位置回弹")
+	}
+	if tester.FramePending() {
+		t.Fatal("分割位置稳定后不应持续请求重绘")
+	}
+	beforeKey := app.prefs.ChangesSplit
+	tester.Key(0, ui.KeyDown)
+	afterKey, _ := tester.Access("已暂存文件列表")
+	if app.prefs.ChangesSplit <= beforeKey || afterKey.Bounds.H <= stable.Bounds.H {
+		t.Fatal("分割线获得焦点后不支持方向键调整")
+	}
+	if err := app.savePreferences(); err != nil {
+		t.Fatal(err)
+	}
+	restored := newNativeApp(app.service, app.stateFile)
+	defer restored.cancel()
+	if restored.prefs.ChangesSplit != app.prefs.ChangesSplit {
+		t.Fatal("重新打开应用后没有恢复手动设置的分割比例")
+	}
+	if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+		saveNativeScreenshot(t, tester, directory, "changes-resized-light.png")
+		tester.SetDark(true)
+		saveNativeScreenshot(t, tester, directory, "changes-resized-dark.png")
+	}
+	tester.SetSize(780, 480)
+	tester.Frame()
+	for _, label := range []string{"已暂存文件操作", "未暂存文件操作", "提交说明"} {
+		info, found := tester.Access(label)
+		if !found || info.Offscreen || info.Bounds.H == 0 {
+			t.Fatalf("紧凑窗口中缺少必要操作: %s", label)
+		}
+	}
+	if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+		saveNativeScreenshot(t, tester, directory, "changes-resized-compact.png")
+	}
+	app.repository.snapshot.Files = nil
+	tester.Frame()
+	for _, label := range []string{"已暂存文件操作", "未暂存文件操作"} {
+		if info, found := tester.Access(label); !found || info.Offscreen || info.Bounds.H == 0 {
+			t.Fatal("空状态下分区标题不可见")
+		}
 	}
 }

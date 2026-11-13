@@ -48,9 +48,24 @@ func (app *nativeApp) commitAIOptions(path string) commitai.Options {
 	return options
 }
 
+func (app *nativeApp) newAIClient(options commitai.Options) (*commitai.Client, error) {
+	if options.Protocol != "" {
+		account, err := commitai.KeyAccount(options)
+		if err != nil {
+			return nil, err
+		}
+		options.APIKey, err = app.aiKeys.Load(account)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return commitai.NewWithOptions(options)
+}
+
 func (app *nativeApp) canGenerateCommit() bool {
 	if app.closed || app.busy || !app.writable || app.repository == nil ||
 		app.screen != "changes" || app.repository.snapshot.Operation.Kind != "" ||
+		app.aiEditor != nil && (app.aiEditor.keySaving || app.aiEditor.key != "") ||
 		app.ai != nil && (app.ai.running || app.ai.tooLarge) {
 		return false
 	}
@@ -84,9 +99,13 @@ func (app *nativeApp) requestCommitAI() {
 		return
 	}
 	path := app.repository.snapshot.Path
+	detail := locales.AiConsentDetail()
+	if app.prefs.AI.Protocol != "" {
+		detail = locales.CustomAiConsent(app.prefs.AI.Endpoint)
+	}
 	app.dialog = &nativeDialog{
 		title:  locales.AiConsentTitle(),
-		detail: locales.AiConsentDetail(),
+		detail: detail,
 		action: locales.StartGeneration(),
 		submit: func(_ *nativeDialog) {
 			app.dialog = nil
@@ -131,7 +150,7 @@ func (app *nativeApp) generateCommitAI() {
 			if err != nil {
 				return err
 			}
-			client, err := commitai.New(options.Endpoint)
+			client, err := app.newAIClient(options)
 			if err != nil {
 				settings = true
 				return err
@@ -322,14 +341,20 @@ func (app *nativeApp) commitAIResult(c *ui.Context) {
 }
 
 type nativeAISettings struct {
-	models    []string
-	endpoint  string
-	problem   string
-	manual    bool
-	connected bool
-	checking  bool
-	cancel    context.CancelFunc
-	serial    uint64
+	models      []string
+	endpoint    string
+	problem     string
+	manual      bool
+	connected   bool
+	checking    bool
+	cancel      context.CancelFunc
+	serial      uint64
+	key         string
+	showKey     bool
+	keyProblem  string
+	keySaved    bool
+	keySaving   bool
+	manualModel bool
 }
 
 func (editor *nativeAISettings) stop() {
@@ -342,6 +367,9 @@ func (editor *nativeAISettings) stop() {
 }
 
 func (editor *nativeAISettings) check(app *nativeApp, dialog *nativeDialog) {
+	if editor.key != "" || editor.keySaving {
+		return
+	}
 	editor.reset()
 	serial := editor.serial
 	ctx, cancel := context.WithCancel(app.ctx)
@@ -355,13 +383,18 @@ func (editor *nativeAISettings) check(app *nativeApp, dialog *nativeDialog) {
 		err := func() error {
 			var err error
 			endpoint = options.Endpoint
-			if strings.TrimSpace(endpoint) == "" {
+			if options.Protocol != "" {
+				endpoint, err = commitai.CustomEndpoint(options)
+				if err != nil {
+					return err
+				}
+			} else if strings.TrimSpace(endpoint) == "" {
 				endpoint, err = commitai.DiscoverEndpoint()
 				if err != nil {
 					return err
 				}
 			}
-			client, err := commitai.New(endpoint)
+			client, err := app.newAIClient(options)
 			if err != nil {
 				return err
 			}
@@ -376,11 +409,18 @@ func (editor *nativeAISettings) check(app *nativeApp, dialog *nativeDialog) {
 			editor.checking, editor.cancel = false, nil
 			if err != nil && !errors.Is(err, commitai.ErrNoModels) {
 				editor.problem = commitAIError(err)
+				if options.Protocol != "" {
+					editor.problem = locales.ModelListFailed(editor.problem)
+				}
 				return
 			}
 			editor.models, editor.endpoint, editor.connected = models, endpoint, true
 			if len(models) == 0 {
-				editor.problem = locales.ConfigureMagpieModels()
+				if options.Protocol == "" {
+					editor.problem = locales.ConfigureMagpieModels()
+				} else {
+					editor.problem = locales.ModelListFailed(locales.NoModels())
+				}
 				return
 			}
 			model, err := commitai.SelectModel(models, app.prefs.AI.Model)
@@ -391,6 +431,44 @@ func (editor *nativeAISettings) check(app *nativeApp, dialog *nativeDialog) {
 			app.prefs.AI.Model = model
 			app.settingsError = ""
 			app.saveSettings()
+		})
+	}()
+}
+
+func (editor *nativeAISettings) saveKey(app *nativeApp, dialog *nativeDialog, clear bool) {
+	if editor.checking {
+		return
+	}
+	options, key := app.prefs.AI, strings.TrimSpace(editor.key)
+	account, err := commitai.KeyAccount(options)
+	if err != nil {
+		editor.keyProblem = err.Error()
+		return
+	}
+	if !clear && key == "" {
+		return
+	}
+	app.stopCommitAI()
+	editor.reset()
+	serial := editor.serial
+	editor.checking, editor.keySaving, editor.keyProblem, editor.keySaved = true, true, "", false
+	go func() {
+		var err error
+		if clear {
+			err = app.aiKeys.Delete(account)
+		} else {
+			err = app.aiKeys.Save(account, key)
+		}
+		app.post(func() {
+			if app.closed || app.dialog != dialog || editor.serial != serial {
+				return
+			}
+			editor.checking, editor.keySaving = false, false
+			if err != nil {
+				editor.keyProblem = err.Error()
+				return
+			}
+			editor.key, editor.keySaved = "", !clear
 		})
 	}()
 }
@@ -421,25 +499,28 @@ func (editor *nativeAISettings) view(app *nativeApp, dialog *nativeDialog, c *ui
 					mode = locales.ManualAddress()
 				}
 				if ui.Select(c, &mode, []string{locales.DiscoverMagpie(), locales.ManualAddress()}).
-					Label(locales.ConnectionMethod()).FillWidth().Disabled(editor.checking).Changed() {
+					Label(locales.ConnectionMethod()).FillWidth().Disabled(editor.checking || editor.key != "").Changed() {
 					editor.manual = mode == locales.ManualAddress()
 					editor.reset()
+					editor.key, editor.keyProblem, editor.keySaved = "", "", false
+					app.stopCommitAI()
+					app.prefs.AIConsent = false
 					app.settingsError = ""
 					if !editor.manual {
+						if app.prefs.AI.Protocol != "" {
+							app.prefs.AI.Model = ""
+						}
 						app.prefs.AI.Endpoint = ""
+						app.prefs.AI.Protocol = ""
+						app.saveSettings()
+					} else if app.prefs.AI.Endpoint == "" {
+						app.prefs.AI.Protocol = commitai.Responses
 						app.saveSettings()
 					}
 				}
 			})
 			if editor.manual {
-				aiSettingsRow(c, locales.ServiceAddress(), func() {
-					if ui.TextInput(c, &app.prefs.AI.Endpoint).Label(locales.MagpieAddress()).
-						Placeholder("http://127.0.0.1:3425/v1").FillWidth().Disabled(editor.checking).Changed() {
-						editor.reset()
-						app.settingsError = ""
-						app.saveSettings()
-					}
-				})
+				editor.connectionFields(app, dialog, c)
 			}
 			aiSettingsRow(c, locales.ConnectionStatus(), func() {
 				ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
@@ -457,11 +538,11 @@ func (editor *nativeAISettings) view(app *nativeApp, dialog *nativeDialog, c *ui
 					ui.Text(c, status).FontSize(13).TextColor(color).
 						Grow(1).MinWidth(0).Tooltip(editor.endpoint)
 					if editor.connected {
-						if ui.Button(c, label).Clicked() {
+						if ui.Button(c, label).Disabled(editor.checking || editor.key != "").Clicked() {
 							editor.check(app, dialog)
 						}
 					} else if ui.PrimaryButton(c, label).
-						Disabled(editor.checking || (editor.manual && strings.TrimSpace(app.prefs.AI.Endpoint) == "")).Clicked() {
+						Disabled(editor.checking || editor.key != "" || (editor.manual && strings.TrimSpace(app.prefs.AI.Endpoint) == "")).Clicked() {
 						editor.check(app, dialog)
 					}
 				})
@@ -472,6 +553,18 @@ func (editor *nativeAISettings) view(app *nativeApp, dialog *nativeDialog, c *ui
 				})
 			}
 			aiSettingsRow(c, locales.Model(), func() {
+				if app.prefs.AI.Protocol != "" && len(editor.models) > 0 {
+					if ui.Checkbox(c, &editor.manualModel, locales.ManualModel()).Disabled(editor.checking).Changed() {
+						editor.problem = ""
+					}
+				}
+				if app.prefs.AI.Protocol != "" && (editor.manualModel || len(editor.models) == 0) {
+					if ui.TextInput(c, &app.prefs.AI.Model).Label(locales.AiModel()).Placeholder(locales.ModelIdHint()).FillWidth().Disabled(editor.checking).Changed() {
+						editor.problem = ""
+						app.saveSettings()
+					}
+					return
+				}
 				if len(editor.models) > 0 {
 					if ui.Select(c, &app.prefs.AI.Model, editor.models).Label(locales.AiModel()).
 						FillWidth().Tooltip(app.prefs.AI.Model).Disabled(editor.checking).Changed() {

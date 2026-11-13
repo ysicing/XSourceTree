@@ -2,7 +2,7 @@
   "name": "xsourcetree",
   "private": true,
   "license": "AGPL-3.0-only",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "type": "module",
   "scripts": {
     "dev": "mygo dev",

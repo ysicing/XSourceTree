@@ -110,7 +110,9 @@ MYGO_AUTOMATION=/tmp/xsourcetree-e2e.sock node scripts/native-smoke.mjs
 ```text
 main.go                       构建信息注入与应用入口
 internal/app/app.go            MyGo 生命周期与原生菜单
-internal/app/native_*.go       原生界面、窗口状态、后台任务、弹窗与交互
+internal/app/window.go         窗口状态、后台任务与草稿保存
+internal/app/ui.go             原生界面布局
+internal/app/history.go        提交历史、图谱与引用标签
 internal/app/*service.go       界面复用的应用层服务
 internal/app/*_test.go         应用与原生界面测试
 internal/app/automation_e2e.go 自动化插件及隔离数据初始化，仅 e2e 构建启用

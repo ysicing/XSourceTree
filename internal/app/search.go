@@ -33,6 +33,7 @@ type nativeHistoryState struct {
 	historyGraphSource   *gitrepo.Commit
 	historyGraphWorking  bool
 	historyGraphHead     string
+	historyRefsWidth     float32
 	historyList          *ui.ListState
 	commitHash           string
 	viewedTag            string

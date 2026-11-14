@@ -423,6 +423,12 @@ try {
     input: historyStream, env: gitEnv, timeout: 15000, stdio: ["pipe", "pipe", "pipe"],
   });
   gitAt(paged, "restore", "--source=HEAD", "--staged", "--worktree", ".");
+  const longHistoryBranch = "origin/dependabot/go_modules/golang.org/x/sys-0.50.0";
+  gitAt(paged, "branch", "feature/完整显示所有分支名称");
+  gitAt(paged, "update-ref", "refs/remotes/origin/main", "HEAD");
+  gitAt(paged, "update-ref", `refs/remotes/${longHistoryBranch}`, "HEAD");
+  gitAt(paged, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main");
+  gitAt(paged, "tag", "v1.0.0-preview");
   await press("输入路径");
   await fill("仓库完整路径", paged);
   await press("添加");
@@ -433,6 +439,37 @@ try {
   await press("history.txt");
   assert(!(await tree()).some((node) => node.label === "加载更多"), "历史仍显示加载更多按钮");
   await capture("native-history-initial.png");
+  const fullHistoryRefs = (await tree()).find((node) =>
+    node.role === "text" && node.label?.includes(longHistoryBranch) && !node.label.includes(", "));
+  assert(fullHistoryRefs, "历史列表未显示完整长分支名");
+  for (const ref of ["HEAD -> main", "origin/main", "origin/HEAD", "feature/完整显示所有分支名称", "v1.0.0-preview"]) {
+    assert(fullHistoryRefs.label.includes(ref), `历史列表遗漏引用 ${ref}`);
+  }
+  const refsTable = (await tree()).find((node) => node.label === "提交历史表格");
+  const scrollHistoryRefs = async (dx) => {
+    await request("input", { events: [{
+      type: "wheel", precise: true, dx, dy: 0,
+      x: refsTable.bounds.x + refsTable.bounds.width / 2,
+      y: fullHistoryRefs.bounds.y + fullHistoryRefs.bounds.height / 2,
+    }] });
+    await frame();
+  };
+  for (const [appearance, suffix] of [["浅色", "light"], ["深色", "dark"]]) {
+    await press("设置");
+    await press(appearance);
+    await press("关闭设置");
+    await capture(`native-history-full-refs-${suffix}.png`);
+    await scrollHistoryRefs(1e6);
+    const scrolledRefs = (await tree()).find((node) => node.label === fullHistoryRefs.label);
+    assert(scrolledRefs?.bounds.x < fullHistoryRefs.bounds.x, "完整引用无法通过横向滚动查看");
+    const message = (await tree()).find((node) => node.role === "text" && node.label === "滚动提交 00624");
+    assert(message && message.bounds.x >= refsTable.bounds.x &&
+      message.bounds.x + message.bounds.width <= refsTable.bounds.x + refsTable.bounds.width,
+    "横向滚动后无法查看提交说明");
+    await capture(`native-history-full-refs-scrolled-${suffix}.png`);
+    await scrollHistoryRefs(-1e6);
+  }
+  console.log("✓ 完整分支和标签名称、横向滚动与浅深色界面");
   for (let attempt = 0; attempt < 12; attempt++) {
     const historyNodes = await tree();
     if (historyNodes.some((node) => node.label?.includes("滚动提交 00000"))) break;

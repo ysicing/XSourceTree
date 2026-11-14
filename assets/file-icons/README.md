@@ -4,4 +4,4 @@
 
 SVG 按 [MIT 许可证](LICENSE) 使用，版权归 Material Extensions 所有。仅内置文件列表使用的图标，不依赖编辑器插件或网络请求。
 
-文件识别与原生渲染统一位于 `internal/app/native_file_icons.go`，本目录的 `icons.go` 嵌入图标和 MIT 许可证，供应用包读取。图标在启动时解析一次；使用 MyGo `ui.Image` 保留原有颜色，浅色主题优先使用上游提供的 `_light` 版本，未知文件使用随主题变化的通用文件图标。
+文件识别与原生渲染统一位于 `internal/app/file_icons.go`，本目录的 `icons.go` 嵌入图标和 MIT 许可证，供应用包读取。图标在启动时解析一次；使用 MyGo `ui.Image` 保留原有颜色，浅色主题优先使用上游提供的 `_light` 版本，未知文件使用随主题变化的通用文件图标。

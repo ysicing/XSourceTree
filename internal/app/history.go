@@ -138,25 +138,10 @@ func historyDate(value string) string {
 	return value
 }
 
-func compactHistoryRef(ref string) string {
-	ref = strings.TrimPrefix(ref, "tag: ")
-	label := []rune(ref)
-	if len(label) > 16 {
-		return string(label[:15]) + "…"
-	}
-	return ref
-}
-
-func historyRefs(refs string, theme *ui.Theme) ([]ui.Span, int) {
+func historyRefs(refs string, theme *ui.Theme) []ui.Span {
 	var spans []ui.Span
-	labels := strings.Split(refs, ", ")
-	count := 0
-	for _, ref := range labels {
+	for ref := range strings.SplitSeq(refs, ", ") {
 		if ref == "" {
-			continue
-		}
-		count++
-		if count > 2 {
 			continue
 		}
 		color := theme.Accent
@@ -165,12 +150,15 @@ func historyRefs(refs string, theme *ui.Theme) ([]ui.Span, int) {
 		} else if strings.Contains(ref, "/") && !strings.Contains(ref, "HEAD") {
 			color = theme.TextMuted
 		}
+		if len(spans) > 0 {
+			spans = append(spans, ui.Span{Text: " ", Size: 10})
+		}
 		spans = append(spans, ui.Span{
-			Text: compactHistoryRef(ref), Size: 10, Weight: 600, Color: color,
+			Text: strings.TrimPrefix(ref, "tag: "), Size: 10, Weight: 600, Color: color,
 			Background: color.Alpha(0.12), Radius: 3, PaddingX: 4, PaddingY: 1,
-		}, ui.Span{Text: " "})
+		})
 	}
-	return spans, max(0, count-2)
+	return spans
 }
 
 func (app *nativeApp) historyWorkspace(c *ui.Context) {
@@ -258,7 +246,7 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 		})
 		return
 	}
-	// 搜索和分页会替换切片或改变长度，拖动分隔线时无需反复计算整张图。
+	// 搜索和分页会替换切片或改变长度；图谱与引用宽度一起缓存，避免拖动分隔线时反复扫描历史。
 	var source *gitrepo.Commit
 	if len(app.history) > 0 {
 		source = &app.history[0]
@@ -269,6 +257,13 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 		app.historyGraph = historyGraphWithWorking(app.history, head, workingOffset != 0)
 		app.historyGraphSource, app.historyGraphHead = source, head
 		app.historyGraphWorking = workingOffset != 0
+		app.historyRefsWidth = 0
+		for _, commit := range app.history {
+			if commit.Refs != "" {
+				width, _ := c.MeasureText(0, historyRefs(commit.Refs, c.Theme())...)
+				app.historyRefsWidth = max(app.historyRefsWidth, width)
+			}
+		}
 	}
 	graphWidth := float32(80)
 	for _, row := range app.historyGraph {
@@ -318,9 +313,13 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 	tableTheme.Accent = theme.Accent.Alpha(0.16)
 	tableTheme.InactiveAccent, tableTheme.AccentText = tableTheme.Accent, theme.Text
 	ui.Themed(c, &tableTheme).Key(app.historyList).FillWidth().Grow(1).MinHeight(0).Children(func() {
+		messageWidth := float32(200)
+		if app.historyRefsWidth > 0 {
+			messageWidth += app.historyRefsWidth + 4 + tableTheme.Space(5)
+		}
 		columns := []ui.TableColumn{
 			{Title: locales.Graph(), Width: graphWidth, Fixed: true},
-			{Title: locales.CommitMessage(), MinWidth: 200},
+			{Title: locales.CommitMessage(), MinWidth: messageWidth},
 			{Title: locales.Author(), Width: 110, MinWidth: 70},
 			{Title: locales.Date(), Width: 138, MinWidth: 138},
 			{Title: locales.CommitID(), Width: 88, MinWidth: 88},
@@ -352,15 +351,10 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 					return
 				}
 				ui.Row(c).FillWidth().MinWidth(0).Gap(4).AlignItems(ui.Center).Children(func() {
-					if spans, overflow := historyRefs(commit.Refs, &theme); len(spans) > 0 {
-						ui.Row(c).MaxWidth(180).Gap(3).MinWidth(0).AlignItems(ui.Center).Children(func() {
-							ui.RichText(c, spans...).MaxWidth(150).MinWidth(0).Shrink(1).SingleLine()
-							if overflow > 0 {
-								ui.Text(c, fmt.Sprintf("+%d", overflow)).FontSize(10).TextColor(theme.TextMuted).SingleLine()
-							}
-						})
+					if spans := historyRefs(commit.Refs, &theme); len(spans) > 0 {
+						ui.RichText(c, spans...).Shrink(0).NoWrap().Tooltip(commit.Refs)
 					}
-					ui.Text(c, commit.Subject).Grow(1).MinWidth(0).SingleLine()
+					ui.Text(c, commit.Subject).Grow(1).MinWidth(0).SingleLine().Tooltip(commit.Subject)
 				})
 			case 2:
 				ui.Text(c, commit.Author).FontSize(12).TextColor(theme.TextMuted).SingleLine()

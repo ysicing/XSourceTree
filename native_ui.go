@@ -219,19 +219,27 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 					}
 				})
 				ui.SidebarItem(c, "screen:history", nil, locales.CommitHistory()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
-				ui.SidebarItem(c, "screen:search", nil, locales.Search()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
-				ui.SidebarItem(c, "screen:compare", nil, locales.CompareVersions()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
-				ui.SidebarItem(c, "screen:worktrees", nil, locales.Worktrees()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
+				if app.prefs.SidebarItems.Search {
+					ui.SidebarItem(c, "screen:search", nil, locales.Search()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
+				}
+				if app.prefs.SidebarItems.Compare {
+					ui.SidebarItem(c, "screen:compare", nil, locales.CompareVersions()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
+				}
+				if app.prefs.SidebarItems.Stash {
+					ui.SidebarItem(c, "screen:stash", nil, locales.Stash()).Label(locales.Stash()).
+						Height(26).Padding(0, 8, 0, 40).FontSize(12).Children(func() {
+						if count := len(app.repository.stashes); count > 0 {
+							ui.Badge(c, fmt.Sprint(count))
+						}
+					})
+				}
+				if app.prefs.SidebarItems.Worktrees {
+					ui.SidebarItem(c, "screen:worktrees", nil, locales.Worktrees()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
+				}
 			})
 			app.localBranchSidebar(c)
 			app.tagSidebar(c)
 			app.remoteSidebar(c)
-			ui.SidebarItem(c, "screen:stash", nativeIcons["stash"], locales.Stash()).Label(locales.Stash()).
-				Height(30).Margin(16, 0, 0, 0).FontSize(12).Children(func() {
-				if count := len(app.repository.stashes); count > 0 {
-					ui.Badge(c, fmt.Sprint(count))
-				}
-			})
 		}).Label(locales.RepositoryNavigation()).Grow(1).MinHeight(0).FillWidth().Changed() {
 			switch {
 			case strings.HasPrefix(selected, "screen:"):

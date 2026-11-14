@@ -283,11 +283,11 @@ func TestNativeRemoteAndConfirmationCopy(t *testing.T) {
 	app.stashHash = "test-stash"
 	app.applyStash(false)
 	if app.dialog.danger || app.dialog.action != "应用" {
-		t.Fatal("普通应用储藏被标记为危险操作")
+		t.Fatal("普通应用贮藏被标记为危险操作")
 	}
 	app.applyStash(true)
-	if !app.dialog.danger || app.dialog.action != "应用并删除" || !strings.Contains(app.dialog.detail, "成功") {
-		t.Fatal("应用并删除未说明删除时机")
+	if !app.dialog.danger || app.dialog.action != "应用并移除" || !strings.Contains(app.dialog.detail, "成功") {
+		t.Fatal("应用并移除未说明移除时机")
 	}
 }
 
@@ -382,11 +382,11 @@ func TestNativeAccessibleGroupManagementAndEmptyStates(t *testing.T) {
 	}
 	app.screen = "stash"
 	tester.Frame()
-	if button, ok := tester.AccessByRole(ui.RoleButton, "新建储藏"); !ok || !button.Disabled {
-		t.Fatal("干净工作区仍可发起储藏")
+	if button, ok := tester.AccessByRole(ui.RoleButton, "贮藏更改…"); !ok || !button.Disabled {
+		t.Fatal("干净工作区仍可发起贮藏")
 	}
-	if _, ok := tester.Find("暂无储藏"); !ok {
-		t.Fatal("缺少储藏空状态")
+	if _, ok := tester.Find("暂无贮藏"); !ok {
+		t.Fatal("缺少贮藏空状态")
 	}
 	app.repository.snapshot.Operation.Kind = "merge"
 	app.repository.snapshot.Files = []gitrepo.File{{Path: "conflict.txt", Conflict: true}}

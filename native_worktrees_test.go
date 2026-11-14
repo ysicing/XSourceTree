@@ -15,31 +15,31 @@ import (
 
 func TestNativeWorktreesDiscoverAndOpen(t *testing.T) {
 	app, path, finish := nativeFixture(t)
-	linked := filepath.Join(t.TempDir(), "中文工作区")
+	linked := filepath.Join(t.TempDir(), "中文工作树")
 	nativeGit(t, path, "worktree", "add", "-b", "topic", linked)
 	linked, err := filepath.EvalSymlinks(linked)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tester := ui.NewTester(app.view, 1024, 680)
-	if err := tester.Click("Worktree"); err != nil {
+	if err := tester.Click("工作树"); err != nil {
 		t.Fatal(err)
 	}
 	finish()
 	tester.Frame()
 	if len(app.worktrees.items) != 2 {
-		t.Fatal("没有发现同仓库的其他工作区")
+		t.Fatal("没有发现同仓库的其他工作树")
 	}
 	if err := tester.Click(linked); err != nil {
 		t.Fatal(err)
 	}
-	if err := tester.Click("打开工作区"); err != nil {
+	if err := tester.Click("打开工作树"); err != nil {
 		t.Fatal(err)
 	}
 	finish()
 	tester.Frame()
 	if app.repository.snapshot.Path != linked || app.repository.snapshot.Branch != "topic" || app.screen != "changes" {
-		t.Fatal("没有作为独立工作目录打开链接工作区")
+		t.Fatal("没有作为独立工作目录打开链接工作树")
 	}
 }
 
@@ -48,7 +48,7 @@ func TestNativeWorktreeCreateAndFailurePreservesDraft(t *testing.T) {
 	app.openWorktrees()
 	finish()
 	tester := ui.NewTester(app.view, 1024, 680)
-	if err := tester.Click("新建 Worktree…"); err != nil {
+	if err := tester.Click("新建工作树…"); err != nil {
 		t.Fatal(err)
 	}
 	dialog := app.dialog
@@ -62,7 +62,7 @@ func TestNativeWorktreeCreateAndFailurePreservesDraft(t *testing.T) {
 	tester.Frame()
 	if app.dialog != nil || len(app.worktrees.items) != 2 ||
 		nativeGit(t, linked, "branch", "--show-current") != "topic" {
-		t.Fatal("创建工作区失败或未刷新列表")
+		t.Fatal("创建工作树失败或未刷新列表")
 	}
 	app.createWorktreeDialog()
 	dialog = app.dialog
@@ -94,10 +94,10 @@ func TestNativeWorktreeMergeAndRemove(t *testing.T) {
 	if err := tester.Click(canonical); err != nil {
 		t.Fatal(err)
 	}
-	if err := tester.Click("工作区操作"); err != nil {
+	if err := tester.Click("工作树操作"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tester.ChooseMenuItem("合并到当前工作区…"); err != nil {
+	if err := tester.ChooseMenuItem("合并到当前工作树…"); err != nil {
 		t.Fatal(err)
 	}
 	finish()
@@ -112,12 +112,12 @@ func TestNativeWorktreeMergeAndRemove(t *testing.T) {
 	finish()
 	tester.Frame()
 	if app.problem != "" || app.dialog != nil || nativeGit(t, path, "rev-parse", "HEAD") != nativeGit(t, linked, "rev-parse", "HEAD") {
-		t.Fatal("合并未更新当前工作区", app.problem)
+		t.Fatal("合并未更新当前工作树", app.problem)
 	}
-	if err := tester.Click("工作区操作"); err != nil {
+	if err := tester.Click("工作树操作"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tester.ChooseMenuItem("移除工作区…"); err != nil {
+	if err := tester.ChooseMenuItem("移除工作树…"); err != nil {
 		t.Fatal(err)
 	}
 	finish()
@@ -131,13 +131,13 @@ func TestNativeWorktreeMergeAndRemove(t *testing.T) {
 	}
 	finish()
 	if app.problem != "" || len(app.worktrees.items) != 1 {
-		t.Fatal("移除后未刷新工作区", app.problem)
+		t.Fatal("移除后未刷新工作树", app.problem)
 	}
 	if _, err := os.Stat(linked); !os.IsNotExist(err) {
 		t.Fatalf("链接工作目录未移除: %v", err)
 	}
 	if nativeGit(t, path, "branch", "--list", "topic") == "" {
-		t.Fatal("移除工作区误删本地分支")
+		t.Fatal("移除工作树误删本地分支")
 	}
 }
 
@@ -154,14 +154,14 @@ func TestNativeWorktreeSafetyAndCanceledReads(t *testing.T) {
 		t.Fatal("未提交内容没有阻止移除")
 	}
 	if _, err := os.Stat(filepath.Join(linked, "untracked.txt")); err != nil {
-		t.Fatal("预检破坏工作区数据")
+		t.Fatal("预检破坏工作树数据")
 	}
 	app.dialog = nil
 	app.loadWorktrees()
 	app.switchWorkspace("changes")
 	finish()
 	if app.screen != "changes" || app.readTask != nil {
-		t.Fatal("离开工作区管理后应用了过期读取")
+		t.Fatal("离开工作树管理后应用了过期读取")
 	}
 }
 
@@ -180,14 +180,14 @@ func TestNativeWorktreesAppearanceAndReadOnly(t *testing.T) {
 		for _, appearance := range []string{appearanceLight, appearanceDark} {
 			app.prefs.Appearance = appearance
 			tester := ui.NewTester(app.view, size[0], size[1])
-			if create, found := tester.AccessByRole(ui.RoleButton, "新建 Worktree…"); !found || !create.Disabled {
-				t.Fatal("仓库不可写时仍允许创建工作区")
+			if create, found := tester.AccessByRole(ui.RoleButton, "新建工作树…"); !found || !create.Disabled {
+				t.Fatal("仓库不可写时仍允许创建工作树")
 			}
 			if err := tester.Click(linked); err != nil {
 				t.Fatal(err)
 			}
-			if open, found := tester.AccessByRole(ui.RoleButton, "打开工作区"); !found || open.Disabled || open.Offscreen {
-				t.Fatal("不可写仓库仍应允许打开工作区")
+			if open, found := tester.AccessByRole(ui.RoleButton, "打开工作树"); !found || open.Disabled || open.Offscreen {
+				t.Fatal("不可写仓库仍应允许打开工作树")
 			}
 			if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
 				saveNativeScreenshot(t, tester, directory, fmt.Sprintf("worktrees-%s-%d.png", appearance, size[0]))

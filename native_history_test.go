@@ -76,7 +76,7 @@ func nativeHistoryFixture(t *testing.T) (*nativeApp, string, func()) {
 	subjects := []string{
 		"feat(repo): 添加本地仓库管理", "feat(diff): 支持并排查看文件差异",
 		"fix(commit): 保留未提交的草稿", "feat(branch): 支持创建和切换分支",
-		"fix(search): 按作者和提交 ID 搜索", "feat(stash): 支持预览储藏内容",
+		"fix(search): 按作者和提交 ID 搜索", "feat(stash): 支持预览贮藏内容",
 		"chore(build): 统一构建版本信息", "feat(history): 添加提交文件列表",
 	}
 	for index, subject := range subjects {

@@ -459,7 +459,7 @@ func TestNativeReadDoesNotBlockNavigation(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			app, path, finish := nativeFixture(t)
 			writeNativeFile(t, path, "hello.txt", "局部刷新\n")
-			nativeGit(t, path, "stash", "push", "-m", "测试储藏")
+			nativeGit(t, path, "stash", "push", "-m", "测试贮藏")
 			writeNativeFile(t, path, "hello.txt", "工作区修改\n")
 			app.refresh()
 			finish()
@@ -615,8 +615,8 @@ func TestNativeLoadingProtectsSelectedActions(t *testing.T) {
 			app, path, finish := nativeFixture(t)
 			app.screen = screen
 			if screen == "stash" {
-				writeNativeFile(t, path, "hello.txt", "储藏内容\n")
-				nativeGit(t, path, "stash", "push", "-m", "保护储藏")
+				writeNativeFile(t, path, "hello.txt", "贮藏内容\n")
+				nativeGit(t, path, "stash", "push", "-m", "保护贮藏")
 				app.refresh()
 				finish()
 				app.selectStash(app.repository.stashes[0].Hash)
@@ -631,7 +631,7 @@ func TestNativeLoadingProtectsSelectedActions(t *testing.T) {
 			tester := ui.NewTester(app.view, 1024, 680)
 			var labels []string
 			if screen == "stash" {
-				labels = []string{"应用", "应用并删除", "删除"}
+				labels = []string{"应用", "应用并移除", "删除"}
 			}
 			for _, label := range labels {
 				control, found := tester.AccessByRole(ui.RoleButton, label)
@@ -763,7 +763,7 @@ func TestNativeRepositoryActionsMenu(t *testing.T) {
 	if err := tester.Click("更多"); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"新建标签…", "储藏修改…", "-", "在 Finder 中显示", "打开恢复副本文件夹"}
+	want := []string{"新建标签…", "贮藏更改…", "-", "在 Finder 中显示", "打开恢复副本文件夹"}
 	if got := tester.Menu(); !slices.Equal(got, want) || app.dialog != nil {
 		t.Fatalf("应直接展开仓库菜单，菜单=%v，弹窗=%v", got, app.dialog)
 	}
@@ -831,7 +831,17 @@ func TestNativeOfficialSidebarAndFileMenu(t *testing.T) {
 	app, _, finish := nativeFixture(t)
 	app.library.Groups = []workspace.Group{{ID: "daily", Name: "日常开发"}}
 	tester := ui.NewTester(app.view, 1320, 860)
-	if err := tester.Click("储藏"); err != nil {
+	if err := tester.Click("文件变更"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Key(0, ui.KeyDown)
+	tester.Frame()
+	if app.screen != "history" {
+		t.Fatal("文件变更后的键盘导航没有优先进入提交历史")
+	}
+	finish()
+	tester.Frame()
+	if err := tester.Click("贮藏"); err != nil {
 		t.Fatal(err)
 	}
 	if app.screen != "stash" {
@@ -840,7 +850,6 @@ func TestNativeOfficialSidebarAndFileMenu(t *testing.T) {
 	if err := tester.Click("提交历史"); err != nil {
 		t.Fatal(err)
 	}
-	finish()
 	tester.Frame()
 	if app.screen != "history" || len(app.history) == 0 {
 		t.Fatal("侧栏切换没有加载提交历史")
@@ -893,7 +902,7 @@ func TestNativeSidebarScopesLibraryNavigation(t *testing.T) {
 				t.Errorf("%s 页面不应显示全局导航 %q", screen, label)
 			}
 		}
-		for _, label := range []string{"返回仓库", "文件变更", "提交历史", "储藏", "本地分支", "main"} {
+		for _, label := range []string{"返回仓库", "文件变更", "提交历史", "贮藏", "工作树", "本地分支", "main"} {
 			if _, found := tester.Find(label); !found {
 				t.Errorf("%s 页面缺少仓库导航 %q", screen, label)
 			}

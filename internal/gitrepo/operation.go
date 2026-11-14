@@ -91,7 +91,7 @@ func (repo *Repository) Merge(ctx context.Context, branch string) error {
 		return err
 	}
 	if operation.Kind != "" || len(files) > 0 {
-		return errors.New("请先完成当前操作，并提交或储藏工作区变更")
+		return errors.New("请先完成当前操作，并提交或贮藏工作区变更")
 	}
 	ref := branch
 	if !strings.HasPrefix(ref, "refs/heads/") && !strings.HasPrefix(ref, "refs/remotes/") {

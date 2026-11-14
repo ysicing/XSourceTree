@@ -36,41 +36,41 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
-// Worktrees says "Worktree"
+// Worktrees says "工作树"
 // in the language the app shows.
 func Worktrees() string { return In(i18n.Locale()).Worktrees() }
 
-// Worktrees says "Worktree"
+// Worktrees says "工作树"
 // in the language of msgs.
 func (msgs Messages) Worktrees() string {
 	return Catalog.Format(msgs.locale, "worktrees", nil)
 }
 
-// EmptyWorktrees says "没有 Worktree"
+// EmptyWorktrees says "没有工作树"
 // in the language the app shows.
 func EmptyWorktrees() string { return In(i18n.Locale()).EmptyWorktrees() }
 
-// EmptyWorktrees says "没有 Worktree"
+// EmptyWorktrees says "没有工作树"
 // in the language of msgs.
 func (msgs Messages) EmptyWorktrees() string {
 	return Catalog.Format(msgs.locale, "emptyWorktrees", nil)
 }
 
-// WorktreesNotLoaded says "尚未读取 Worktree"
+// WorktreesNotLoaded says "尚未读取工作树"
 // in the language the app shows.
 func WorktreesNotLoaded() string { return In(i18n.Locale()).WorktreesNotLoaded() }
 
-// WorktreesNotLoaded says "尚未读取 Worktree"
+// WorktreesNotLoaded says "尚未读取工作树"
 // in the language of msgs.
 func (msgs Messages) WorktreesNotLoaded() string {
 	return Catalog.Format(msgs.locale, "worktreesNotLoaded", nil)
 }
 
-// WorktreeReadCanceled says "已取消读取 Worktree"
+// WorktreeReadCanceled says "已取消读取工作树"
 // in the language the app shows.
 func WorktreeReadCanceled() string { return In(i18n.Locale()).WorktreeReadCanceled() }
 
-// WorktreeReadCanceled says "已取消读取 Worktree"
+// WorktreeReadCanceled says "已取消读取工作树"
 // in the language of msgs.
 func (msgs Messages) WorktreeReadCanceled() string {
 	return Catalog.Format(msgs.locale, "worktreeReadCanceled", nil)
@@ -86,51 +86,51 @@ func (msgs Messages) BareWorktree() string {
 	return Catalog.Format(msgs.locale, "bareWorktree", nil)
 }
 
-// ReadingWorktrees says "正在读取 Worktree…"
+// ReadingWorktrees says "正在读取工作树…"
 // in the language the app shows.
 func ReadingWorktrees() string { return In(i18n.Locale()).ReadingWorktrees() }
 
-// ReadingWorktrees says "正在读取 Worktree…"
+// ReadingWorktrees says "正在读取工作树…"
 // in the language of msgs.
 func (msgs Messages) ReadingWorktrees() string {
 	return Catalog.Format(msgs.locale, "readingWorktrees", nil)
 }
 
-// NewWorktreeMenu says "新建 Worktree…"
+// NewWorktreeMenu says "新建工作树…"
 // in the language the app shows.
 func NewWorktreeMenu() string { return In(i18n.Locale()).NewWorktreeMenu() }
 
-// NewWorktreeMenu says "新建 Worktree…"
+// NewWorktreeMenu says "新建工作树…"
 // in the language of msgs.
 func (msgs Messages) NewWorktreeMenu() string {
 	return Catalog.Format(msgs.locale, "newWorktreeMenu", nil)
 }
 
-// OpenWorktree says "打开工作区"
+// OpenWorktree says "打开工作树"
 // in the language the app shows.
 func OpenWorktree() string { return In(i18n.Locale()).OpenWorktree() }
 
-// OpenWorktree says "打开工作区"
+// OpenWorktree says "打开工作树"
 // in the language of msgs.
 func (msgs Messages) OpenWorktree() string {
 	return Catalog.Format(msgs.locale, "openWorktree", nil)
 }
 
-// MergeWorktreeMenu says "合并到当前工作区…"
+// MergeWorktreeMenu says "合并到当前工作树…"
 // in the language the app shows.
 func MergeWorktreeMenu() string { return In(i18n.Locale()).MergeWorktreeMenu() }
 
-// MergeWorktreeMenu says "合并到当前工作区…"
+// MergeWorktreeMenu says "合并到当前工作树…"
 // in the language of msgs.
 func (msgs Messages) MergeWorktreeMenu() string {
 	return Catalog.Format(msgs.locale, "mergeWorktreeMenu", nil)
 }
 
-// RemoveWorktreeMenu says "移除工作区…"
+// RemoveWorktreeMenu says "移除工作树…"
 // in the language the app shows.
 func RemoveWorktreeMenu() string { return In(i18n.Locale()).RemoveWorktreeMenu() }
 
-// RemoveWorktreeMenu says "移除工作区…"
+// RemoveWorktreeMenu says "移除工作树…"
 // in the language of msgs.
 func (msgs Messages) RemoveWorktreeMenu() string {
 	return Catalog.Format(msgs.locale, "removeWorktreeMenu", nil)
@@ -166,21 +166,21 @@ func (msgs Messages) ExistingWorktreeBranch() string {
 	return Catalog.Format(msgs.locale, "existingWorktreeBranch", nil)
 }
 
-// MainWorktree says "主工作区"
+// MainWorktree says "主工作树"
 // in the language the app shows.
 func MainWorktree() string { return In(i18n.Locale()).MainWorktree() }
 
-// MainWorktree says "主工作区"
+// MainWorktree says "主工作树"
 // in the language of msgs.
 func (msgs Messages) MainWorktree() string {
 	return Catalog.Format(msgs.locale, "mainWorktree", nil)
 }
 
-// CurrentWorktree says "当前工作区"
+// CurrentWorktree says "当前工作树"
 // in the language the app shows.
 func CurrentWorktree() string { return In(i18n.Locale()).CurrentWorktree() }
 
-// CurrentWorktree says "当前工作区"
+// CurrentWorktree says "当前工作树"
 // in the language of msgs.
 func (msgs Messages) CurrentWorktree() string {
 	return Catalog.Format(msgs.locale, "currentWorktree", nil)
@@ -236,31 +236,31 @@ func (msgs Messages) IgnoredWorktree() string {
 	return Catalog.Format(msgs.locale, "ignoredWorktree", nil)
 }
 
-// WorktreeList says "工作区列表"
+// WorktreeList says "工作树列表"
 // in the language the app shows.
 func WorktreeList() string { return In(i18n.Locale()).WorktreeList() }
 
-// WorktreeList says "工作区列表"
+// WorktreeList says "工作树列表"
 // in the language of msgs.
 func (msgs Messages) WorktreeList() string {
 	return Catalog.Format(msgs.locale, "worktreeList", nil)
 }
 
-// WorktreeActions says "工作区操作"
+// WorktreeActions says "工作树操作"
 // in the language the app shows.
 func WorktreeActions() string { return In(i18n.Locale()).WorktreeActions() }
 
-// WorktreeActions says "工作区操作"
+// WorktreeActions says "工作树操作"
 // in the language of msgs.
 func (msgs Messages) WorktreeActions() string {
 	return Catalog.Format(msgs.locale, "worktreeActions", nil)
 }
 
-// SelectWorktree says "选择工作区"
+// SelectWorktree says "选择工作树"
 // in the language the app shows.
 func SelectWorktree() string { return In(i18n.Locale()).SelectWorktree() }
 
-// SelectWorktree says "选择工作区"
+// SelectWorktree says "选择工作树"
 // in the language of msgs.
 func (msgs Messages) SelectWorktree() string {
 	return Catalog.Format(msgs.locale, "selectWorktree", nil)
@@ -276,41 +276,41 @@ func (msgs Messages) WorktreeRemoveDetail() string {
 	return Catalog.Format(msgs.locale, "worktreeRemoveDetail", nil)
 }
 
-// CreatingWorktree says "正在创建 Worktree…"
+// CreatingWorktree says "正在创建工作树…"
 // in the language the app shows.
 func CreatingWorktree() string { return In(i18n.Locale()).CreatingWorktree() }
 
-// CreatingWorktree says "正在创建 Worktree…"
+// CreatingWorktree says "正在创建工作树…"
 // in the language of msgs.
 func (msgs Messages) CreatingWorktree() string {
 	return Catalog.Format(msgs.locale, "creatingWorktree", nil)
 }
 
-// ReviewingWorktree says "正在检查 Worktree…"
+// ReviewingWorktree says "正在检查工作树…"
 // in the language the app shows.
 func ReviewingWorktree() string { return In(i18n.Locale()).ReviewingWorktree() }
 
-// ReviewingWorktree says "正在检查 Worktree…"
+// ReviewingWorktree says "正在检查工作树…"
 // in the language of msgs.
 func (msgs Messages) ReviewingWorktree() string {
 	return Catalog.Format(msgs.locale, "reviewingWorktree", nil)
 }
 
-// MergingWorktree says "正在合并 Worktree…"
+// MergingWorktree says "正在合并工作树…"
 // in the language the app shows.
 func MergingWorktree() string { return In(i18n.Locale()).MergingWorktree() }
 
-// MergingWorktree says "正在合并 Worktree…"
+// MergingWorktree says "正在合并工作树…"
 // in the language of msgs.
 func (msgs Messages) MergingWorktree() string {
 	return Catalog.Format(msgs.locale, "mergingWorktree", nil)
 }
 
-// RemovingWorktree says "正在移除 Worktree…"
+// RemovingWorktree says "正在移除工作树…"
 // in the language the app shows.
 func RemovingWorktree() string { return In(i18n.Locale()).RemovingWorktree() }
 
-// RemovingWorktree says "正在移除 Worktree…"
+// RemovingWorktree says "正在移除工作树…"
 // in the language of msgs.
 func (msgs Messages) RemovingWorktree() string {
 	return Catalog.Format(msgs.locale, "removingWorktree", nil)
@@ -1100,11 +1100,11 @@ func (msgs Messages) ReadingFileDiff() string {
 	return Catalog.Format(msgs.locale, "readingFileDiff", nil)
 }
 
-// ReadingStash says "正在读取储藏…"
+// ReadingStash says "正在读取贮藏…"
 // in the language the app shows.
 func ReadingStash() string { return In(i18n.Locale()).ReadingStash() }
 
-// ReadingStash says "正在读取储藏…"
+// ReadingStash says "正在读取贮藏…"
 // in the language of msgs.
 func (msgs Messages) ReadingStash() string {
 	return Catalog.Format(msgs.locale, "readingStash", nil)
@@ -1552,31 +1552,31 @@ func (msgs Messages) Merging() string {
 	return Catalog.Format(msgs.locale, "merging", nil)
 }
 
-// SavingStash says "正在储藏…"
+// SavingStash says "正在贮藏…"
 // in the language the app shows.
 func SavingStash() string { return In(i18n.Locale()).SavingStash() }
 
-// SavingStash says "正在储藏…"
+// SavingStash says "正在贮藏…"
 // in the language of msgs.
 func (msgs Messages) SavingStash() string {
 	return Catalog.Format(msgs.locale, "savingStash", nil)
 }
 
-// ApplyingStash says "正在应用储藏…"
+// ApplyingStash says "正在应用贮藏…"
 // in the language the app shows.
 func ApplyingStash() string { return In(i18n.Locale()).ApplyingStash() }
 
-// ApplyingStash says "正在应用储藏…"
+// ApplyingStash says "正在应用贮藏…"
 // in the language of msgs.
 func (msgs Messages) ApplyingStash() string {
 	return Catalog.Format(msgs.locale, "applyingStash", nil)
 }
 
-// DeletingStash says "正在删除储藏…"
+// DeletingStash says "正在删除贮藏…"
 // in the language the app shows.
 func DeletingStash() string { return In(i18n.Locale()).DeletingStash() }
 
-// DeletingStash says "正在删除储藏…"
+// DeletingStash says "正在删除贮藏…"
 // in the language of msgs.
 func (msgs Messages) DeletingStash() string {
 	return Catalog.Format(msgs.locale, "deletingStash", nil)
@@ -1966,51 +1966,51 @@ func (msgs Messages) IncludeUntracked() string {
 	return Catalog.Format(msgs.locale, "includeUntracked", nil)
 }
 
-// ApplyStashTitle says "应用储藏？"
+// ApplyStashTitle says "应用贮藏？"
 // in the language the app shows.
 func ApplyStashTitle() string { return In(i18n.Locale()).ApplyStashTitle() }
 
-// ApplyStashTitle says "应用储藏？"
+// ApplyStashTitle says "应用贮藏？"
 // in the language of msgs.
 func (msgs Messages) ApplyStashTitle() string {
 	return Catalog.Format(msgs.locale, "applyStashTitle", nil)
 }
 
-// ApplyStashDetail says "应用到 {path}\n保留储藏记录。"
+// ApplyStashDetail says "应用到 {path}\n保留贮藏记录。"
 // in the language the app shows.
 func ApplyStashDetail(path string) string { return In(i18n.Locale()).ApplyStashDetail(path) }
 
-// ApplyStashDetail says "应用到 {path}\n保留储藏记录。"
+// ApplyStashDetail says "应用到 {path}\n保留贮藏记录。"
 // in the language of msgs.
 func (msgs Messages) ApplyStashDetail(path string) string {
 	return Catalog.Format(msgs.locale, "applyStashDetail", map[string]any{"path": path})
 }
 
-// PopStashTitle says "应用并删除储藏？"
+// PopStashTitle says "应用并移除贮藏？"
 // in the language the app shows.
 func PopStashTitle() string { return In(i18n.Locale()).PopStashTitle() }
 
-// PopStashTitle says "应用并删除储藏？"
+// PopStashTitle says "应用并移除贮藏？"
 // in the language of msgs.
 func (msgs Messages) PopStashTitle() string {
 	return Catalog.Format(msgs.locale, "popStashTitle", nil)
 }
 
-// PopStashDetail says "应用到 {path}\n仅在应用成功后删除储藏记录；发生冲突时保留记录。"
+// PopStashDetail says "应用到 {path}\n仅在应用成功后移除贮藏记录；发生冲突时保留记录。"
 // in the language the app shows.
 func PopStashDetail(path string) string { return In(i18n.Locale()).PopStashDetail(path) }
 
-// PopStashDetail says "应用到 {path}\n仅在应用成功后删除储藏记录；发生冲突时保留记录。"
+// PopStashDetail says "应用到 {path}\n仅在应用成功后移除贮藏记录；发生冲突时保留记录。"
 // in the language of msgs.
 func (msgs Messages) PopStashDetail(path string) string {
 	return Catalog.Format(msgs.locale, "popStashDetail", map[string]any{"path": path})
 }
 
-// DeleteStashTitle says "删除储藏？"
+// DeleteStashTitle says "删除贮藏？"
 // in the language the app shows.
 func DeleteStashTitle() string { return In(i18n.Locale()).DeleteStashTitle() }
 
-// DeleteStashTitle says "删除储藏？"
+// DeleteStashTitle says "删除贮藏？"
 // in the language of msgs.
 func (msgs Messages) DeleteStashTitle() string {
 	return Catalog.Format(msgs.locale, "deleteStashTitle", nil)
@@ -2408,11 +2408,11 @@ func (msgs Messages) NewTagMenu() string {
 	return Catalog.Format(msgs.locale, "newTagMenu", nil)
 }
 
-// StashChangesMenu says "储藏修改…"
+// StashChangesMenu says "贮藏更改…"
 // in the language the app shows.
 func StashChangesMenu() string { return In(i18n.Locale()).StashChangesMenu() }
 
-// StashChangesMenu says "储藏修改…"
+// StashChangesMenu says "贮藏更改…"
 // in the language of msgs.
 func (msgs Messages) StashChangesMenu() string {
 	return Catalog.Format(msgs.locale, "stashChangesMenu", nil)
@@ -3154,6 +3154,16 @@ func (msgs Messages) Appearance() string {
 	return Catalog.Format(msgs.locale, "appearance", nil)
 }
 
+// Sidebar says "侧栏"
+// in the language the app shows.
+func Sidebar() string { return In(i18n.Locale()).Sidebar() }
+
+// Sidebar says "侧栏"
+// in the language of msgs.
+func (msgs Messages) Sidebar() string {
+	return Catalog.Format(msgs.locale, "sidebar", nil)
+}
+
 // AppearanceMode says "外观模式"
 // in the language the app shows.
 func AppearanceMode() string { return In(i18n.Locale()).AppearanceMode() }
@@ -3734,11 +3744,11 @@ func (msgs Messages) CommitHistory() string {
 	return Catalog.Format(msgs.locale, "commitHistory", nil)
 }
 
-// Stash says "储藏"
+// Stash says "贮藏"
 // in the language the app shows.
 func Stash() string { return In(i18n.Locale()).Stash() }
 
-// Stash says "储藏"
+// Stash says "贮藏"
 // in the language of msgs.
 func (msgs Messages) Stash() string {
 	return Catalog.Format(msgs.locale, "stash", nil)
@@ -5144,21 +5154,21 @@ func (msgs Messages) LocalBranches() string {
 	return Catalog.Format(msgs.locale, "localBranches", nil)
 }
 
-// NewStash says "新建储藏"
+// NewStash says "贮藏更改…"
 // in the language the app shows.
 func NewStash() string { return In(i18n.Locale()).NewStash() }
 
-// NewStash says "新建储藏"
+// NewStash says "贮藏更改…"
 // in the language of msgs.
 func (msgs Messages) NewStash() string {
 	return Catalog.Format(msgs.locale, "newStash", nil)
 }
 
-// EmptyStashes says "暂无储藏"
+// EmptyStashes says "暂无贮藏"
 // in the language the app shows.
 func EmptyStashes() string { return In(i18n.Locale()).EmptyStashes() }
 
-// EmptyStashes says "暂无储藏"
+// EmptyStashes says "暂无贮藏"
 // in the language of msgs.
 func (msgs Messages) EmptyStashes() string {
 	return Catalog.Format(msgs.locale, "emptyStashes", nil)
@@ -5174,21 +5184,21 @@ func (msgs Messages) Apply() string {
 	return Catalog.Format(msgs.locale, "apply", nil)
 }
 
-// ApplyAndDrop says "应用并删除"
+// ApplyAndDrop says "应用并移除"
 // in the language the app shows.
 func ApplyAndDrop() string { return In(i18n.Locale()).ApplyAndDrop() }
 
-// ApplyAndDrop says "应用并删除"
+// ApplyAndDrop says "应用并移除"
 // in the language of msgs.
 func (msgs Messages) ApplyAndDrop() string {
 	return Catalog.Format(msgs.locale, "applyAndDrop", nil)
 }
 
-// StashDiff says "储藏差异"
+// StashDiff says "贮藏差异"
 // in the language the app shows.
 func StashDiff() string { return In(i18n.Locale()).StashDiff() }
 
-// StashDiff says "储藏差异"
+// StashDiff says "贮藏差异"
 // in the language of msgs.
 func (msgs Messages) StashDiff() string {
 	return Catalog.Format(msgs.locale, "stashDiff", nil)
@@ -5254,21 +5264,21 @@ func (msgs Messages) SelectFileOrCommit() string {
 	return Catalog.Format(msgs.locale, "selectFileOrCommit", nil)
 }
 
-// SelectStash says "选择储藏查看差异"
+// SelectStash says "选择贮藏查看差异"
 // in the language the app shows.
 func SelectStash() string { return In(i18n.Locale()).SelectStash() }
 
-// SelectStash says "选择储藏查看差异"
+// SelectStash says "选择贮藏查看差异"
 // in the language of msgs.
 func (msgs Messages) SelectStash() string {
 	return Catalog.Format(msgs.locale, "selectStash", nil)
 }
 
-// EmptyStashDiff says "暂无储藏差异"
+// EmptyStashDiff says "暂无贮藏差异"
 // in the language the app shows.
 func EmptyStashDiff() string { return In(i18n.Locale()).EmptyStashDiff() }
 
-// EmptyStashDiff says "暂无储藏差异"
+// EmptyStashDiff says "暂无贮藏差异"
 // in the language of msgs.
 func (msgs Messages) EmptyStashDiff() string {
 	return Catalog.Format(msgs.locale, "emptyStashDiff", nil)

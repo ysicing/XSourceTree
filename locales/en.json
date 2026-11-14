@@ -310,6 +310,7 @@
   "sectionTree": "{label} tree",
   "sectionBatchActions": "{label} batch actions",
   "appearance": "Appearance",
+  "sidebar": "Sidebar",
   "appearanceMode": "Appearance",
   "systemAppearance": "System",
   "lightAppearance": "Light",

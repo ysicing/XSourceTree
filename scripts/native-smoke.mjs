@@ -135,6 +135,34 @@ try {
   await press("添加");
   await press(basename(fixture));
   await shown("文件变更");
+  await press("搜索");
+  await press("设置");
+  const optionalSidebarItems = ["搜索", "版本比较", "贮藏", "工作树"];
+  for (const label of optionalSidebarItems) await press(label);
+  await capture("native-sidebar-settings-hidden.png");
+  await press("关闭设置");
+  let sidebarNodes = await tree();
+  for (const label of optionalSidebarItems) {
+    assert(!sidebarNodes.some((node) => node.label === label), `侧栏未隐藏 ${label}`);
+  }
+  await shown("未暂存文件");
+  await capture("native-sidebar-minimal.png");
+  await press("设置");
+  await press("贮藏");
+  await press("关闭设置");
+  sidebarNodes = await tree();
+  assert(sidebarNodes.some((node) => node.label === "贮藏"));
+  for (const label of ["搜索", "版本比较", "工作树"]) {
+    assert(!sidebarNodes.some((node) => node.label === label), `贮藏开关影响了 ${label}`);
+  }
+  await press("设置");
+  for (const label of ["搜索", "版本比较", "工作树"]) await press(label);
+  for (const [appearance, suffix] of [["浅色", "light"], ["深色", "dark"]]) {
+    await press(appearance);
+    await capture(`native-sidebar-settings-${suffix}.png`);
+  }
+  await press("关闭设置");
+  console.log("✓ 侧栏独立开关、当前页面回退、重新开启及浅深色设置");
   await press("提交历史");
   await press("未提交更改 · 1 个文件");
   await shown("未暂存文件");
@@ -250,35 +278,36 @@ try {
   assert.equal(gitAt(remote, "rev-parse", "refs/heads/main"), git("rev-parse", "HEAD"));
   console.log("✓ 远程配置、首次发布和上游跟踪（临时本地 bare 仓库）");
 
-  writeFileSync(join(fixture, "hello.txt"), "储藏修改\n");
+  writeFileSync(join(fixture, "hello.txt"), "贮藏修改\n");
   await press("刷新");
-  await press("储藏");
-  await press("新建储藏");
-  await fill("说明（可选）", "原生储藏");
-  await press("储藏");
+  await press("贮藏");
+  await press("贮藏更改…");
+  await fill("说明（可选）", "原生贮藏");
+  await press("贮藏");
   assert.equal(git("status", "--porcelain"), "");
-  await press("储藏");
+  await press("贮藏");
   const stashNodes = await waitFor((nodes) => nodes.some((node) =>
-    node.role === "button" && node.label?.includes("原生储藏")), "储藏记录");
-  const stashNode = stashNodes.find((node) => node.role === "button" && node.label?.includes("原生储藏"));
-  assert(stashNode, "未显示储藏记录");
+    node.role === "button" && node.label?.includes("原生贮藏")), "贮藏记录");
+  const stashNode = stashNodes.find((node) => node.role === "button" && node.label?.includes("原生贮藏"));
+  assert(stashNode, "未显示贮藏记录");
   await press(stashNode.label);
-  await press("应用并删除");
-  await shown("应用并删除储藏？");
-  await press("应用并删除");
-  assert.equal(readFileSync(join(fixture, "hello.txt"), "utf8"), "储藏修改\n");
+  await capture("native-stash.png");
+  await press("应用并移除");
+  await shown("应用并移除贮藏？");
+  await press("应用并移除");
+  assert.equal(readFileSync(join(fixture, "hello.txt"), "utf8"), "贮藏修改\n");
   assert.equal(git("stash", "list"), "");
   await press("文件变更");
   await press("hello.txt");
   await press("丢弃修改…");
   await press("丢弃修改");
   assert.equal(git("status", "--porcelain"), "");
-  console.log("✓ 创建、预览、应用储藏，以及备份后丢弃修改");
+  console.log("✓ 创建、预览、应用贮藏，以及备份后丢弃修改");
 
-  const linked = join(root, "中文工作区");
+  const linked = join(root, "中文工作树");
   const mainHead = git("rev-parse", "HEAD");
-  await press("Worktree");
-  await press("新建 Worktree…");
+  await press("工作树");
+  await press("新建工作树…");
   await fill("工作目录", linked);
   await fill("分支名称", "native-worktree");
   await fill("起点", "HEAD");
@@ -294,19 +323,19 @@ try {
     await press("关闭设置");
     await capture(`native-worktrees-${suffix}.png`);
   }
-  await press("打开工作区");
+  await press("打开工作树");
   await shown("文件变更");
-  writeFileSync(join(linked, "worktree-feature.txt"), "来自链接工作区\n");
+  writeFileSync(join(linked, "worktree-feature.txt"), "来自链接工作树\n");
   gitAt(linked, "add", ".");
   gitAt(linked, "commit", "-m", "worktree feature");
-  await press("Worktree");
+  await press("工作树");
   await press(realpathSync(fixture));
-  await press("打开工作区");
-  await press("Worktree");
+  await press("打开工作树");
+  await press("工作树");
   await press(realpathSync(linked));
-  assert(existsSync(linked), "打开另一个工作目录不应移除链接工作区");
-  assert.equal(git("rev-parse", "HEAD"), mainHead, "切换工作区不应隐式合并提交");
-  console.log("✓ Worktree 创建、发现、打开与浅深色界面");
+  assert(existsSync(linked), "打开另一个工作目录不应移除链接工作树");
+  assert.equal(git("rev-parse", "HEAD"), mainHead, "切换工作树不应隐式合并提交");
+  console.log("✓ 工作树创建、发现、打开与浅深色界面");
 
   await request("menu", { path: ["文件", "本地仓库"] });
   await ready();

@@ -416,6 +416,17 @@ func (app *nativeApp) generalPreferences(c *ui.Context) {
 			app.chooseLanguage(app.chosenLanguage)
 		}
 	})
+	ui.Divider(c)
+	ui.Row(c).FillWidth().Gap(20).AlignItems(ui.Start).Children(func() {
+		ui.Text(c, locales.Sidebar()).FontSize(13).Width(92).Shrink(0)
+		ui.Column(c).Grow(1).Gap(8).Children(func() {
+			items := &app.prefs.SidebarItems
+			app.sidebarPreference(c, "search", locales.Search(), &items.Search)
+			app.sidebarPreference(c, "compare", locales.CompareVersions(), &items.Compare)
+			app.sidebarPreference(c, "stash", locales.Stash(), &items.Stash)
+			app.sidebarPreference(c, "worktrees", locales.Worktrees(), &items.Worktrees)
+		})
+	})
 }
 
 func (app *nativeApp) applyAppearance() {

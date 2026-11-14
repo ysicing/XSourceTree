@@ -38,6 +38,7 @@ type nativePreferences struct {
 	FileTree             bool                        `json:"fileTree"`
 	Drafts               map[string]string           `json:"drafts"`
 	Appearance           string                      `json:"appearance"`
+	SidebarItems         nativeSidebarItems          `json:"sidebarItems"`
 	Shortcuts            nativeShortcuts             `json:"shortcuts"`
 	UpdateCheckFrequency string                      `json:"updateCheckFrequency"`
 	AI                   commitai.Options            `json:"ai"`
@@ -143,6 +144,7 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 		prefs: nativePreferences{
 			Sidebar: 226, Files: 360, History: 56, HistoryFiles: 280, Wrap: true, DiffLayout: "auto", Drafts: map[string]string{},
 			Appearance: appearanceSystem, Shortcuts: defaultNativeShortcuts(),
+			SidebarItems: nativeSidebarItems{Search: true, Compare: true, Stash: true, Worktrees: true},
 		},
 		nativeHistoryState: newNativeHistoryState(),
 		browseState:        newNativeHistoryState(), searchState: newNativeHistoryState(),

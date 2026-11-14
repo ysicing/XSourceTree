@@ -229,7 +229,7 @@ func TestNativeSidebarSectionNavigation(t *testing.T) {
 	}
 	tester := ui.NewTester(app.view, 1024, 680)
 	previousY := float32(0)
-	for _, label := range []string{"仓库工作区", "文件变更", "提交历史", "本地分支", "main", "标签", "远端", "远端 origin", "远端 upstream", "储藏", "返回仓库"} {
+	for _, label := range []string{"仓库工作区", "文件变更", "提交历史", "搜索", "版本比较", "贮藏", "工作树", "本地分支", "main", "标签", "远端", "远端 origin", "远端 upstream", "返回仓库"} {
 		bounds, found := tester.Find(label)
 		if label == "main" {
 			var branch ui.AccessInfo

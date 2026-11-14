@@ -45,7 +45,7 @@ func TestWorktreeTokenRejectsMetadataDirectoryReplacement(t *testing.T) {
 				t.Fatal(err)
 			}
 			if err := target.RemoveWorktree(context.Background(), source, review.Token); err == nil {
-				t.Fatal("元数据目录已替换，旧确认令牌仍可移除工作区")
+				t.Fatal("元数据目录已替换，旧确认令牌仍可移除工作树")
 			}
 			if _, err := os.Stat(filepath.Join(source, "base.txt")); err != nil {
 				t.Fatalf("旧确认破坏了工作目录: %v", err)

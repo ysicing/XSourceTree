@@ -163,7 +163,7 @@ func (repo *Repository) Worktrees(ctx context.Context) ([]Worktree, error) {
 	return result, nil
 }
 
-// ReviewWorktree 仅检查列表中的条目，不把任意路径当成链接工作区。
+// ReviewWorktree 仅检查列表中的条目，不把任意路径当成链接工作树。
 func (repo *Repository) ReviewWorktree(ctx context.Context, path string) (WorktreeReview, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -196,10 +196,10 @@ func (repo *Repository) reviewWorktree(ctx context.Context, common, path string)
 		}
 	}
 	if source == nil {
-		return WorktreeReview{}, worktreeReviewState{}, errors.New("路径不在当前仓库的工作区列表中")
+		return WorktreeReview{}, worktreeReviewState{}, errors.New("路径不在当前仓库的工作树列表中")
 	}
 	if target == nil {
-		return WorktreeReview{}, worktreeReviewState{}, errors.New("当前目标不在仓库工作区列表中，请重新打开仓库")
+		return WorktreeReview{}, worktreeReviewState{}, errors.New("当前目标不在仓库工作树列表中，请重新打开仓库")
 	}
 	review := WorktreeReview{
 		Worktree: source.Worktree, TargetHead: target.Worktree.Head, TargetBranch: target.Worktree.Branch,
@@ -209,7 +209,7 @@ func (repo *Repository) reviewWorktree(ctx context.Context, common, path string)
 	if review.RemoveProblem == "" {
 		_, err := repo.git(ctx, "merge-base", "--is-ancestor", source.Worktree.Head, target.Worktree.Head)
 		if exitCode(err, 1) {
-			review.RemoveProblem = "工作区含有未合并到当前目标 HEAD 的提交，不能移除"
+			review.RemoveProblem = "工作树含有未合并到当前目标 HEAD 的提交，不能移除"
 		} else if err != nil {
 			return WorktreeReview{}, worktreeReviewState{}, err
 		}
@@ -232,11 +232,11 @@ func (repo *Repository) reviewWorktree(ctx context.Context, common, path string)
 func worktreeUnavailable(worktree Worktree) string {
 	switch {
 	case worktree.Locked:
-		return "工作区已锁定，请先解锁"
+		return "工作树已锁定，请先解锁"
 	case worktree.Prunable:
-		return "工作区已失效并标记为可清理，请先修复"
+		return "工作树已失效并标记为可清理，请先修复"
 	case worktree.Bare:
-		return "裸仓库没有可操作的工作区"
+		return "裸仓库没有可操作的工作树"
 	case worktree.Problem != "":
 		return worktree.Problem
 	}
@@ -246,27 +246,27 @@ func worktreeUnavailable(worktree Worktree) string {
 func worktreeMergeProblem(source, target Worktree) string {
 	switch {
 	case source.Current:
-		return "不能将当前工作区合并到自身"
+		return "不能将当前工作树合并到自身"
 	}
 	if problem := worktreeUnavailable(source); problem != "" {
 		return problem
 	}
 	if problem := worktreeUnavailable(target); problem != "" {
-		return "目标工作区：" + problem
+		return "目标工作树：" + problem
 	}
 	switch {
 	case source.Head == "":
-		return "源工作区尚无提交"
+		return "源工作树尚无提交"
 	case source.Operation != "":
-		return "请先完成源工作区正在进行的 Git 操作"
+		return "请先完成源工作树正在进行的 Git 操作"
 	case source.Dirty:
-		return "请先提交或储藏源工作区的未提交及未跟踪文件"
+		return "请先提交或贮藏源工作树的未提交及未跟踪文件"
 	case target.Detached || !strings.HasPrefix(target.Branch, "refs/heads/"):
-		return "目标工作区处于分离 HEAD，请先切换到本地分支"
+		return "目标工作树处于分离 HEAD，请先切换到本地分支"
 	case target.Operation != "":
-		return "请先完成目标工作区正在进行的 Git 操作"
+		return "请先完成目标工作树正在进行的 Git 操作"
 	case target.Dirty:
-		return "请先提交或储藏目标工作区的未提交及未跟踪文件"
+		return "请先提交或贮藏目标工作树的未提交及未跟踪文件"
 	}
 	return ""
 }
@@ -274,24 +274,24 @@ func worktreeMergeProblem(source, target Worktree) string {
 func worktreeRemoveProblem(source, target Worktree) string {
 	switch {
 	case source.Main:
-		return "不能移除主工作区"
+		return "不能移除主工作树"
 	case source.Current:
-		return "不能移除当前工作区"
+		return "不能移除当前工作树"
 	}
 	if problem := worktreeUnavailable(source); problem != "" {
 		return problem
 	}
 	switch {
 	case source.Dirty:
-		return "工作区含有未提交或未跟踪文件，不能移除"
+		return "工作树含有未提交或未跟踪文件，不能移除"
 	case source.Ignored:
-		return "工作区含有被忽略的文件，移除会丢失数据"
+		return "工作树含有被忽略的文件，移除会丢失数据"
 	case source.Operation != "":
-		return "工作区正在进行 Git 操作，不能移除"
+		return "工作树正在进行 Git 操作，不能移除"
 	case target.Problem != "":
-		return "无法核实目标工作区：" + target.Problem
+		return "无法核实目标工作树：" + target.Problem
 	case source.Head == "" || target.Head == "":
-		return "无法确认工作区提交已合并到当前目标 HEAD，不能移除"
+		return "无法确认工作树提交已合并到当前目标 HEAD，不能移除"
 	}
 	return ""
 }
@@ -314,7 +314,7 @@ func (repo *Repository) CreateWorktree(ctx context.Context, path, branch, start 
 		return Worktree{}, err
 	}
 	if strings.HasPrefix(branch, "refs/") && !strings.HasPrefix(branch, "refs/heads/") {
-		return Worktree{}, errors.New("工作区只能使用本地分支")
+		return Worktree{}, errors.New("工作树只能使用本地分支")
 	}
 	branch = strings.TrimPrefix(branch, "refs/heads/")
 	if err := repo.validateBranch(ctx, branch); err != nil {
@@ -326,7 +326,7 @@ func (repo *Repository) CreateWorktree(ctx context.Context, path, branch, start 
 	ref := "refs/heads/" + branch
 	for _, state := range states {
 		if state.Worktree.Branch == ref {
-			return Worktree{}, errors.New("分支已被其他工作区占用")
+			return Worktree{}, errors.New("分支已被其他工作树占用")
 		}
 	}
 	_, refErr := repo.git(ctx, "show-ref", "--verify", "--quiet", ref)
@@ -352,7 +352,7 @@ func (repo *Repository) CreateWorktree(ctx context.Context, path, branch, start 
 		if err != nil {
 			return Worktree{}, err
 		}
-		return Worktree{}, errors.New("工作区目标路径在检查后已改变")
+		return Worktree{}, errors.New("工作树目标路径在检查后已改变")
 	}
 	args := []string{"worktree", "add"}
 	if existing {
@@ -370,12 +370,12 @@ func (repo *Repository) CreateWorktree(ctx context.Context, path, branch, start 
 	for _, state := range states {
 		if worktreeSamePath(state.Worktree.Path, path) {
 			if state.Worktree.Problem != "" || state.Worktree.Head != head || state.Worktree.Branch != ref {
-				return state.Worktree, errors.New("工作区已创建，但状态发生变化，请刷新核实")
+				return state.Worktree, errors.New("工作树已创建，但状态发生变化，请刷新核实")
 			}
 			return state.Worktree, nil
 		}
 	}
-	return Worktree{}, fmt.Errorf("工作区创建后未出现在列表中，请刷新核实：%s", path)
+	return Worktree{}, fmt.Errorf("工作树创建后未出现在列表中，请刷新核实：%s", path)
 }
 
 // MergeWorktree 合并复核后的固定提交；冲突状态留给现有操作界面处理。
@@ -392,7 +392,7 @@ func (repo *Repository) MergeWorktree(ctx context.Context, path, token string) e
 		return err
 	}
 	if token == "" || token != review.Token {
-		return errors.New("工作区状态已改变，请刷新后重新确认")
+		return errors.New("工作树状态已改变，请刷新后重新确认")
 	}
 	if !review.CanMerge {
 		return errors.New(review.MergeProblem)
@@ -408,7 +408,7 @@ func (repo *Repository) MergeWorktree(ctx context.Context, path, token string) e
 	return err
 }
 
-// RemoveWorktree 不强制移除，不删除分支，也不清理其他工作区元数据。
+// RemoveWorktree 不强制移除，不删除分支，也不清理其他工作树元数据。
 func (repo *Repository) RemoveWorktree(ctx context.Context, path, token string) error {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
@@ -422,7 +422,7 @@ func (repo *Repository) RemoveWorktree(ctx context.Context, path, token string) 
 		return err
 	}
 	if token == "" || token != review.Token {
-		return errors.New("工作区状态已改变，请刷新后重新确认")
+		return errors.New("工作树状态已改变，请刷新后重新确认")
 	}
 	if !review.CanRemove {
 		return errors.New(review.RemoveProblem)

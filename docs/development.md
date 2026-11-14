@@ -55,7 +55,7 @@ task build
 
 `task fmt`（或 `task format`）参考 Gitness，先补齐文件头，再通过 `golangci-lint fmt` 统一执行 gofmt、goimports 和 gci。规则集中在 [.golangci.yml](../.golangci.yml)，导入分组为标准库、项目包、第三方包、匿名导入、点导入。覆盖新建但尚未暂存的 Go 文件，跳过依赖、构建目录和生成文件。
 
-工具固定为 golangci-lint `v2.15.0` 和 addlicense `v1.2.0`。golangci-lint 通过 `go run` 调用，addlicense 安装到 `.mygo/tools/`；首次运行会下载并缓存工具，不覆盖全局安装。任务串行执行，Go 并发限制为 2，工具编译使用 `-p=1`，addlicense 每次只处理一个文件。`task fmt:check` 检查文件头是否缺失及格式差异，不修改源码；`task lint` 使用 goheader 校验 Go 版权头内容，并运行格式检查及 govet。
+golangci-lint、addlicense 和 govulncheck 优先复用 `PATH` 中的工具，缺少时使用 `go install ...@latest` 安装，不指定项目专用安装目录。Go 工具安装目录应包含在 `PATH` 中。任务串行执行，Go 并发限制为 2，工具编译使用 `-p=1`，addlicense 每次只处理一个文件。`task fmt:check` 检查文件头是否缺失及格式差异，不修改源码；`task lint` 使用 goheader 校验 Go 版权头内容，并运行格式检查及 govet。
 
 ```sh
 task fmt
@@ -81,6 +81,8 @@ task check
 ```
 
 可用 `task test:go`、`task test:ui`、`task test:release` 或 `task vet` 单独执行检查，`task test` 依次执行 Go 和发布脚本测试。Go 测试使用 `GOMAXPROCS=2`、`-p=1` 和 `-parallel=2`；开发与构建任务同样限制 Go 构建并发。
+
+`task govulncheck` 单独扫描当前平台及 Go 工具链下可调用代码的已知漏洞，需要访问 Go 漏洞数据库，不包含在默认 `task check` 中。
 
 加载基准覆盖 100／5000 个变更文件的原生列表重绘、单文件历史／比较读取，以及 1 万提交的首屏、后页和搜索。使用 `GOMAXPROCS=2 go test -p=1 -parallel=2 ./internal/app ./internal/gitrepo -run '^$' -bench 'Benchmark(NativeChangedFilesFrame|RevisionFileLoading|HistoryLoading)$' -benchtime=3x -count=1` 串行复测；基准仓库由测试临时生成，不访问真实远程。比较相同场景的耗时与分配，避免把冷启动、后台负载或不同数据规模混为优化收益。
 

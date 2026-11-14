@@ -4,8 +4,6 @@
 version: '3'
 
 vars:
-  GOLANGCI_LINT: go run -p=1 github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
-  ADDLICENSE: '{{.ROOT_DIR}}/.mygo/tools/addlicense-v1.2.0/addlicense'
   SOURCE_FILES: >-
     find . -type d \( -name .git -o -name .mygo -o -name .agents -o -name node_modules -o -name vendor -o -name build -o -name dist -o -name graft \) -prune
     -o -type f \( -name '*.go' -o -name '*.ts' -o -name '*.mjs' -o -name '*.css' -o -name '*.html' -o -name '*.yml' -o -name '*.yaml' \) -print0
@@ -40,14 +38,29 @@ tasks:
       GOFLAGS: -p=1
     cmds:
       - task: license
-      - '{{.GOLANGCI_LINT}} fmt'
+      - task: tools:lint
+      - golangci-lint fmt
+
+  tools:lint:
+    internal: true
+    status:
+      - command -v golangci-lint
+    cmds:
+      - GOMAXPROCS=2 go install -p=1 github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+
+  tools:vuln:
+    internal: true
+    status:
+      - command -v govulncheck
+    cmds:
+      - GOMAXPROCS=2 go install -p=1 golang.org/x/vuln/cmd/govulncheck@latest
 
   tools:license:
     internal: true
     status:
-      - test -x "{{.ADDLICENSE}}"
+      - command -v addlicense
     cmds:
-      - GOBIN="{{.ROOT_DIR}}/.mygo/tools/addlicense-v1.2.0" GOMAXPROCS=2 go install -p=1 github.com/google/addlicense@v1.2.0
+      - GOMAXPROCS=2 go install -p=1 github.com/google/addlicense@latest
 
   license:
     desc: 为源码、脚本和配置补齐 AGPL 版权头
@@ -56,7 +69,7 @@ tasks:
       GOMAXPROCS: '2'
     cmds:
       - task: tools:license
-      - '{{.SOURCE_FILES}} | xargs -0 -n 1 "{{.ADDLICENSE}}" -c ysicing -l AGPL-3.0-only -s=only'
+      - '{{.SOURCE_FILES}} | xargs -0 -n 1 addlicense -c ysicing -l AGPL-3.0-only -s=only'
 
   license:check:
     desc: 检查源码文件头是否缺失，包含平台专用文件
@@ -65,7 +78,7 @@ tasks:
       GOMAXPROCS: '2'
     cmds:
       - task: tools:license
-      - '{{.SOURCE_FILES}} | xargs -0 -n 1 "{{.ADDLICENSE}}" -check'
+      - '{{.SOURCE_FILES}} | xargs -0 -n 1 addlicense -check'
 
   gomod:
     desc: 整理 Go 模块依赖
@@ -79,7 +92,8 @@ tasks:
       GOFLAGS: -p=1
     cmds:
       - task: license:check
-      - '{{.GOLANGCI_LINT}} fmt --diff'
+      - task: tools:lint
+      - golangci-lint fmt --diff
 
   lint:
     desc: 使用 golangci-lint 检查 Go 文件头、格式及 govet
@@ -88,7 +102,17 @@ tasks:
       GOFLAGS: -p=1
     cmds:
       - task: license:check
-      - '{{.GOLANGCI_LINT}} run ./...'
+      - task: tools:lint
+      - golangci-lint run ./...
+
+  govulncheck:
+    desc: 检查当前构建可调用代码的已知漏洞（需要联网）
+    env:
+      GOMAXPROCS: '2'
+      GOFLAGS: -p=1
+    cmds:
+      - task: tools:vuln
+      - govulncheck ./...
 
   vet:
     desc: 检查 Go 代码

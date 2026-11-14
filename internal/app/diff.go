@@ -20,7 +20,21 @@ type nativeFileViewer struct {
 }
 
 func (app *nativeApp) canApplyPatch() bool {
-	return app.patch.Supported && !app.fileViewer.contextChanged
+	return app.workingFileActions() && app.writable && !app.busy && app.readTask == nil &&
+		app.patch.Supported && !app.fileViewer.contextChanged
+}
+
+func (app *nativeApp) workingFileActions() bool {
+	if app.repository == nil || app.selectedFile == "" ||
+		!(app.screen == "changes" || app.screen == "history" && app.historyWorking) {
+		return false
+	}
+	for _, file := range app.repository.snapshot.Files {
+		if file.Path == app.selectedFile {
+			return !file.Conflict
+		}
+	}
+	return false
 }
 
 func (viewer *nativeFileViewer) setSources(diff gitrepo.Diff) {
@@ -175,7 +189,7 @@ func (app *nativeApp) fileDiffPanel(c *ui.Context) {
 		}
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(4).Padding(0, 10).Children(func() {
 			ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-				if app.screen == "changes" && app.selectedFile != "" {
+				if app.workingFileActions() {
 					app.patchToolbar(c)
 				}
 			})

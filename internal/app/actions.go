@@ -57,6 +57,9 @@ func (app *nativeApp) stageFiles(staged, all bool) {
 }
 
 func (app *nativeApp) stageSelectedFile() {
+	if !app.workingFileActions() || app.readTask != nil {
+		return
+	}
 	app.stagePaths(app.staged, []string{app.selectedFile})
 }
 

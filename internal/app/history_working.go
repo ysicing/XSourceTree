@@ -36,6 +36,9 @@ func historyWorkingFile(files []gitrepo.File, selected string, staged bool) (str
 	if selected != "" && fileExists(files, selected, staged) {
 		return selected, staged
 	}
+	if selected != "" && fileExists(files, selected, !staged) {
+		return selected, !staged
+	}
 	for _, file := range files {
 		if isWorking(file) {
 			return file.Path, false
@@ -62,16 +65,29 @@ func (app *nativeApp) selectHistoryWorkingFile(file string, staged bool) {
 		return
 	}
 	path := app.repository.snapshot.Path
+	files := app.repository.snapshot.Files
 	app.load(locales.ReadingDiff(), nativeReadDiff, func(ctx context.Context) (func(), error) {
-		diff, err := app.service.Diff(ctx, path, file, staged)
+		selection, err := app.readHistoryWorkingSelection(ctx, path, file, staged, files)
 		return func() {
-			selection := &nativeSelection{file: file, staged: staged}
-			if err == nil {
-				selection.diff = diff
-			}
 			app.applyHistoryWorkingSelection(selection)
 		}, err
 	})
+}
+
+func (app *nativeApp) readHistoryWorkingSelection(ctx context.Context, path, file string, staged bool, files []gitrepo.File) (*nativeSelection, error) {
+	selection := &nativeSelection{file: file, staged: staged}
+	for _, entry := range files {
+		if entry.Path == file && entry.Conflict {
+			diff, err := app.service.Diff(ctx, path, file, staged)
+			selection.diff = diff
+			return selection, err
+		}
+	}
+	result, err := app.readSelection(ctx, path, file, staged, files)
+	if err != nil {
+		return selection, err
+	}
+	return result, nil
 }
 
 func (app *nativeApp) applyHistoryWorkingSelection(selection *nativeSelection) {
@@ -101,19 +117,24 @@ type historyWorkingFileRow struct {
 	file   gitrepo.File
 	staged bool
 	header bool
+	paths  []string
 }
 
 func (app *nativeApp) historyWorkingFiles(c *ui.Context) {
 	var rows []historyWorkingFileRow
 	for _, staged := range []bool{true, false} {
 		var group []historyWorkingFileRow
+		var paths []string
 		for _, file := range app.repository.snapshot.Files {
 			if staged && isStaged(file) || !staged && isWorking(file) {
 				group = append(group, historyWorkingFileRow{file: file, staged: staged})
+				if !file.Conflict {
+					paths = append(paths, file.Path)
+				}
 			}
 		}
 		if len(group) > 0 {
-			rows = append(rows, historyWorkingFileRow{staged: staged, header: true})
+			rows = append(rows, historyWorkingFileRow{staged: staged, header: true, paths: paths})
 			rows = append(rows, group...)
 		}
 	}
@@ -155,7 +176,13 @@ func (app *nativeApp) historyWorkingFiles(c *ui.Context) {
 			row := rows[index]
 			if row.header {
 				ui.Row(c).FillWidth().Height(30).Padding(0, 12).Background(c.Theme().Surface).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, state.Label(index)).Bold().FontSize(12)
+					ui.Text(c, state.Label(index)).Bold().FontSize(12).Grow(1).MinWidth(0).SingleLine()
+					action := locales.StageAll()
+					if row.staged {
+						action = locales.UnstageAll()
+					}
+					ui.Button(c, action).FontSize(11).Disabled(!app.writable || app.readTask != nil || len(row.paths) == 0).
+						OnClick(func() { app.stagePaths(row.staged, row.paths) })
 				})
 				return
 			}
@@ -163,6 +190,13 @@ func (app *nativeApp) historyWorkingFiles(c *ui.Context) {
 				nativeFileIcon(c, row.file.Path)
 				ui.Text(c, row.file.Path).FontSize(12).Grow(1).MinWidth(0).SingleLine().Tooltip(row.file.Path)
 				ui.Text(c, nativeFileStatus(row.file, row.staged)).FontSize(10).TextColor(c.Theme().TextMuted)
+				action, symbol := locales.StageFile(), "+"
+				if row.staged {
+					action, symbol = locales.UnstageFile(), "−"
+				}
+				ui.Button(c, symbol).Label(action + " " + row.file.Path).Tooltip(action).Width(22).Height(22).
+					Disabled(!app.writable || app.readTask != nil || row.file.Conflict).
+					OnClick(func() { app.stagePaths(row.staged, []string{row.file.Path}) })
 			})
 		}).Fill().Label(locales.WorkingTreeFiles()).Disabled(app.busy || app.readTask != nil && app.readTask.kind != nativeReadDiff).
 			Changed() && app.workingSelected >= 0 && app.workingSelected < len(rows) {

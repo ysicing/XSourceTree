@@ -47,8 +47,7 @@ func (app *nativeApp) refreshOnFocus() {
 			}
 			if file != "" && fileExists(result.snapshot.Files, file, staged) {
 				if history.historyWorking {
-					selection = &nativeSelection{file: file, staged: staged}
-					selection.diff, err = app.service.Diff(ctx, path, file, staged)
+					selection, err = app.readHistoryWorkingSelection(ctx, path, file, staged, result.snapshot.Files)
 				} else {
 					selection, err = app.readSelection(ctx, path, file, staged, result.snapshot.Files)
 				}

@@ -167,6 +167,33 @@ try {
   await press("未提交更改 · 1 个文件");
   await shown("未暂存文件");
   await capture("native-desktop-working-history.png");
+  for (const [appearance, suffix] of [["浅色", "light"], ["深色", "dark"]]) {
+    await press("设置");
+    await press(appearance);
+    await press("关闭设置");
+    await capture(`native-history-working-actions-${suffix}.png`);
+  }
+  await press("暂存文件 hello.txt");
+  assert.equal(git("diff", "--cached", "--name-only"), "hello.txt");
+  await shown("取消暂存文件 hello.txt");
+  await press("全部取消暂存");
+  assert.equal(git("diff", "--cached", "--name-only"), "");
+  await press("全部暂存");
+  await press("取消暂存文件 hello.txt");
+  await press("暂存此区块");
+  assert.equal(git("diff", "--cached", "--name-only"), "hello.txt");
+  await press("取消此区块暂存");
+  await press("选择行…");
+  await press("+原生界面变更");
+  await press("应用所选行");
+  assert.equal(git("show", ":hello.txt"), "原始内容\n原生界面变更");
+  await press("选择 已暂存文件 hello.txt");
+  await press("选择行…");
+  await press("+原生界面变更");
+  await press("应用所选行");
+  assert.equal(git("diff", "--cached", "--name-only"), "");
+  await shown("前往文件变更");
+  console.log("✓ 历史工作区整文件、分组、区块与逐行暂存及取消暂存");
   await press("前往文件变更");
   await press("hello.txt");
   await press("差异");

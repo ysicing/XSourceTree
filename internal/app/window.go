@@ -418,7 +418,7 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 	wasWorking := screen == "history" && app.historyWorking
 	historyRequest := app.historyRequest()
 	historyScreen := screen == "history" || screen == "search" && app.historyLoaded
-	if screen == "search" {
+	if screen == "search" || wasWorking {
 		historyRequest = app.historyResult
 	}
 	historyOffset := app.historyOffset
@@ -465,8 +465,7 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 		if restoreWorking {
 			if len(result.snapshot.Files) > 0 {
 				workingFile, workingStaged := historyWorkingFile(result.snapshot.Files, file, staged)
-				workingSelection = &nativeSelection{file: workingFile, staged: workingStaged}
-				workingSelection.diff, detailErr = app.service.Diff(ctx, path, workingFile, workingStaged)
+				workingSelection, detailErr = app.readHistoryWorkingSelection(ctx, path, workingFile, workingStaged, result.snapshot.Files)
 			} else if result.snapshot.Head != "" {
 				headVisible := false
 				for _, commit := range history {

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ysicing/XSourceTree/locales"
+	"github.com/ysicing/51code/locales"
 
 	"github.com/egoist/mygo"
 )

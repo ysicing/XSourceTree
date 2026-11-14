@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "xsourcetree",
+      "name": "51code",
       "devDependencies": {
         "mygo-cli": "0.9.0",
       },

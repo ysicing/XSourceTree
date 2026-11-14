@@ -1,4 +1,4 @@
-module github.com/ysicing/XSourceTree
+module github.com/ysicing/51code
 
 go 1.27.3
 

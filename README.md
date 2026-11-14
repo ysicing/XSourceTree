@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="resources/icon.png" width="128" height="128" alt="XSourceTree 应用图标">
+  <img src="resources/icon.png" width="128" height="128" alt="51Code 应用图标">
 </p>
 
-# XSourceTree
+# 51Code
 
-轻量的开源 Git 桌面客户端，专注 SourceTree 中常用的工作流。优先支持 macOS，使用 Go 和 [MyGo Native UI](https://mygo.egoist.dev/docs/ui) 构建界面，使用系统 Git。
+51Code（原 XSourceTree）是轻量的开源 Git 桌面客户端，专注 SourceTree 中常用的工作流。优先支持 macOS，使用 Go 和 [MyGo Native UI](https://mygo.egoist.dev/docs/ui) 构建界面，使用系统 Git。
 
 ## 功能
 

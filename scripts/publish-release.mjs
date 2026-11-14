@@ -18,15 +18,20 @@ export async function releasePlan(root, directory = "build") {
   if (!/^[\w-]+\/[\w.-]+$/.test(config.githubRepository ?? "")) {
     throw new Error("发布配置缺少有效的 GitHub owner/repository");
   }
-  const base = new URL(config.downloadBase);
-  if (!/^\d+\.\d+\.\d+$/.test(version) || base.protocol !== "https:" ||
-      base.username || base.password || base.search || base.hash ||
-      !/^[\w.-]+\/[\w./-]+$/.test(config.storageTarget) ||
-      config.storageTarget.split("/").some((part) => part === "." || part === "..")) {
-    throw new Error("发布版本必须为稳定版，下载地址须为 HTTPS，存储目标须为 mc 别名下的路径");
-  }
-  const downloadBase = base.href.replace(/\/$/, "");
-  const storageTarget = config.storageTarget.replace(/\/$/, "");
+  const locations = [config, ...(config.legacyUpdates ? [config.legacyUpdates] : [])].map((location) => {
+    const base = new URL(location.downloadBase);
+    if (!/^\d+\.\d+\.\d+$/.test(version) || base.protocol !== "https:" ||
+        base.username || base.password || base.search || base.hash ||
+        !/^[\w.-]+\/[\w./-]+$/.test(location.storageTarget) ||
+        location.storageTarget.split("/").some((part) => part === "." || part === "..")) {
+      throw new Error("发布版本必须为稳定版，下载地址须为 HTTPS，存储目标须为 mc 别名下的路径");
+    }
+    return {
+      downloadBase: base.href.replace(/\/$/, ""),
+      storageTarget: location.storageTarget.replace(/\/$/, ""),
+    };
+  });
+  const [{ downloadBase, storageTarget }] = locations;
   const publicKey = Buffer.from(config.publicKey, "base64");
   if (publicKey.length !== 32) throw new Error("更新公钥无效");
   const key = createPublicKey({
@@ -44,7 +49,7 @@ export async function releasePlan(root, directory = "build") {
     const manifestData = await readFile(manifestPath);
     const manifest = JSON.parse(manifestData);
     notes ??= manifest.notes;
-    const archiveName = `xsourcetree-${version}-${target}.tar.gz`;
+    const archiveName = `51code-${version}-${target}.tar.gz`;
     const archivePath = resolve(folder, archiveName);
     const archive = await readFile(archivePath);
     const signature = Buffer.from(manifest.signature ?? "", "base64");
@@ -54,7 +59,7 @@ export async function releasePlan(root, directory = "build") {
         !verify(null, createHash("sha256").update(archive).digest(), key, signature)) {
       throw new Error(`${target} 的清单、签名或更新包不一致，请用当前配置和签名私钥重新构建`);
     }
-    const dmgName = `xsourcetree-${version}-${arch}.dmg`;
+    const dmgName = `51code-${version}-${arch}.dmg`;
     const dmgPath = resolve(folder, dmgName);
     const dmg = await readFile(dmgPath);
     if (!dmg.length) throw new Error(`${dmgName} 为空`);
@@ -68,7 +73,13 @@ export async function releasePlan(root, directory = "build") {
       artifact(dmgName, dmgPath, dmg),
       artifact(`${version}/${manifestName}`, manifestPath, manifestData),
     );
-    feeds.push({ ...artifact(manifestName, manifestPath, manifestData), version });
+    for (const location of locations) {
+      feeds.push({
+        ...artifact(manifestName, manifestPath, manifestData), version,
+        object: `${location.storageTarget}/${manifestName}`,
+        url: `${location.downloadBase}/${manifestName}`,
+      });
+    }
   }
   return { version, artifacts, feeds, github: { repository: config.githubRepository, notes } };
 }
@@ -83,15 +94,15 @@ export async function verifyAppleRelease(root, directory, plan, run = spawnSync)
     }
     return `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
   };
-  const temporary = await mkdtemp(resolve(tmpdir(), "xsourcetree-signing-"));
+  const temporary = await mkdtemp(resolve(tmpdir(), "51code-signing-"));
   try {
     for (const arch of ["arm64", "amd64"]) {
       const folder = resolve(root, directory, `darwin-${arch}`);
       const extracted = resolve(temporary, arch);
       await mkdir(extracted);
-      checked("tar", ["-xzf", resolve(folder, `xsourcetree-${plan.version}-darwin-${arch}.tar.gz`), "-C", extracted]);
-      const app = resolve(extracted, "XSourceTree.app");
-      const dmg = resolve(folder, `xsourcetree-${plan.version}-${arch}.dmg`);
+      checked("tar", ["-xzf", resolve(folder, `51code-${plan.version}-darwin-${arch}.tar.gz`), "-C", extracted]);
+      const app = resolve(extracted, "51Code.app");
+      const dmg = resolve(folder, `51code-${plan.version}-${arch}.dmg`);
       for (const artifact of [app, dmg]) {
         checked("codesign", ["--verify", "--deep", "--strict", artifact]);
         const signature = checked("codesign", ["--display", "--verbose=4", artifact]);
@@ -253,7 +264,7 @@ export async function publishGitHubRelease(plan, { run = spawnSync } = {}) {
   if (!current) {
     invoke([
       "release", "create", tag, ...repoArgs, "--verify-tag", "--draft",
-      "--title", `XSourceTree ${tag}`, "--notes-file", "-",
+      "--title", `51Code ${tag}`, "--notes-file", "-",
     ], plan.github.notes);
   }
   for (const file of pending) {
@@ -307,7 +318,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       console.log(plan.artifacts.filter((file) => file.name.endsWith(".dmg")).map((file) => file.name).join("\n"));
     } else {
       await publish(plan);
-      console.log(`已发布 XSourceTree ${plan.version}，双架构 CDN 文件及更新清单回读通过`);
+      console.log(`已发布 51Code ${plan.version}，双架构 CDN 文件及更新清单回读通过`);
       try {
         const url = await publishGitHubRelease(plan);
         console.log(`GitHub Release 与双架构安装包已发布并校验：${url}`);

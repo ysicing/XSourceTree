@@ -1,4 +1,4 @@
 interface:
-  display_name: "XSourceTree 发版"
+  display_name: "51Code 发版"
   short_description: "本地允许 ad-hoc，正式发版完成 Apple 签名公证、tag、对象存储及 Homebrew 更新"
-  default_prompt: "使用 $xsourcetree-release 完成本次 XSourceTree 正式发版，使用 Apple 证书签名与公证，推送版本 tag，发布双架构包到自有对象存储并更新 ysicing/homebrew-tap。"
+  default_prompt: "使用 $xsourcetree-release 完成本次 51Code 正式发版，保留旧版配置和 API Key 兼容，使用 Apple 证书签名与公证，推送版本 tag，发布双架构包及新旧入口更新清单到自有对象存储并更新 ysicing/homebrew-tap。"

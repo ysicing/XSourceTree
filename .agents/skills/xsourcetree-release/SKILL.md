@@ -1,17 +1,19 @@
 ---
 name: xsourcetree-release
-description: 为 XSourceTree 本地构建或正式发版；本地允许 ad-hoc，正式版使用 Apple 证书签名与公证，推送版本 tag、发布双架构包到对象存储及 CDN、创建附带安装包的 GitHub Release，并更新 ysicing/homebrew-tap。支持预演与中断恢复，不用于 XStats 或普通功能开发。
+description: 为 51Code（原 XSourceTree）本地构建或正式发版；本地允许 ad-hoc，正式版使用 Apple 证书签名与公证，推送版本 tag、发布双架构包到对象存储及 CDN、创建附带安装包的 GitHub Release，并更新 ysicing/homebrew-tap。支持预演与中断恢复，不用于 XStats 或普通功能开发。
 ---
 
-# XSourceTree 发版
+# 51Code 发版
 
 复用仓库发布脚本，让已安装应用通过自有对象存储获得可信更新，同时在对应 tag 的 GitHub Release 附加双架构 DMG，供用户直接下载安装。
+
+技能调用名保留 `xsourcetree-release`，兼容已有入口。改名后的数据目录、Bundle ID、钥匙串服务名与更新签名密钥必须沿用旧身份，详见 `docs/development.md` 的“改名兼容”；不得批量替换这些兼容标识。
 
 ## 模式与授权
 
 - 本地开发或预览使用 `task dev` / `task build`，默认 ad-hoc；本地产物不得用于正式发布。
 - 正式发布预演使用 `bun run release --dry-run`，执行双架构 Developer ID 签名、公证及校验；dry-run 仍会向 Apple 提交公证，但不上传对象、不打 tag、不更新 tap。
-- 按用户已明确的发布约定，“发布 XSourceTree <版本>”包含发布源码 commit/push、创建并推送 `v<version>` tag、正式签名与公证、对象/CDN 发布、创建或补齐该 tag 的 GitHub Release 及双架构 DMG 附件、更新并推送 `ysicing/homebrew-tap`。用户明确缩小范围时遵循其限制。
+- 按用户已明确的发布约定，“发布 51Code <版本>”（原 XSourceTree）包含发布源码 commit/push、创建并推送 `v<version>` tag、正式签名与公证、对象/CDN 发布、创建或补齐该 tag 的 GitHub Release 及双架构 DMG 附件、更新并推送 `ysicing/homebrew-tap`。用户明确缩小范围时遵循其限制。
 - “整理技能”“准备发版”“预演”“只构建”“只发布已有产物”按请求范围执行；不推断额外发布动作。安装或覆盖用户正在运行的应用不属于默认流程。正式发版只推 tag 不算交付完成，必须同时有可下载的 GitHub Release 安装包附件。
 - 目标版本优先采用用户指定值，否则核对 `package.json`、`CHANGELOG.md` 与线上清单。不要静默升版本或覆盖已发布版本。
 
@@ -28,7 +30,7 @@ description: 为 XSourceTree 本地构建或正式发版；本地允许 ad-hoc�
 | `scripts/publish-release.mjs` | 双架构校验、上传顺序、回读与重试约束 |
 | `Taskfile.yml`、`docs/development.md` | 验证、签名、发布及原生桌面 smoke 说明 |
 
-每次从配置读取对象目标、下载地址、Developer ID 身份、预期团队 ID 和公证钥匙串配置，不把证书指纹硬编码进技能。默认对象目标为 `c-ip/oss/apps/macOS/XSourceTree`，下载根地址为 `https://c.ysicing.net/oss/apps/macOS/XSourceTree`；以当前配置为准，不操作 XStats 路径。使用发布机器已有的 `mc` 别名，不输出凭证。
+每次从配置读取对象目标、下载地址、Developer ID 身份、预期团队 ID 和公证钥匙串配置，不把证书指纹硬编码进技能。默认对象目标为 `c-ip/oss/apps/macOS/51code`，下载根地址为 `https://c.ysicing.net/oss/apps/macOS/51code`；以当前配置为准，不操作 XStats 路径。`legacyUpdates` 指向原 XSourceTree 目录，发布脚本会在新安装包验证后同步旧入口清单；新旧目录的双架构清单都须回读验证，历史对象不移动、不覆盖。使用发布机器已有的 `mc` 别名，不输出凭证。
 
 更新私钥默认位于 `~/.config/xsourcetree/update-keys/mygo-update.key`，通过 `MYGO_UPDATER_PRIVATE_KEY` 传给构建。保留现有密钥；缺失、不可读或不匹配时停止，不生成或更换密钥。不得将私钥写进仓库、技能、输出或命令行字面参数。
 
@@ -80,10 +82,10 @@ bun run publish --dir "$RELEASE_DIR"
 
 ## GitHub Release 安装包
 
-`release` 与 `publish` 在对象/CDN 验收后，自动为配置中的 `githubRepository`（当前为 `ysicing/XSourceTree`）发布 `v<version>` Release。使用同一正式产物目录，附加：
+`release` 与 `publish` 在对象/CDN 验收后，自动为配置中的 `githubRepository`（当前为 `ysicing/51code`）发布 `v<version>` Release。使用同一正式产物目录，附加：
 
-- `xsourcetree-<version>-arm64.dmg`
-- `xsourcetree-<version>-amd64.dmg`
+- `51code-<version>-arm64.dmg`
+- `51code-<version>-amd64.dmg`
 
 新 Release 先保持草稿，说明来自已验签更新清单的当前版本更新日志；两个附件上传完成且 GitHub 返回的 SHA-256 digest 与 CDN 使用的本地产物一致后，才公开发布。tag 本身不能承载附件，源码压缩包不代替 DMG。
 
@@ -93,12 +95,12 @@ bun run publish --dir "$RELEASE_DIR"
 
 ## Homebrew tap
 
-对象与 CDN 验收通过后，更新 `ysicing/homebrew-tap`（tap 名称 `ysicing/tap`）。先核对远端默认分支、适用规则、已有 cask、CI 和本地工作区修改。首次创建 `Casks/xsourcetree.rb`，之后更新该文件；只修改该 cask 及首次收录所需的现有安装说明，不改其他产品或添加无关自动化。
+对象与 CDN 验收通过后，更新 `ysicing/homebrew-tap`（tap 名称 `ysicing/tap`）。先核对远端默认分支、适用规则、已有 cask、CI 和本地工作区修改。兼容现有安装入口时继续更新 `Casks/xsourcetree.rb`，产品名称改为 51Code；如用户另行要求改 cask token，需同时处理旧入口迁移。只修改该产品及其安装说明，不改其他产品或添加无关自动化。没有正式发布新安装包时，不提前把线上 cask 指向尚未上传的 URL。
 
 - `version` 与源码 tag、两个固定更新清单一致。
-- 用 `arch arm: "arm64", intel: "amd64"` 和对应 `sha256 arm: ..., intel: ...`；URL 为 `<downloadBase>/xsourcetree-#{version}-#{arch}.dmg`。
+- 用 `arch arm: "arm64", intel: "amd64"` 和对应 `sha256 arm: ..., intel: ...`；URL 为 `<downloadBase>/51code-#{version}-#{arch}.dmg`。
 - SHA-256 必须来自本次已发布且 CDN 回读一致的 DMG，不能使用更新归档 hash 或 `sha256 :no_check`。
-- 使用 `app "XSourceTree.app"` 和 `auto_updates true`。最低 macOS 版本以当前配置和实际产物为准（目前为 macOS 12 Monterey）。
+- 使用 `app "51Code.app"` 和 `auto_updates true`。最低 macOS 版本以当前配置和实际产物为准（目前为 macOS 12 Monterey）。
 - 如配置 livecheck，可使用本项目的稳定版 Git tag 或 GitHub Release；下载 URL 仍使用本项目 CDN，不使用 XStats 的发布源。
 
 使用本地 Homebrew 能解析到的 tap 工作区，运行：

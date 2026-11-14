@@ -12,14 +12,14 @@ import { publish, releasePlan, verifyAppleRelease } from "./publish-release.mjs"
 import * as release from "./publish-release.mjs";
 
 async function fixture(run) {
-  const root = await mkdtemp(join(tmpdir(), "xsourcetree-publish-"));
+  const root = await mkdtemp(join(tmpdir(), "51code-publish-"));
   const { publicKey, privateKey } = generateKeyPairSync("ed25519");
-  const base = "https://cdn.example.test/XSourceTree";
+  const base = "https://cdn.example.test/51code";
   try {
     await writeFile(join(root, "package.json"), JSON.stringify({ version: "1.2.3" }));
     await writeFile(join(root, "release.config.json"), JSON.stringify({
-      downloadBase: base, storageTarget: "test/apps/XSourceTree",
-      githubRepository: "ysicing/XSourceTree",
+      downloadBase: base, storageTarget: "test/apps/51code",
+      githubRepository: "ysicing/51code",
       publicKey: publicKey.export({ type: "spki", format: "der" }).subarray(-32).toString("base64"),
       macos: { teamID: "TEAM123456" },
     }));
@@ -28,9 +28,9 @@ async function fixture(run) {
       const folder = join(root, "build", target);
       await mkdir(folder, { recursive: true });
       const archive = Buffer.from(`signed test archive ${arch}`);
-      const name = `xsourcetree-1.2.3-${target}.tar.gz`;
+      const name = `51code-1.2.3-${target}.tar.gz`;
       await writeFile(join(folder, name), archive);
-      await writeFile(join(folder, `xsourcetree-1.2.3-${arch}.dmg`), "test dmg");
+      await writeFile(join(folder, `51code-1.2.3-${arch}.dmg`), "test dmg");
       await writeFile(join(folder, `update-${target}.json`), JSON.stringify({
         version: "1.2.3", notes: "更新说明", size: archive.length, url: `${base}/${name}`,
         signature: sign(null, createHash("sha256").update(archive).digest(), privateKey).toString("base64"),
@@ -75,7 +75,7 @@ function storage(plan, options = {}) {
 test("checks both architectures and rejects wrong signatures or missing packages", async () => {
   await fixture(async (root) => {
     expect((await releasePlan(root)).artifacts).toHaveLength(6);
-    const archive = join(root, "build/darwin-amd64/xsourcetree-1.2.3-darwin-amd64.tar.gz");
+    const archive = join(root, "build/darwin-amd64/51code-1.2.3-darwin-amd64.tar.gz");
     const original = await readFile(archive);
     await writeFile(archive, Buffer.alloc(original.length));
     await expect(releasePlan(root)).rejects.toThrow("签名");
@@ -121,6 +121,42 @@ test("identical artifacts are safe to retry without overwriting version objects"
   });
 });
 
+test("keeps legacy clients on the signed update channel after renaming", async () => {
+  await fixture(async (root) => {
+    const configPath = join(root, "release.config.json");
+    const config = JSON.parse(await readFile(configPath, "utf8"));
+    config.legacyUpdates = {
+      downloadBase: "https://cdn.example.test/old-name",
+      storageTarget: "test/apps/old-name",
+    };
+    await writeFile(configPath, JSON.stringify(config));
+    const plan = await releasePlan(root);
+    expect(plan.feeds).toHaveLength(4);
+    const legacy = plan.feeds.filter((feed) => feed.object.startsWith("test/apps/old-name/"));
+    expect(legacy).toHaveLength(2);
+    for (const feed of legacy) {
+      const current = plan.feeds.find((item) => item.name === feed.name && item !== feed);
+      expect(feed.path).toBe(current.path);
+      expect(feed.hash).toBe(current.hash);
+      expect(feed.url).toBe(`https://cdn.example.test/old-name/${feed.name}`);
+      const manifest = JSON.parse(await readFile(feed.path, "utf8"));
+      expect(manifest.url).toStartWith(config.downloadBase + "/");
+    }
+    const fake = storage(plan);
+    await publish(plan, fake);
+    expect(fake.events.filter((args) => args[0] === "cp")).toHaveLength(4);
+    for (const feed of legacy) {
+      expect(fake.events.some((args) => args[0] === "read" && args[1] === feed.url)).toBe(true);
+    }
+    const ahead = storage(plan, { currentVersion: "2.0.0" });
+    await expect(publish(plan, ahead)).rejects.toThrow("禁止回退");
+    expect(ahead.events.some((args) => args.includes("cp"))).toBe(false);
+    config.legacyUpdates.storageTarget = "test/../wrong";
+    await writeFile(configPath, JSON.stringify(config));
+    await expect(releasePlan(root)).rejects.toThrow();
+  });
+});
+
 test("validates archived apps and disk images for both architectures", async () => {
   await fixture(async (root) => {
     const plan = await releasePlan(root);
@@ -134,10 +170,10 @@ test("validates archived apps and disk images for both architectures", async () 
     });
     const archives = calls.filter(([program]) => program === "tar");
     expect(archives).toHaveLength(2);
-    expect(archives[0][2]).toEndWith("xsourcetree-1.2.3-darwin-arm64.tar.gz");
-    expect(archives[1][2]).toEndWith("xsourcetree-1.2.3-darwin-amd64.tar.gz");
+    expect(archives[0][2]).toEndWith("51code-1.2.3-darwin-arm64.tar.gz");
+    expect(archives[1][2]).toEndWith("51code-1.2.3-darwin-amd64.tar.gz");
     const applications = calls.filter(([program, operation]) => program === "codesign" && operation === "--verify");
-    expect(applications[0].at(-1)).toBe(join(archives[0].at(-1), "XSourceTree.app"));
+    expect(applications[0].at(-1)).toBe(join(archives[0].at(-1), "51Code.app"));
     expect(calls.filter(([program]) => program === "xcrun")).toHaveLength(4);
     expect(calls.filter(([program]) => program === "spctl")).toHaveLength(4);
     await expect(stat(archives[0].at(-1))).rejects.toThrow();
@@ -195,7 +231,7 @@ function github(plan, options = {}) {
       }
       if (args[0] === "api") {
         if (options.lookupFailure) return { status: 1, stderr: "forbidden" };
-        if (endpoint !== "repos/ysicing/XSourceTree/releases?per_page=100" ||
+        if (endpoint !== "repos/ysicing/51code/releases?per_page=100" ||
             !args.includes("--paginate") || !args.includes("--jq") || args.includes("--slurp")) {
           throw new Error("draft lookup must filter paginated releases before collecting output");
         }
@@ -241,10 +277,10 @@ test("publishes both DMGs on the existing version tag after verifying uploaded d
     expect(fake.current.tag_name).toBe("v1.2.3");
     expect(fake.current.draft).toBe(false);
     expect(fake.current.assets.map((file) => file.name)).toEqual([
-      "xsourcetree-1.2.3-arm64.dmg", "xsourcetree-1.2.3-amd64.dmg",
+      "51code-1.2.3-arm64.dmg", "51code-1.2.3-amd64.dmg",
     ]);
     expect(fake.events.every((args) => args.includes("github.com") ||
-      args.includes("github.com/ysicing/XSourceTree"))).toBe(true);
+      args.includes("github.com/ysicing/51code"))).toBe(true);
     const finalUpload = fake.events.findLastIndex((args) => args[1] === "upload");
     const publication = fake.events.findIndex((args) => args[1] === "edit");
     expect(fake.events.slice(finalUpload + 1, publication).some((args) => args[0] === "api")).toBe(true);

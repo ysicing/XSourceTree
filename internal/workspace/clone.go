@@ -6,7 +6,7 @@ package workspace
 import (
 	"context"
 
-	"github.com/ysicing/XSourceTree/internal/gitrepo"
+	"github.com/ysicing/51code/internal/gitrepo"
 )
 
 func (manager *Manager) Clone(ctx context.Context, source, parent, name string) (gitrepo.Snapshot, error) {

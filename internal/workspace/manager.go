@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ysicing/XSourceTree/internal/gitrepo"
+	"github.com/ysicing/51code/internal/gitrepo"
 )
 
 type Recent struct {

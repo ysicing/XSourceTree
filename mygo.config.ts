@@ -8,8 +8,8 @@ import { version } from "./package.json";
 import release from "./release.config.json";
 
 export default defineConfig({
-  name: "XSourceTree",
-  slug: "xsourcetree",
+  name: "51Code",
+  slug: "51code",
   identifier: "com.ysicing.xsourcetree",
   version,
   out: "build",

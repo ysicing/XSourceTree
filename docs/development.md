@@ -25,6 +25,16 @@ AI 协议适配位于 `internal/commitai/`。空协议保留原有 Magpie 自动
 
 `internal/aikeychain/` 使用已有 purego 依赖调用 macOS Security.framework，不通过命令行传递密钥。钥匙串服务名为 `com.ysicing.xsourcetree.ai`，账号由协议与规范化 Base URL 的 SHA-256 生成。密钥不参与配置 JSON 序列化；读写在后台完成，失败不降级为明文保存或忽略凭证错误发送请求。设置保留未保存的密钥草稿，保存失败允许重试，关闭前确认放弃，写入期间阻止关闭。
 
+### 改名兼容
+
+品牌展示名为 `51Code`，Go 模块为 `github.com/ysicing/51code`，安装包前缀使用小写 `51code`。Bundle ID 继续使用 `com.ysicing.xsourcetree`，钥匙串服务名及账号生成规则保持不变，以复用旧 API Key 和系统偏好。
+
+MyGo 根据应用名选择数据目录和单实例锁。启动时先用旧名称 `XSourceTree`（开发版为 `XSourceTree Dev`）固定数据目录并取得原锁，再恢复新显示名。macOS 继续读取 `~/Library/Application Support/XSourceTree`，包括仓库列表、草稿、偏好与恢复副本；不复制、移动或覆盖旧数据。自动化提前设置的数据目录仍优先使用。旧目录不可用时停止启动，不静默启用空配置。
+
+已有 `XSOURCETREE_*` 构建和测试环境变量、`XSourceTreeCommit`／`XSourceTreeBuildTime` 元数据字段及仓库外更新私钥路径继续兼容。图标内容未变，历史图标源文件名保留。
+
+### 本地构建
+
 构建 macOS 应用与 DMG：
 
 ```sh
@@ -37,7 +47,7 @@ task build
 
 正式版本仍由 `package.json` 的 `version` 控制，不随本地构建自动修改。右下角状态栏显示例如 `v0.0.1 (12)`，点击打开“关于”窗口；悬停和“关于”窗口可查看构建号、Git short commit 和构建时间。未提交修改的构建附加 `-dirty`。时间以 UTC 写入构建，界面按本地时区显示；macOS 安装包同时写入 `CFBundleVersion`、`XSourceTreeCommit` 和 `XSourceTreeBuildTime`。更新清单、下载文件名和版本 tag 继续使用正式版本号。`task dev` 和直接 `go build` 不递增打包构建号。
 
-本地构建产物与已安装应用共用单实例锁。再次启动时，新进程退出并激活已有窗口，因此已有应用运行时，打开新产物不会切换到新代码。预览新构建前，应先通过应用菜单正常退出已有版本，再直接打开构建目录中的 `.app`，无需覆盖 `/Applications/XSourceTree.app`。代理不得擅自退出用户启动的进程；需要切换时先说明并取得授权。普通预览不得修改 `XDG_RUNTIME_DIR`、`TMPDIR` 或应用标识来绕过单实例锁；独立数据的 `e2e` 测试仍按下文流程执行。
+本地构建产物与已安装应用共用单实例锁，新旧品牌也共用原锁。再次启动时，新进程退出并激活已有窗口，因此已有应用运行时，打开新产物不会切换到新代码。预览新构建前，应先通过应用菜单正常退出已有版本，再直接打开构建目录中的 `51Code.app`，无需覆盖已安装应用。代理不得擅自退出用户启动的进程；需要切换时先说明并取得授权。普通预览不得修改 `XDG_RUNTIME_DIR`、`TMPDIR` 或应用标识来绕过单实例锁；独立数据的 `e2e` 测试仍按下文流程执行。
 
 应用图标源文件为 `resources/icon.png`，MyGo 构建时自动使用。透明底 Logo 位于 `assets/brand/logo.png`，macOS 图标文件位于 `assets/brand/XSourceTree.icns`。
 
@@ -118,7 +128,9 @@ Git 命令使用参数数组执行，路径按字面值处理。写操作限定�
 
 ### 存储与签名
 
-更新包与清单放在自有对象存储，沿用 XStats 的 `mc` 存储别名和 CDN，使用独立目录。[release.config.json](../release.config.json) 统一维护下载根地址 `https://c.ysicing.net/oss/apps/macOS/XSourceTree`、上传目标 `c-ip/oss/apps/macOS/XSourceTree` 和签名公钥。客户端直接通过 HTTPS 检查与下载，再交由 MyGo 验签安装。存储凭证仅由发布机器的 `mc` 管理。
+更新包与清单放在自有对象存储，沿用 XStats 的 `mc` 存储别名和 CDN，使用独立目录。[release.config.json](../release.config.json) 统一维护下载根地址 `https://c.ysicing.net/oss/apps/macOS/51code`、上传目标 `c-ip/oss/apps/macOS/51code` 和签名公钥。客户端直接通过 HTTPS 检查与下载，再交由 MyGo 验签安装。存储凭证仅由发布机器的 `mc` 管理。
+
+`legacyUpdates` 保留原 `XSourceTree` 下载根地址及上传目标。每次正式发布在新目录中的安装包通过校验后，将同一份签名更新清单同步到新旧目录；旧客户端可从原入口发现并下载新品牌安装包。旧版本归档不移动、不覆盖，更新公私钥不变。MyGo 原位替换更新会保留已安装的 `.app` 文件路径，显示名称变为 51Code；通过新 DMG 安装时应用文件名为 `51Code.app`。首次改名发布仍须提升正式版本号，不能复用已发布版本。
 
 同一配置的 `macos` 保存 Developer ID 证书指纹、预期团队 ID 和公证钥匙串配置名。当前复用本机的 `XStats` 公证配置，凭据和证书私钥保存在钥匙串中，不写入仓库。证书续期后须更新指纹；更换发布机器时须安装对应证书私钥并配置同名公证凭据。可用 `security find-identity -v -p codesigning` 检查证书、`xcrun notarytool history --keychain-profile XStats` 检查公证权限。
 
@@ -159,6 +171,6 @@ MYGO_UPDATER_PRIVATE_KEY="$(cat ~/.config/xsourcetree/update-keys/mygo-update.ke
 
 通过校验后，上传带版本号的 DMG、归档及 `<version>/update-darwin-*.json` 历史清单。版本对象通过条件 PUT 禁止覆盖；已存在且内容相同可重跑，内容不同必须提升版本，包括从 ad-hoc 改为 Developer ID 重新签名的情况。全部版本对象经 CDN 完整回读并验证 SHA-256 后，才更新两份固定更新清单并回读确认；固定清单设置 `Cache-Control: no-cache,max-age=0,must-revalidate`，CDN 需遵守该响应头，不能强制长缓存。
 
-CDN 与更新清单验证通过后，脚本自动创建或补齐 `githubRepository` 中对应 `v<version>` 的 GitHub Release，附加同一产物目录中的 `xsourcetree-<version>-arm64.dmg` 和 `xsourcetree-<version>-amd64.dmg`。新 Release 先创建草稿，使用更新清单内的版本说明，确认两个附件在 GitHub 上的 SHA-256 digest 与本地一致后才公开。已有同名且 SHA-256 相同的附件直接复用，缺失附件补传，内容不同或无法校验时停止，绝不覆盖。tag 本身没有附件，正式发版不能仅有 tag 或 GitHub 自动生成的源码压缩包。
+CDN 与更新清单验证通过后，脚本自动创建或补齐 `githubRepository`（`ysicing/51code`）中对应 `v<version>` 的 GitHub Release，附加同一产物目录中的 `51code-<version>-arm64.dmg` 和 `51code-<version>-amd64.dmg`。新 Release 先创建草稿，使用更新清单内的版本说明，确认两个附件在 GitHub 上的 SHA-256 digest 与本地一致后才公开。已有同名且 SHA-256 相同的附件直接复用，缺失附件补传，内容不同或无法校验时停止，绝不覆盖。tag 本身没有附件，正式发版不能仅有 tag 或 GitHub 自动生成的源码压缩包。
 
-同一产品发布须串行执行，两份架构清单并非原子更新；中途失败可使用同一产物目录重跑，脚本拒绝覆盖新版本清单为旧版本。CDN 已生效但 GitHub 阶段失败会明确报告部分完成；保留原目录重跑，不重建同版本包、不回退清单。若上传失败留下同名 `starter` 占位附件，脚本会停止并提示：先在对应 Release 中核实并手动删除该占位附件，再用原产物目录重跑；脚本不自动删除附件，不允许删除已有完整附件来绕过内容冲突。`--dry-run` 仅列出 GitHub 发布计划，不验证远端 tag 或权限，不创建 Release、不上传附件。脚本不会修改存储权限、创建标签或提交推送 Git。
+同一产品发布须串行执行，新旧目录的双架构清单并非原子更新；中途失败可使用同一产物目录重跑，脚本拒绝覆盖新版本清单为旧版本。CDN 已生效但 GitHub 阶段失败会明确报告部分完成；保留原目录重跑，不重建同版本包、不回退清单。若上传失败留下同名 `starter` 占位附件，脚本会停止并提示：先在对应 Release 中核实并手动删除该占位附件，再用原产物目录重跑；脚本不自动删除附件，不允许删除已有完整附件来绕过内容冲突。`--dry-run` 仅列出 GitHub 发布计划，不验证远端 tag 或权限，不创建 Release、不上传附件。脚本不会修改存储权限、创建标签或提交推送 Git。

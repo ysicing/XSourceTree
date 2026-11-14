@@ -3564,11 +3564,11 @@ func (msgs Messages) FilesMenu() string {
 	return Catalog.Format(msgs.locale, "filesMenu", nil)
 }
 
-// About says "关于 XSourceTree"
+// About says "关于 51Code"
 // in the language the app shows.
 func About() string { return In(i18n.Locale()).About() }
 
-// About says "关于 XSourceTree"
+// About says "关于 51Code"
 // in the language of msgs.
 func (msgs Messages) About() string {
 	return Catalog.Format(msgs.locale, "about", nil)

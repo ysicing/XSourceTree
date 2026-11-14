@@ -8,9 +8,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/ysicing/XSourceTree/internal/gitrepo"
-	"github.com/ysicing/XSourceTree/internal/workspace"
-	"github.com/ysicing/XSourceTree/locales"
+	"github.com/ysicing/51code/internal/gitrepo"
+	"github.com/ysicing/51code/internal/workspace"
+	"github.com/ysicing/51code/locales"
 
 	"github.com/egoist/mygo/plugins/updater"
 	"github.com/egoist/mygo/ui"

@@ -1,7 +1,11 @@
 {
-  "downloadBase": "https://c.ysicing.net/oss/apps/macOS/XSourceTree",
-  "storageTarget": "c-ip/oss/apps/macOS/XSourceTree",
-  "githubRepository": "ysicing/XSourceTree",
+  "downloadBase": "https://c.ysicing.net/oss/apps/macOS/51code",
+  "storageTarget": "c-ip/oss/apps/macOS/51code",
+  "githubRepository": "ysicing/51code",
+  "legacyUpdates": {
+    "downloadBase": "https://c.ysicing.net/oss/apps/macOS/XSourceTree",
+    "storageTarget": "c-ip/oss/apps/macOS/XSourceTree"
+  },
   "publicKey": "4iCjLnmpkvE0x/McE+VVdS1PIt6XTKW8GDGKnqbqBsE=",
   "macos": {
     "signingIdentity": "970ABEF8A680716E4C09F4104704121C71BB975B",

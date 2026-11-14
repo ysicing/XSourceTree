@@ -13,8 +13,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ysicing/XSourceTree/internal/commitai"
-	"github.com/ysicing/XSourceTree/locales"
+	"github.com/ysicing/51code/internal/commitai"
+	"github.com/ysicing/51code/locales"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/updater"

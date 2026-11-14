@@ -1,5 +1,10 @@
 # 更新日志
 
+## 未发布
+
+- 将应用品牌改为 51Code，安装包前缀和项目路径使用小写 `51code`（`ysicing/51code`）
+- 保留旧版配置、提交草稿、API Key 和单实例兼容，发布时同步旧入口更新清单
+
 ## 0.0.11
 
 - 新增 OpenAI Responses、Chat Completions 和 Claude Messages 自定义连接，保留本机 Magpie 自动发现

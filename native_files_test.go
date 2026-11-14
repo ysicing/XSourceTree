@@ -10,7 +10,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/ysicing/XSourceTree/internal/gitrepo"
+	"github.com/ysicing/51code/internal/gitrepo"
 
 	"github.com/egoist/mygo/ui"
 )

@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ysicing/XSourceTree/internal/gitrepo"
+	"github.com/ysicing/51code/internal/gitrepo"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/updater"

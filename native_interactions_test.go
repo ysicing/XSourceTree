@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ysicing/XSourceTree/internal/gitrepo"
-	"github.com/ysicing/XSourceTree/internal/workspace"
+	"github.com/ysicing/51code/internal/gitrepo"
+	"github.com/ysicing/51code/internal/workspace"
 
 	"github.com/egoist/mygo/ui"
 )

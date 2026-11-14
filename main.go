@@ -7,8 +7,8 @@ import (
 	"log"
 	"path/filepath"
 
-	"github.com/ysicing/XSourceTree/internal/workspace"
-	"github.com/ysicing/XSourceTree/locales"
+	"github.com/ysicing/51code/internal/workspace"
+	"github.com/ysicing/51code/locales"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/updater"
@@ -17,9 +17,14 @@ import (
 
 func main() {
 	app := mygo.App
+	displayName := app.Name()
+	if err := preserveLegacyApplicationIdentity(app); err != nil {
+		log.Fatal(err)
+	}
 	if !app.RequestSingleInstanceLock() {
 		return
 	}
+	app.SetName(displayName)
 	dir, err := app.Path(mygo.PathUserData)
 	if err != nil {
 		log.Fatal(err)
@@ -62,7 +67,7 @@ func main() {
 	app.OnSecondInstance(func(_ []string, _ string) { open() })
 	setMenu := func() {
 		app.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
-			{Label: "XSourceTree", Submenu: []*mygo.MenuItem{
+			{Label: "51Code", Submenu: []*mygo.MenuItem{
 				{Label: locales.About(), Click: func(_ *mygo.MenuItem, _ *mygo.Window) {
 					showNativeAbout()
 				}},

@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ysicing/XSourceTree/internal/workspace"
-	"github.com/ysicing/XSourceTree/locales"
+	"github.com/ysicing/51code/internal/workspace"
+	"github.com/ysicing/51code/locales"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/sfsymbols"

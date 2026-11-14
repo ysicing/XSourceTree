@@ -6,7 +6,7 @@ package main
 import (
 	"context"
 
-	"github.com/ysicing/XSourceTree/internal/gitrepo"
+	"github.com/ysicing/51code/internal/gitrepo"
 )
 
 func (service *RepositoryService) Worktrees(ctx context.Context, path string) ([]gitrepo.Worktree, error) {

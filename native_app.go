@@ -12,11 +12,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ysicing/XSourceTree/internal/aikeychain"
-	"github.com/ysicing/XSourceTree/internal/commitai"
-	"github.com/ysicing/XSourceTree/internal/gitrepo"
-	"github.com/ysicing/XSourceTree/internal/workspace"
-	"github.com/ysicing/XSourceTree/locales"
+	"github.com/ysicing/51code/internal/aikeychain"
+	"github.com/ysicing/51code/internal/commitai"
+	"github.com/ysicing/51code/internal/gitrepo"
+	"github.com/ysicing/51code/internal/workspace"
+	"github.com/ysicing/51code/locales"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/updater"
@@ -215,7 +215,7 @@ func clampSize(value, fallback, minimum, maximum float32) float32 {
 func (app *nativeApp) open() {
 	app.chosenLanguage = mygo.App.ChosenLocale()
 	app.win = mygo.NewWindow(mygo.WindowOptions{
-		Title: "XSourceTree", Width: 1320, Height: 860, MinWidth: 1024, MinHeight: 680,
+		Title: "51Code", Width: 1320, Height: 860, MinWidth: 1024, MinHeight: 680,
 		TitleBarStyle: mygo.TitleBarHiddenInset, TitleBarHeight: 52,
 		BackgroundColor: appearanceBackground(app.prefs.Appearance), StateKey: "main",
 		Content: ui.View(app.view),

@@ -48,3 +48,11 @@ func (service *RepositoryService) PublishBranch(ctx context.Context, path string
 	}
 	return repo.PublishBranch(ctx, request)
 }
+
+func (service *RepositoryService) PushBranch(ctx context.Context, path string, request gitrepo.PushBranchRequest) error {
+	repo, err := service.manager.Get(path)
+	if err != nil {
+		return err
+	}
+	return repo.PushBranch(ctx, request)
+}

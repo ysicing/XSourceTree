@@ -44,11 +44,14 @@ type Snapshot struct {
 }
 
 type Branch struct {
-	Name     string `json:"name"`
-	Hash     string `json:"hash"`
-	Current  bool   `json:"current"`
-	Remote   bool   `json:"remote"`
-	Upstream string `json:"upstream"`
+	Name           string `json:"name"`
+	Hash           string `json:"hash"`
+	Current        bool   `json:"current"`
+	Default        bool   `json:"default"`
+	Remote         bool   `json:"remote"`
+	Upstream       string `json:"upstream"`
+	UpstreamRemote string `json:"upstreamRemote"`
+	UpstreamBranch string `json:"upstreamBranch"`
 }
 
 type Commit struct {
@@ -314,22 +317,62 @@ func (repo *Repository) History(ctx context.Context, skip int) ([]Commit, error)
 func (repo *Repository) Branches(ctx context.Context) ([]Branch, error) {
 	repo.mu.Lock()
 	defer repo.mu.Unlock()
-	output, err := repo.git(ctx, "for-each-ref", "--format=%(refname)%00%(objectname:short)%00%(HEAD)%00%(upstream:short)", "refs/heads", "refs/remotes")
+	output, err := repo.git(ctx, "for-each-ref", "--format=%(refname)%00%(objectname:short)%00%(HEAD)%00%(upstream:short)%00%(symref)%00%(upstream:remotename)%00%(upstream:remoteref)", "refs/heads", "refs/remotes")
 	if err != nil {
 		return nil, err
 	}
 	branches := []Branch{}
+	defaults := make(map[string]bool)
+	targets := make(map[string]bool)
+	defaultName := ""
 	for _, line := range strings.Split(strings.TrimSuffix(output, "\n"), "\n") {
 		if line == "" {
 			continue
 		}
 		fields := strings.Split(line, "\x00")
-		if len(fields) != 4 {
+		if len(fields) != 7 {
 			return nil, errors.New("无法解析分支")
 		}
 		remote := strings.HasPrefix(fields[0], "refs/remotes/")
 		name := strings.TrimPrefix(strings.TrimPrefix(fields[0], "refs/heads/"), "refs/remotes/")
-		branches = append(branches, Branch{Name: name, Hash: fields[1], Current: fields[2] == "*", Remote: remote, Upstream: fields[3]})
+		branches = append(branches, Branch{
+			Name: name, Hash: fields[1], Current: fields[2] == "*", Remote: remote, Upstream: fields[3],
+			UpstreamRemote: fields[5], UpstreamBranch: strings.TrimPrefix(fields[6], "refs/heads/"),
+		})
+		if remote && strings.HasSuffix(fields[0], "/HEAD") && fields[4] != "" {
+			prefix := strings.TrimSuffix(fields[0], "HEAD")
+			if strings.HasPrefix(fields[4], prefix) {
+				target := strings.TrimPrefix(fields[4], prefix)
+				targets[target] = true
+				defaults[strings.TrimPrefix(fields[4], "refs/remotes/")] = true
+				if fields[0] == "refs/remotes/origin/HEAD" {
+					defaultName = target
+				}
+			}
+		}
+	}
+	if defaultName == "" && len(targets) == 1 {
+		for name := range targets {
+			defaultName = name
+		}
+	}
+	if defaultName == "" {
+		// 未获取远程 HEAD 的仓库仍优先显示常见主分支，不按当前检出状态猜测默认分支。
+		for _, name := range []string{"main", "master"} {
+			for _, branch := range branches {
+				if !branch.Remote && branch.Name == name {
+					defaultName = name
+					break
+				}
+			}
+			if defaultName != "" {
+				break
+			}
+		}
+	}
+	for index := range branches {
+		branch := &branches[index]
+		branch.Default = !branch.Remote && branch.Name == defaultName || branch.Remote && defaults[branch.Name]
 	}
 	return branches, nil
 }

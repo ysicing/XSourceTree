@@ -6,6 +6,7 @@ package main
 import (
 	"cmp"
 	"fmt"
+	"math"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -144,6 +145,19 @@ type nativeFileMetrics struct {
 	font   string
 	zoom   float32
 	widths map[string]float32
+}
+
+func nativeFileScroll(element ui.Element) ui.Element {
+	scroll := ui.Local(element, "file-scroll", func() ui.ScrollState { return ui.ScrollState{} })
+	return element.TrackScroll(scroll).HandleInput(func(event ui.InputEvent) bool {
+		if event.Kind != ui.InputScroll || !event.Precise || event.Mods&ui.Shift != 0 ||
+			event.DY == 0 || math.Abs(float64(event.DX)) > math.Abs(float64(event.DY)) {
+			return false
+		}
+		// 纵向手势到达边界后仍保持纵向，避免触摸板的微小横向分量挪动文件路径。
+		scroll.Y = max(0, min(scroll.Y+event.DY, scroll.MaxY))
+		return true
+	})
 }
 
 func (app *nativeApp) filePathWidth(c *ui.Context, path string) float32 {

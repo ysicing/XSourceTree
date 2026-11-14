@@ -13,6 +13,30 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
+func TestNativeDefaultBranchPrecedesDirectories(t *testing.T) {
+	app, path, finish := nativeFixture(t)
+	for _, name := range []string{"a/topic", "aaa", "release/alpha", "release/stable", "topic"} {
+		nativeGit(t, path, "branch", name)
+	}
+	nativeGit(t, path, "switch", "topic")
+	nativeGit(t, path, "update-ref", "refs/remotes/origin/release/stable", "HEAD")
+	nativeGit(t, path, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/release/stable")
+	app.refresh()
+	finish()
+	tester := ui.NewTester(app.view, 1320, 1000)
+	previousY := float32(0)
+	for _, label := range []string{"本地分支目录 release", "release/stable", "release/alpha", "本地分支目录 a", "a/topic", "aaa", "main", "topic"} {
+		node, found := tester.AccessByRole(ui.RoleTreeItem, label)
+		if !found || node.Bounds.Y <= previousY {
+			t.Fatalf("默认分支路径没有优先排列: %s %+v", label, node)
+		}
+		previousY = node.Bounds.Y
+	}
+	if app.repository.snapshot.Branch != "topic" {
+		t.Fatal("排序改变了当前分支")
+	}
+}
+
 func TestNativeReferenceDirectoryStateScopes(t *testing.T) {
 	app, _, _ := nativeFixture(t)
 	app.repository.branches = append(app.repository.branches,

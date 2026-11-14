@@ -38,6 +38,7 @@ type nativeDialog struct {
 	checkLabel      string
 	options         []string
 	choice          string
+	choiceChanged   func()
 	body            func(*ui.Context)
 	submit          func(*nativeDialog)
 	danger          bool
@@ -141,7 +142,7 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 				})
 			}
 			if len(dialog.options) > 0 {
-				ui.Select(c, &dialog.choice, dialog.options).Disabled(app.busy).FillWidth()
+				ui.Select(c, &dialog.choice, dialog.options).Disabled(app.busy).FillWidth().OnChange(dialog.choiceChanged)
 			}
 			if dialog.checkLabel != "" {
 				ui.Checkbox(c, &dialog.check, dialog.checkLabel).Disabled(app.busy)

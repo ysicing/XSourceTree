@@ -28,6 +28,7 @@ func remoteBranchParts(reference string, remotes []gitrepo.RemoteConfig) (string
 
 func (app *nativeApp) remoteSidebar(c *ui.Context) {
 	groups := map[string][]string{}
+	defaults := map[string]string{}
 	for _, remote := range app.repository.remotes {
 		groups[remote.Name] = nil
 	}
@@ -35,6 +36,9 @@ func (app *nativeApp) remoteSidebar(c *ui.Context) {
 		if branch.Remote {
 			remote, name := remoteBranchParts(branch.Name, app.repository.remotes)
 			groups[remote] = append(groups[remote], name)
+			if branch.Default {
+				defaults[remote] = name
+			}
 		}
 	}
 	names := make([]string, 0, len(groups))
@@ -46,7 +50,7 @@ func (app *nativeApp) remoteSidebar(c *ui.Context) {
 	for _, remote := range names {
 		nodes = append(nodes, &nativeRefNode{
 			name: remote, reference: remote, remote: true,
-			children: nativeReferenceNodes(groups[remote], remote+"/", ""),
+			children: nativeReferenceNodes(groups[remote], remote+"/", "", defaults[remote]),
 		})
 	}
 	app.referenceSidebar(c, "远端", "远端分支树", nativeIcons["cloud"], nodes, func(reference string, item ui.Element) {

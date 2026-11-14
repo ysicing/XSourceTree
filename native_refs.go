@@ -19,6 +19,7 @@ type nativeRefNode struct {
 	name, reference string
 	remote          bool
 	current         bool
+	preferred       bool
 	children        []*nativeRefNode
 }
 
@@ -26,7 +27,7 @@ type nativeRefKey struct {
 	repository, kind, reference string
 }
 
-func nativeReferenceNodes(names []string, prefix, current string) []*nativeRefNode {
+func nativeReferenceNodes(names []string, prefix, current, preferred string) []*nativeRefNode {
 	var roots []*nativeRefNode
 	nodes := make(map[string]*nativeRefNode)
 	for _, name := range names {
@@ -43,6 +44,7 @@ func nativeReferenceNodes(names []string, prefix, current string) []*nativeRefNo
 				nodes[path] = node
 				*children = append(*children, node)
 			}
+			node.preferred = node.preferred || name == preferred
 			children = &node.children
 		}
 		nodes[name].current = name == current
@@ -50,6 +52,12 @@ func nativeReferenceNodes(names []string, prefix, current string) []*nativeRefNo
 	var sortNodes func([]*nativeRefNode)
 	sortNodes = func(nodes []*nativeRefNode) {
 		slices.SortFunc(nodes, func(left, right *nativeRefNode) int {
+			if left.preferred != right.preferred {
+				if left.preferred {
+					return -1
+				}
+				return 1
+			}
 			if (len(left.children) > 0) != (len(right.children) > 0) {
 				if len(left.children) > 0 {
 					return -1
@@ -208,6 +216,7 @@ func (app *nativeApp) referenceItems(c *ui.Context, tree ui.TreeParts, nodes []*
 func (app *nativeApp) localBranchSidebar(c *ui.Context) {
 	var names []string
 	var current string
+	var preferred string
 	branches := make(map[string]gitrepo.Branch)
 	for _, branch := range app.repository.branches {
 		if !branch.Remote {
@@ -216,9 +225,12 @@ func (app *nativeApp) localBranchSidebar(c *ui.Context) {
 			if branch.Current {
 				current = branch.Name
 			}
+			if branch.Default {
+				preferred = branch.Name
+			}
 		}
 	}
-	app.referenceSidebar(c, "本地分支", "本地分支树", nativeIcons["branch"], nativeReferenceNodes(names, "", current), func(name string, item ui.Element) {
+	app.referenceSidebar(c, "本地分支", "本地分支树", nativeIcons["branch"], nativeReferenceNodes(names, "", current, preferred), func(name string, item ui.Element) {
 		branch := branches[name]
 		if branch.Current {
 			item.Tooltip(name + " · " + locales.CurrentBranch())
@@ -258,7 +270,7 @@ func (app *nativeApp) tagSidebar(c *ui.Context) {
 		names = append(names, tag.Name)
 	}
 	services := c.Services()
-	app.referenceSidebar(c, "标签", "标签树", nativeIcons["tag"], nativeReferenceNodes(names, "", ""), func(name string, item ui.Element) {
+	app.referenceSidebar(c, "标签", "标签树", nativeIcons["tag"], nativeReferenceNodes(names, "", "", ""), func(name string, item ui.Element) {
 		item.ContextMenu(func(menu *ui.Menu) {
 			app.refSelected = nativeRefKey{repository: app.repository.snapshot.Path, kind: "标签", reference: name}
 			if menu.Item(locales.CopyTagName()).Chosen() {

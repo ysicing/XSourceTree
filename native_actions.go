@@ -287,6 +287,10 @@ func (app *nativeApp) remoteAction(action string) {
 		app.publishDialog()
 		return
 	}
+	if action == "push" && len(app.repository.remotes) > 1 {
+		app.branchPushDialog(false)
+		return
+	}
 	app.leaveConflict(func() {
 		app.mutate(map[string]string{"fetch": locales.Fetching(), "pull": locales.Pulling(), "push": locales.Pushing()}[action], func(ctx context.Context, path string) error {
 			return app.service.Remote(ctx, path, action)
@@ -363,43 +367,7 @@ func (app *nativeApp) editRemoteDialog(remote *gitrepo.RemoteConfig) {
 }
 
 func (app *nativeApp) publishDialog() {
-	if len(app.repository.remotes) == 0 {
-		app.remoteDialog()
-		return
-	}
-	snapshot := app.repository.snapshot
-	remotes := append([]gitrepo.RemoteConfig{}, app.repository.remotes...)
-	var names []string
-	for _, remote := range remotes {
-		names = append(names, remote.Name)
-	}
-	app.dialog = &nativeDialog{
-		title: locales.PublishBranch(), action: locales.Publish(),
-		options: names, choice: names[0],
-		fields: []nativeField{{label: locales.RemoteBranchName(), value: snapshot.Branch}},
-		body: func(c *ui.Context) {
-			for _, remote := range remotes {
-				if app.dialog != nil && remote.Name == app.dialog.choice {
-					ui.Text(c, strings.Join(remote.PushURLs, "\n")).FontSize(12).Selectable()
-				}
-			}
-		},
-		submit: func(dialog *nativeDialog) {
-			for _, remote := range remotes {
-				if remote.Name != dialog.choice {
-					continue
-				}
-				request := gitrepo.PublishBranchRequest{
-					Remote: remote.Name, Token: remote.Token, Name: dialog.fields[0].value,
-					Branch: snapshot.Branch, Head: snapshot.Head,
-				}
-				app.mutateForm(dialog, locales.PublishingBranch(), func(ctx context.Context, path string) error {
-					return app.service.PublishBranch(ctx, path, request)
-				})
-				return
-			}
-		},
-	}
+	app.branchPushDialog(true)
 }
 
 func (app *nativeApp) checkoutDialog(remote string) {

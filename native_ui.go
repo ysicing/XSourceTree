@@ -565,7 +565,7 @@ func (app *nativeApp) changesSection(c *ui.Context, staged bool) {
 			return
 		}
 		if app.prefs.FileTree {
-			scroll := ui.ScrollBoth(c).Label(locales.SectionList(label)).Grow(1).MinHeight(0).FillWidth().Padding(0, 6, 6)
+			scroll := nativeFileScroll(ui.ScrollBoth(c).Label(locales.SectionList(label)).Grow(1).MinHeight(0).FillWidth().Padding(0, 6, 6))
 			scroll.Children(func() {
 				ui.Column(c).FillWidth().MinWidth(max(listWidth, scroll.LayoutBounds().W-12)).Children(func() {
 					tree := ui.TreeBase(c)
@@ -575,10 +575,11 @@ func (app *nativeApp) changesSection(c *ui.Context, staged bool) {
 				})
 			})
 		} else {
-			ui.List(c, nil, len(files)).
+			list := ui.List(c, nil, len(files)).
 				ItemKey(func(index int) any { return files[index].Path }).
 				Label(locales.SectionList(label)).Grow(1).MinHeight(0).FillWidth().
-				Padding(0, 6, 6).RowWidth(listWidth).
+				Padding(0, 6, 6).RowWidth(listWidth)
+			nativeFileScroll(list).
 				Rows(func(row ui.ListRow) { app.changeFileRow(row.Context, files[row.Index], staged, nil, 0) })
 		}
 		if count := len(app.checkedFiles(staged)); count > 0 {

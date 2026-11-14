@@ -30,6 +30,8 @@ type PublishBranchRequest struct {
 	Head   string `json:"head"`
 }
 
+type PushBranchRequest PublishBranchRequest
+
 func (repo *Repository) validateRemoteName(ctx context.Context, name string) error {
 	if name == "" || name == "." || strings.HasPrefix(name, "-") || strings.ContainsFunc(name, unicode.IsControl) {
 		return errors.New("远程名称无效")
@@ -180,6 +182,14 @@ func (repo *Repository) CheckoutRemote(ctx context.Context, remoteBranch, name s
 }
 
 func (repo *Repository) PublishBranch(ctx context.Context, request PublishBranchRequest) error {
+	return repo.pushBranch(ctx, request, true)
+}
+
+func (repo *Repository) PushBranch(ctx context.Context, request PushBranchRequest) error {
+	return repo.pushBranch(ctx, PublishBranchRequest(request), false)
+}
+
+func (repo *Repository) pushBranch(ctx context.Context, request PublishBranchRequest, publish bool) error {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	if err := repo.lockHistory(ctx); err != nil {
@@ -193,23 +203,23 @@ func (repo *Repository) PublishBranch(ctx context.Context, request PublishBranch
 	}
 	branch, err := repo.git(ctx, "symbolic-ref", "--quiet", "HEAD")
 	if err != nil {
-		return errors.New("请先切换到本地分支再发布")
+		return errors.New("请先切换到本地分支再推送")
 	}
 	head, err := repo.head(ctx)
 	if err != nil {
 		return err
 	}
 	if head == "" {
-		return errors.New("请先创建首次提交再发布分支")
+		return errors.New("请先创建首次提交再推送分支")
 	}
 	if strings.TrimSpace(branch) != "refs/heads/"+request.Branch || head != request.Head {
-		return errors.New("当前分支或提交已改变，请重新打开发布分支")
+		return errors.New("当前分支或提交已改变，请重新打开推送窗口")
 	}
 	upstream, err := repo.git(ctx, "for-each-ref", "--format=%(upstream)", "refs/heads/"+request.Branch)
 	if err != nil {
 		return err
 	}
-	if strings.TrimSpace(upstream) != "" {
+	if publish && strings.TrimSpace(upstream) != "" {
 		return errors.New("当前分支已有上游，请刷新后直接推送")
 	}
 	operation, err := repo.operation(ctx)
@@ -224,19 +234,22 @@ func (repo *Repository) PublishBranch(ctx context.Context, request PublishBranch
 		return err
 	}
 	if request.Token == "" || config.Token != request.Token {
-		return errors.New("远程配置已改变，请重新打开发布分支")
+		return errors.New("远程配置已改变，请重新打开推送窗口")
 	}
 	if len(config.PushURLs) != 1 || config.PushURLs[0] == "" {
-		return errors.New("发布分支需要且只能有一个推送地址")
+		return errors.New("推送分支需要且只能有一个推送地址")
 	}
 	mirror, err := repo.git(ctx, "config", "--bool", "--get", "remote."+request.Remote+".mirror")
 	if err != nil && !exitCode(err, 1) {
 		return err
 	}
 	if strings.TrimSpace(mirror) == "true" {
-		return errors.New("镜像远程不支持普通分支发布，请使用命令行操作")
+		return errors.New("镜像远程不支持普通分支推送，请使用命令行操作")
 	}
 	// 使用明确的本地引用，外部切换 HEAD 不会把另一个分支发布出去。
-	return repo.runRemote(ctx, "push", "--set-upstream", "--no-follow-tags", "--recurse-submodules=no",
-		"--", request.Remote, "refs/heads/"+request.Branch+":refs/heads/"+request.Name)
+	args := []string{"-c", "push.autoSetupRemote=false", "push", "--no-follow-tags", "--recurse-submodules=no"}
+	if publish {
+		args = append(args, "--set-upstream")
+	}
+	return repo.runRemote(ctx, append(args, "--", request.Remote, "refs/heads/"+request.Branch+":refs/heads/"+request.Name)...)
 }

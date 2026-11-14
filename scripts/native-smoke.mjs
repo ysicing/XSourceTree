@@ -278,6 +278,67 @@ try {
   assert.equal(gitAt(remote, "rev-parse", "refs/heads/main"), git("rev-parse", "HEAD"));
   console.log("✓ 远程配置、首次发布和上游跟踪（临时本地 bare 仓库）");
 
+  const backup = join(root, "backup.git");
+  gitAt(root, "init", "--bare", backup);
+  git("remote", "add", "backup", backup);
+  const originalRemoteHead = gitAt(remote, "rev-parse", "main");
+  git("commit", "--allow-empty", "-m", "选择推送远程");
+  git("branch", "aaa");
+  git("branch", "a/topic");
+  git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main");
+  await press("刷新");
+  const branchNodes = await tree();
+  const mainBranch = branchNodes.find((node) => node.role === "treeItem" && node.label === "main");
+  const directory = branchNodes.find((node) => node.label === "本地分支目录 a");
+  assert(mainBranch && directory && mainBranch.bounds.y < directory.bounds.y, "默认分支未排在目录前");
+  for (const [appearance, suffix] of [["浅色", "light"], ["深色", "dark"]]) {
+    await press("设置");
+    await press(appearance);
+    await press("关闭设置");
+    await press("推送");
+    await shown("远程分支名称");
+    await capture(`native-push-remote-selection-${suffix}.png`);
+    if (suffix === "light") await press("取消");
+  }
+  await press("origin");
+  await press("backup");
+  await shown(backup);
+  await press("推送");
+  assert.equal(gitAt(backup, "rev-parse", "refs/heads/main"), git("rev-parse", "HEAD"));
+  assert.equal(gitAt(remote, "rev-parse", "refs/heads/main"), originalRemoteHead);
+  assert.equal(git("rev-parse", "--abbrev-ref", "@{upstream}"), "origin/main");
+  console.log("✓ 默认分支置顶、多远程选择推送并保留已有上游");
+
+  const scrollDirectory = join(fixture, "scroll-fixture");
+  mkdirSync(scrollDirectory);
+  const scrollPath = (index) => `scroll-fixture/${"long-path-".repeat(8)}file-${String(index).padStart(3, "0")}.go`;
+  for (let index = 0; index < 100; index++) writeFileSync(join(fixture, scrollPath(index)), "scroll\n");
+  await press("刷新");
+  const scrollNodes = await tree();
+  const fileList = scrollNodes.find((node) => node.label === "未暂存文件列表");
+  const firstFile = scrollNodes.find((node) => node.label === scrollPath(0));
+  assert(fileList && firstFile);
+  const wheel = async (dx, dy) => {
+    await request("input", { events: [{
+      type: "wheel", precise: true, dx, dy,
+      x: fileList.bounds.x + fileList.bounds.width / 2,
+      y: fileList.bounds.y + fileList.bounds.height / 2,
+    }] });
+    await frame();
+  };
+  await wheel(0, 400);
+  await wheel(0, -1000);
+  for (let index = 0; index < 4; index++) await wheel(6, -50);
+  let scrolledFile = (await tree()).find((node) => node.label === scrollPath(0));
+  assert.equal(scrolledFile?.bounds.x, firstFile.bounds.x, "顶部纵向滑动导致路径横移");
+  await wheel(80, 0);
+  scrolledFile = (await tree()).find((node) => node.label === scrollPath(0));
+  assert(scrolledFile?.bounds.x < firstFile.bounds.x, "主动横向滑动失效");
+  await capture("native-file-list-scroll.png");
+  rmSync(scrollDirectory, { recursive: true });
+  await press("刷新");
+  console.log("✓ 文件列表顶部纵向滚动保持位置、主动横向滚动");
+
   writeFileSync(join(fixture, "hello.txt"), "贮藏修改\n");
   await press("刷新");
   await press("贮藏");

@@ -369,8 +369,9 @@ func TestNativeAccessibleGroupManagementAndEmptyStates(t *testing.T) {
 	if _, ok := tester.AccessByRole(ui.RoleButton, "管理仓库组 日常"); !ok {
 		t.Fatal("辅助功能无法发现分组管理按钮")
 	}
-	if _, ok := tester.Find("此分组暂无仓库"); !ok {
-		t.Fatal("空分组误报为搜索失败")
+	if button, ok := tester.AccessByRole(ui.RoleButton, "添加仓库"); !ok || button.Bounds.Y < 200 ||
+		tester.HasText("没有匹配的仓库") {
+		t.Fatal("空分组未显示中央添加入口或误报为搜索失败")
 	}
 	app.query = "无匹配结果"
 	tester.Frame()

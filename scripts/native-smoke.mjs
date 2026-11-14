@@ -135,11 +135,26 @@ try {
   assert(version && feedback.bounds.x + feedback.bounds.width <= version.bounds.x &&
     feedback.bounds.y >= version.bounds.y - 6, "反馈入口未显示在版本号左侧");
   await capture("native-feedback-library.png");
+  const emptyAdd = feedbackNodes.filter((node) => node.label === "添加仓库" && node.actions?.includes("press"));
+  assert.equal(emptyAdd.length, 1, "空仓库添加入口重复");
+  assert(emptyAdd[0].bounds.y > 200, "空仓库添加入口未居中");
+  assert(!feedbackNodes.some((node) => node.placeholder === "搜索仓库名称、路径或分支"), "空仓库仍显示搜索框");
+  for (const [appearance, suffix] of [["浅色", "light"], ["深色", "dark"]]) {
+    await press("设置");
+    await press(appearance);
+    await press("关闭设置");
+    await capture(`native-empty-library-${suffix}.png`);
+  }
   await request("menu", { path: ["文件", "本地仓库"] });
   await ready();
   await press("输入路径");
   await fill("仓库完整路径", fixture);
   await press("添加");
+  const populated = await tree();
+  const populatedAdd = populated.find((node) => node.label === "添加仓库" && node.actions?.includes("press"));
+  assert(populatedAdd && populatedAdd.bounds.y < 52, "添加后未恢复顶部工具栏");
+  assert(populated.some((node) => node.placeholder === "搜索仓库名称、路径或分支"), "添加后未恢复搜索框");
+  console.log("✓ 空仓库中央添加入口、浅深色外观和添加后恢复列表");
   await press(basename(fixture));
   await shown("文件变更");
   await press("搜索");

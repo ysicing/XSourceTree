@@ -113,7 +113,7 @@ func (app *nativeApp) view(c *ui.Context) {
 	ui.Column(c).Fill().Background(c.Theme().Background).Children(func() {
 		bar := c.TitleBar()
 		ui.Row(c).Height(52).Shrink(0).Padding(0, bar.Right+12, 0, bar.Left+12).AlignItems(ui.Center).Gap(12).DragWindow().Children(func() {
-			title := locales.LocalRepositories()
+			title := locales.Repository()
 			if app.repository != nil && app.screen != "library" {
 				title = app.repository.snapshot.Name
 			}
@@ -316,14 +316,16 @@ func (app *nativeApp) toolbar(c *ui.Context) {
 	ui.Toolbar(c, func() {
 		ui.Spacer(c)
 		if app.screen == "library" {
-			if ui.PrimaryButton(c, locales.AddRepository()).Disabled(disabled).Clicked() {
-				app.chooseLocal()
-			}
-			if ui.Button(c, locales.EnterPath()).Disabled(disabled).Clicked() {
-				app.pathDialog()
-			}
-			if toolButton(c, locales.ScanFolders(), nativeIcons["folder"]).Disabled(disabled).Clicked() {
-				app.chooseScan()
+			if !app.libraryEmpty() {
+				if ui.PrimaryButton(c, locales.AddRepository()).Disabled(disabled).Clicked() {
+					app.chooseLocal()
+				}
+				if ui.Button(c, locales.EnterPath()).Disabled(disabled).Clicked() {
+					app.pathDialog()
+				}
+				if toolButton(c, locales.ScanFolders(), nativeIcons["folder"]).Disabled(disabled).Clicked() {
+					app.chooseScan()
+				}
 			}
 		} else if app.repository != nil {
 			ui.Row(c).Children(func() {
@@ -351,15 +353,35 @@ func (app *nativeApp) toolbar(c *ui.Context) {
 	}).Label(locales.RepositoryActions()).Grow(1).MinWidth(0).Height(52).Padding(0)
 }
 
+func (app *nativeApp) libraryEmpty() bool {
+	return app.query == "" && !slices.ContainsFunc(app.library.Repositories, func(entry workspace.LocalRepository) bool {
+		return app.group == "" || entry.GroupID == app.group
+	})
+}
+
+func (app *nativeApp) emptyLibraryActions(c *ui.Context) {
+	ui.Column(c).Key("empty-library").Grow(1).FillWidth().Center().Gap(12).
+		Disabled(app.busy || app.dialog != nil).Children(func() {
+		ui.PrimaryButton(c, locales.AddRepository()).Width(168).Height(36).OnClick(app.chooseLocal)
+		ui.Toolbar(c, func() {
+			ui.Button(c, locales.EnterPath()).TextColor(c.Theme().TextMuted).OnClick(app.pathDialog)
+			ui.Button(c, locales.ScanFolders()).TextColor(c.Theme().TextMuted).OnClick(app.chooseScan)
+		}).Label(locales.AddExistingRepository()).Gap(24).Padding(0)
+	})
+}
+
 func (app *nativeApp) libraryView(c *ui.Context) {
 	ui.Column(c).FillWidth().Grow(1).MinHeight(0).Padding(22).Gap(16).Children(func() {
-		title := locales.LocalRepositories()
 		for _, group := range app.library.Groups {
 			if group.ID == app.group {
-				title = group.Name
+				ui.Text(c, group.Name).FontSize(24).Bold()
+				break
 			}
 		}
-		ui.Text(c, title).FontSize(24).Bold()
+		if app.libraryEmpty() {
+			app.emptyLibraryActions(c)
+			return
+		}
 		ui.TextInput(c, &app.query).Search().Placeholder(locales.SearchRepositories()).FillWidth()
 		var entries []workspace.LocalRepository
 		for _, entry := range app.library.Repositories {

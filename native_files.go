@@ -95,43 +95,51 @@ func (app *nativeApp) fileControls(c *ui.Context) {
 				}
 			}
 		}).Label(locales.FileFiltering()).FontSize(12)
-		orderLabel := locales.Path()
-		switch app.prefs.FileSort {
-		case "name":
-			orderLabel = locales.FileName()
-		case "status":
-			orderLabel = locales.Status()
-		}
-		if app.prefs.FileDescending {
-			orderLabel += " ↓"
-		}
-		ui.MenuButton(c, orderLabel, func(menu *ui.Menu) {
-			for _, order := range []struct{ value, label string }{
-				{"path", locales.SortByPath()}, {"name", locales.SortByName()}, {"status", locales.SortByStatus()},
-			} {
-				if menu.Item(order.label).Checked(app.prefs.FileSort == order.value).Chosen() {
-					app.prefs.FileSort = order.value
-				}
-			}
-			menu.Separator()
-			if menu.Item(locales.Descending()).Checked(app.prefs.FileDescending).Chosen() {
-				app.prefs.FileDescending = !app.prefs.FileDescending
-			}
-		}).Label(locales.FileSorting()).FontSize(12)
+		app.fileSortingControl(c)
 		ui.Spacer(c)
-		viewLabel := locales.List()
-		if app.prefs.FileTree {
-			viewLabel = locales.Tree()
-		}
-		ui.MenuButton(c, viewLabel, func(menu *ui.Menu) {
-			if menu.Item(locales.FlatList()).Checked(!app.prefs.FileTree).Chosen() {
-				app.prefs.FileTree = false
-			}
-			if menu.Item(locales.Tree()).Checked(app.prefs.FileTree).Chosen() {
-				app.prefs.FileTree = true
-			}
-		}).Label(locales.FileView()).FontSize(12)
+		app.fileViewControl(c)
 	}).Label(locales.FileDisplayOptions()).FillWidth().Padding(0, 8, 4, 8)
+}
+
+func (app *nativeApp) fileSortingControl(c *ui.Context) {
+	orderLabel := locales.Path()
+	switch app.prefs.FileSort {
+	case "name":
+		orderLabel = locales.FileName()
+	case "status":
+		orderLabel = locales.Status()
+	}
+	if app.prefs.FileDescending {
+		orderLabel += " ↓"
+	}
+	ui.MenuButton(c, orderLabel, func(menu *ui.Menu) {
+		for _, order := range []struct{ value, label string }{
+			{"path", locales.SortByPath()}, {"name", locales.SortByName()}, {"status", locales.SortByStatus()},
+		} {
+			if menu.Item(order.label).Checked(app.prefs.FileSort == order.value).Chosen() {
+				app.prefs.FileSort = order.value
+			}
+		}
+		menu.Separator()
+		if menu.Item(locales.Descending()).Checked(app.prefs.FileDescending).Chosen() {
+			app.prefs.FileDescending = !app.prefs.FileDescending
+		}
+	}).Label(locales.FileSorting()).FontSize(12)
+}
+
+func (app *nativeApp) fileViewControl(c *ui.Context) {
+	viewLabel := locales.List()
+	if app.prefs.FileTree {
+		viewLabel = locales.Tree()
+	}
+	ui.MenuButton(c, viewLabel, func(menu *ui.Menu) {
+		if menu.Item(locales.FlatList()).Checked(!app.prefs.FileTree).Chosen() {
+			app.prefs.FileTree = false
+		}
+		if menu.Item(locales.Tree()).Checked(app.prefs.FileTree).Chosen() {
+			app.prefs.FileTree = true
+		}
+	}).Label(locales.FileView()).FontSize(12)
 }
 
 type nativeFileNode struct {

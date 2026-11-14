@@ -456,15 +456,55 @@ func (app *nativeApp) revisionFileList(c *ui.Context, files []gitrepo.CommitFile
 	theme := *c.Theme()
 	theme.Accent = theme.Accent.Alpha(0.16)
 	theme.InactiveAccent, theme.AccentText = theme.Accent, theme.Text
-	ui.Themed(c, &theme).Fill().MinWidth(0).Children(func() {
-		ui.Row(c).FillWidth().Height(49).Padding(0, 12).AlignItems(ui.Center).Children(func() {
+	panel := ui.Themed(c, &theme).Key(list).Fill().MinWidth(0)
+	collapsed := ui.Local(panel, "revision-directories", func() map[string]bool { return make(map[string]bool) })
+	panel.Children(func() {
+		ui.Column(c).FillWidth().Padding(6, 8).Gap(2).Children(func() {
 			ui.Text(c, locales.ChangedFiles(fmt.Sprint(len(files)))).FontSize(12).Bold()
+			ui.Toolbar(c, func() {
+				app.fileSortingControl(c)
+				ui.Spacer(c)
+				app.fileViewControl(c)
+			}).Label(locales.FileDisplayOptions()).FillWidth().Padding(0)
 		})
 		ui.Divider(c)
 		if len(files) == 0 {
 			if empty != "" {
 				ui.Text(c, empty).Padding(12).FontSize(12).TextColor(c.Theme().TextMuted)
 			}
+			return
+		}
+		path := ""
+		if *selected >= 0 && *selected < len(files) {
+			path = files[*selected].Path
+		}
+		// 选择索引与异步 Diff 回填共用原切片，排序时必须按路径恢复，避免索引指向其他文件。
+		slices.SortFunc(files, func(first, second gitrepo.CommitFile) int {
+			return compareNativeFiles(
+				gitrepo.File{Path: first.Path, Index: first.Status},
+				gitrepo.File{Path: second.Path, Index: second.Status},
+				app.prefs.FileSort, app.prefs.FileDescending, true,
+			)
+		})
+		*selected = slices.IndexFunc(files, func(file gitrepo.CommitFile) bool { return file.Path == path })
+		disabled := app.readTask != nil && app.readTask.kind != nativeReadDiff
+		if app.prefs.FileTree {
+			entries := make([]gitrepo.File, len(files))
+			indices := make(map[string]int, len(files))
+			for index, file := range files {
+				entries[index] = gitrepo.File{Path: file.Path, Index: file.Status}
+				indices[file.Path] = index
+			}
+			nodes := nativeFileNodes(entries, app.prefs.FileSort, app.prefs.FileDescending, true)
+			scroll := nativeFileScroll(ui.ScrollBoth(c).FillWidth().Grow(1).MinHeight(0))
+			scroll.Children(func() {
+				ui.Column(c).FillWidth().MinWidth(scroll.LayoutBounds().W).Children(func() {
+					tree := ui.TreeBase(c)
+					tree.Root.Label(label).Disabled(disabled).FillWidth().Children(func() {
+						app.revisionFileTree(c, tree, nodes, *collapsed, indices, selected, choose, 0)
+					})
+				})
+			})
 			return
 		}
 		list.Selected = selected
@@ -477,7 +517,7 @@ func (app *nativeApp) revisionFileList(c *ui.Context, files []gitrepo.CommitFile
 				ui.Text(c, file.Path).FontSize(12).Grow(1).MinWidth(0).SingleLine().Tooltip(file.Path)
 				ui.Text(c, file.Status).FontSize(10).TextColor(c.Theme().TextMuted)
 			})
-		}).FillWidth().Grow(1).MinHeight(0).Disabled(app.readTask != nil && app.readTask.kind != nativeReadDiff).Label(label).Changed() && *selected >= 0 && *selected < len(files) {
+		}).FillWidth().Grow(1).MinHeight(0).Disabled(disabled).Label(label).Changed() && *selected >= 0 && *selected < len(files) {
 			choose(files[*selected].Path)
 		}
 	})

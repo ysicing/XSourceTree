@@ -4,11 +4,12 @@
 
 51Code（原 XSourceTree）是使用 Go 和 MyGo Native UI 构建的 macOS Git 客户端，调用系统 Git。品牌展示名使用 `51Code`，仓库、Go 模块及安装包前缀使用小写 `51code`。
 
-- 根目录 Go 文件：应用生命周期、原生界面、弹窗及服务。
+- 根目录 `main.go`：构建信息注入及应用入口。
+- `internal/app/`：应用生命周期、原生界面、弹窗、应用层服务及对应测试。
 - `internal/gitrepo/`：Git 命令执行、解析与仓库操作。
 - `internal/workspace/`：仓库发现、分组与已打开仓库管理。
 - 测试与源码相邻：Go 使用 `*_test.go`，脚本使用 `scripts/*.test.mjs`。
-- `resources/`、`assets/`：应用图标、品牌及文件图标。
+- `resources/`、`assets/`：应用图标、品牌及文件图标；`assets/file-icons/` 的 Go 包负责嵌入文件图标与许可证。
 - `docs/development.md`、`docs/usage.md`：开发发布与使用说明。
 
 ## 开发与验证

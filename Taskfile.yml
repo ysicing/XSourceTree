@@ -109,7 +109,7 @@ tasks:
   test:ui:
     desc: 运行原生界面与交互测试
     cmds:
-      - GOMAXPROCS=2 go test -p=1 -parallel=2 .
+      - GOMAXPROCS=2 go test -p=1 -parallel=2 ./internal/app
 
   test:release:
     desc: 运行发布脚本测试

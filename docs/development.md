@@ -82,7 +82,7 @@ task check
 
 可用 `task test:go`、`task test:ui`、`task test:release` 或 `task vet` 单独执行检查，`task test` 依次执行 Go 和发布脚本测试。Go 测试使用 `GOMAXPROCS=2`、`-p=1` 和 `-parallel=2`；开发与构建任务同样限制 Go 构建并发。
 
-加载基准覆盖 100／5000 个变更文件的原生列表重绘、单文件历史／比较读取，以及 1 万提交的首屏、后页和搜索。使用 `GOMAXPROCS=2 go test -p=1 -parallel=2 . ./internal/gitrepo -run '^$' -bench 'Benchmark(NativeChangedFilesFrame|RevisionFileLoading|HistoryLoading)$' -benchtime=3x -count=1` 串行复测；基准仓库由测试临时生成，不访问真实远程。比较相同场景的耗时与分配，避免把冷启动、后台负载或不同数据规模混为优化收益。
+加载基准覆盖 100／5000 个变更文件的原生列表重绘、单文件历史／比较读取，以及 1 万提交的首屏、后页和搜索。使用 `GOMAXPROCS=2 go test -p=1 -parallel=2 ./internal/app ./internal/gitrepo -run '^$' -bench 'Benchmark(NativeChangedFilesFrame|RevisionFileLoading|HistoryLoading)$' -benchtime=3x -count=1` 串行复测；基准仓库由测试临时生成，不访问真实远程。比较相同场景的耗时与分配，避免把冷启动、后台负载或不同数据规模混为优化收益。
 
 原生界面测试使用 MyGo `ui.Tester`，覆盖侧栏切换与键盘导航、文件排序菜单、中文文本输入、统一/并排 Diff、提交草稿、失败 hook 后刷新、逐行暂存、冲突版本保护及刷新失败后的写入保护。设置 `XSOURCETREE_TEST_SCREENSHOTS=/tmp/xsourcetree-native-preview` 可导出浅色、深色和窄窗口截图；该测试不验证系统输入法候选窗。
 
@@ -106,17 +106,21 @@ MYGO_AUTOMATION=/tmp/xsourcetree-e2e.sock node scripts/native-smoke.mjs
 以下路径均相对于仓库根目录：
 
 ```text
-internal/gitrepo/     系统 Git 调用、状态解析与仓库操作，无桌面依赖
-internal/workspace/   本地仓库库、扫描、分组与已打开仓库管理，无桌面依赖
-main.go              MyGo 生命周期与原生菜单
-native_app.go        窗口状态、后台任务与草稿保存
-native_ui.go         原生仓库列表、文件、历史、贮藏与 Diff 界面
-native_selection.go  差异加载、逐块/逐行暂存与历史选择
-native_dialogs.go    原生弹窗、仓库分组与扫描
-native_actions.go    分支、远程、贮藏与冲突操作
-service.go           界面复用的 Go 仓库服务
-scripts/native-smoke.mjs  真实原生桌面端集成测试
+main.go                       构建信息注入与应用入口
+internal/app/app.go            MyGo 生命周期与原生菜单
+internal/app/native_*.go       原生界面、窗口状态、后台任务、弹窗与交互
+internal/app/*service.go       界面复用的应用层服务
+internal/app/*_test.go         应用与原生界面测试
+internal/app/automation_e2e.go 自动化插件及隔离数据初始化，仅 e2e 构建启用
+internal/gitrepo/              系统 Git 调用、状态解析与仓库操作，无桌面依赖
+internal/workspace/            本地仓库库、扫描、分组与已打开仓库管理，无桌面依赖
+internal/commitai/             AI 提交说明协议适配
+internal/aikeychain/           原生钥匙串读写
+assets/file-icons/             文件图标与许可证的嵌入包
+scripts/native-smoke.mjs      真实原生桌面端集成测试
 ```
+
+`main.go` 保留 `buildNumber`、`buildCommit`、`buildTime` 链接变量，通过 `app.BuildInfo` 传给 `app.Run`，已有 `-X main.*` 构建参数继续有效。应用代码及测试集中在 `internal/app`，暂不按界面页面拆包；`e2e` 初始化随应用包加载。`task test:ui` 与 `bun run test:ui` 指向该包，完整测试仍使用 `go test ./...`。
 
 Git 命令使用参数数组执行，路径按字面值处理。写操作限定在已打开的仓库内，文件变更操作校验当前状态；取消暂存保留工作区内容。命令设有超时，Diff 禁用外部 diff/textconv 程序，输出和预览大小设有限制。窗口关闭会取消该窗口发起的 Git 请求。
 

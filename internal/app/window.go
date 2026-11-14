@@ -123,9 +123,11 @@ type nativeApp struct {
 	chooseLanguage        func(string)
 	ai                    *nativeCommitAI
 	aiEditor              *nativeAISettings
-	changesSplit          float32
-	changesSplitTarget    float32
-	aiKeys                interface {
+	// identityEditor 记录打开中的身份编辑器，退出时据此确认未保存的修改。
+	identityEditor     *nativeIdentityEditor
+	changesSplit       float32
+	changesSplitTarget float32
+	aiKeys             interface {
 		Load(string) (string, error)
 		Save(string, string) error
 		Delete(string) error
@@ -153,6 +155,11 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 		refCollapsed: make(map[nativeRefKey]bool), fileCollapsed: make(map[string]bool),
 		chooseLanguage: mygo.App.SetLocale,
 	}
+	if service != nil && service.manager != nil {
+		if err := service.manager.LoadProblem(); err != nil {
+			app.problem = err.Error()
+		}
+	}
 	if data, err := os.ReadFile(stateFile); err == nil {
 		stored := struct {
 			*nativePreferences
@@ -162,6 +169,12 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 		}{nativePreferences: &app.prefs}
 		if err := json.Unmarshal(data, &stored); err != nil {
 			app.problem = locales.LoadPreferencesFailed()
+			// 退出和任何设置变更都会保存偏好；先保留损坏文件的副本，避免草稿与 AI 配置被默认值覆盖。
+			// 无法备份时停用保存，宁可丢弃本次会话的偏好也不覆盖原文件。
+			backup := stateFile + ".corrupt-" + time.Now().Format("20060102-150405")
+			if os.WriteFile(backup, data, 0600) != nil {
+				app.stateFile = ""
+			}
 		}
 		if app.prefs.FileSort == "" && stored.ByName {
 			app.prefs.FileSort = "name"
@@ -272,6 +285,11 @@ func (app *nativeApp) savePreferences() error {
 	}
 	defer os.Remove(file.Name())
 	if _, err := file.Write(data); err != nil {
+		file.Close()
+		return err
+	}
+	// rename 前落盘，避免断电后留下空文件。
+	if err := file.Sync(); err != nil {
 		file.Close()
 		return err
 	}
@@ -422,8 +440,9 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 		historyRequest = app.historyResult
 	}
 	historyOffset := app.historyOffset
+	historyCount := max(len(app.history), gitrepo.DefaultHistoryPageSize)
 	if historyRequest != app.historyResult {
-		historyOffset = 0
+		historyOffset, historyCount = 0, gitrepo.DefaultHistoryPageSize
 	}
 	conflict, conflictEdit := app.conflict, app.conflictEdit
 	conflictBase := app.conflictBase
@@ -445,8 +464,10 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 			}
 		}
 		var history []gitrepo.Commit
+		historyMore := false
 		if refreshErr == nil && historyScreen {
-			history, refreshErr = app.service.SearchHistory(ctx, path, historyRequest.query, historyRequest.file, historyOffset, historyRequest.filter)
+			history, refreshErr = app.readHistoryRange(ctx, path, historyRequest, historyOffset, historyCount)
+			historyMore = len(history) == historyCount
 		}
 		var selection *nativeSelection
 		if refreshErr == nil && screen == "changes" && file != "" && fileExists(result.snapshot.Files, file, staged) {
@@ -476,6 +497,7 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 					location, detailErr = app.service.LocateHistory(ctx, path, result.snapshot.Head, "", "", historyRequest.filter)
 					if detailErr == nil && len(location.Commits) > 0 {
 						history, historyOffset = location.Commits, location.Offset
+						historyMore = len(history) == gitrepo.DefaultHistoryPageSize
 					}
 				}
 				if detailErr == nil {
@@ -519,7 +541,7 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 				app.worktrees.setItems(worktreeItems)
 			}
 			if historyScreen && refreshErr == nil {
-				app.history, app.historyMore = history, len(history) == gitrepo.DefaultHistoryPageSize
+				app.history, app.historyMore = history, historyMore
 				app.historyPagePaused = false
 				app.historyLoaded = true
 				app.historyOffset = historyOffset
@@ -603,7 +625,8 @@ func (app *nativeApp) showLibrary() {
 }
 
 func (app *nativeApp) commit() {
-	if app.repository == nil || app.busy || !app.writable {
+	// 与提交按钮一致，只在文件变更页可用；其他页面看不到要提交的仓库与暂存内容。
+	if app.repository == nil || app.screen != "changes" || app.busy || !app.writable {
 		return
 	}
 	path := app.repository.snapshot.Path
@@ -702,6 +725,16 @@ func (app *nativeApp) prepareClose() bool {
 		result, err := mygo.Dialog.Message(mygo.MessageOptions{
 			Parent: app.win, Type: mygo.MessageWarning, Message: locales.DiscardUnsavedTitle(),
 			Detail: locales.DiscardApiKey(), Buttons: []string{locales.Cancel(), locales.DiscardAndQuit()},
+			CancelButton: 0, DestructiveButtons: []int{1},
+		})
+		if err != nil || result.Button != 1 {
+			return false
+		}
+	}
+	if app.identityEditor != nil && app.identityEditor.dirty() {
+		result, err := mygo.Dialog.Message(mygo.MessageOptions{
+			Parent: app.win, Type: mygo.MessageWarning, Message: locales.DiscardUnsavedTitle(),
+			Detail: locales.DiscardIdentityDetail(), Buttons: []string{locales.Cancel(), locales.DiscardAndQuit()},
 			CancelButton: 0, DestructiveButtons: []int{1},
 		})
 		if err != nil || result.Button != 1 {

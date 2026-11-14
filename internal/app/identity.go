@@ -167,13 +167,17 @@ func identitySource(value gitrepo.IdentityValue) string {
 }
 
 func (editor *nativeIdentityEditor) close(app *nativeApp, dialog *nativeDialog) {
-	if !editor.dirty() {
+	leave := func() {
+		if app.identityEditor == editor {
+			app.identityEditor = nil
+		}
 		app.dialog = dialog.parent
+	}
+	if !editor.dirty() {
+		leave()
 		return
 	}
-	app.confirm(locales.DiscardUnsavedTitle(), locales.DiscardIdentityDetail(), locales.DiscardEdits(), func() {
-		app.dialog = dialog.parent
-	})
+	app.confirm(locales.DiscardUnsavedTitle(), locales.DiscardIdentityDetail(), locales.DiscardEdits(), leave)
 	app.dialog.parent = dialog
 }
 
@@ -186,6 +190,7 @@ func (app *nativeApp) repositorySettingsDialog() {
 		return
 	}
 	identity := &nativeIdentityEditor{path: app.repository.snapshot.Path}
+	app.identityEditor = identity
 	app.settingsError = ""
 	tab := 0
 	dialog := &nativeDialog{

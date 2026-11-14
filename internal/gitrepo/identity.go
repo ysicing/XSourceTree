@@ -48,6 +48,8 @@ type identityStore struct {
 	root  string
 	write []string
 	read  []string
+	// keepInherited 仅用于全局身份；仓库覆盖需要按用户选择写入两项，不能省略未修改的值。
+	keepInherited bool
 }
 
 var globalIdentityMu sync.Mutex
@@ -75,7 +77,7 @@ func globalIdentityStore() (identityStore, error) {
 		return identityStore{}, errors.New("全局 Git 配置路径为空")
 	}
 	// 与 Git 的全局写入目标一致，避免回滚时把 XDG 文件中的值复制进另一份配置。
-	return identityStore{root: home, write: []string{"--file", target}, read: []string{"--global"}}, nil
+	return identityStore{root: home, write: []string{"--file", target}, read: []string{"--global"}, keepInherited: true}, nil
 }
 
 func GlobalIdentity(ctx context.Context) (IdentitySettings, error) {
@@ -213,6 +215,16 @@ func (store identityStore) save(ctx context.Context, request IdentityRequest) er
 	var names, emails []string
 	if !request.Inherit {
 		names, emails = []string{strings.TrimSpace(request.Name)}, []string{strings.TrimSpace(request.Email)}
+		if store.keepInherited {
+			// 全局值可能来自 include 或 XDG 文件；写入目标中没有直接值且未修改时保持继承，
+			// 否则只改一项也会把另一项复制进写入目标，遮蔽来源文件的后续修改。
+			if len(settings.DirectName) == 0 && names[0] == settings.Name.Value {
+				names = nil
+			}
+			if len(settings.DirectEmail) == 0 && emails[0] == settings.Email.Value {
+				emails = nil
+			}
+		}
 	}
 	changes := []struct {
 		key           string

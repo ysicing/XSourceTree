@@ -67,3 +67,25 @@ func TestFailedOpenDoesNotChangeRecent(t *testing.T) {
 		t.Fatal("failed open added to recent")
 	}
 }
+
+func TestCorruptLibraryIsBackedUpAndStartsEmpty(t *testing.T) {
+	settings := filepath.Join(t.TempDir(), "recent.json")
+	original := []byte(`{"repositories": [{"name": "keep"`)
+	if err := os.WriteFile(settings, original, 0600); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := New(settings)
+	if err != nil {
+		t.Fatal("损坏的仓库记录阻止了启动:", err)
+	}
+	if manager.LoadProblem() == nil || len(manager.Library().Repositories) != 0 {
+		t.Fatalf("未提示损坏记录或未以空列表启动: %v %+v", manager.LoadProblem(), manager.Library())
+	}
+	backups, err := filepath.Glob(settings + ".corrupt-*")
+	if err != nil || len(backups) != 1 {
+		t.Fatalf("未备份损坏的仓库记录: %v %v", backups, err)
+	}
+	if data, err := os.ReadFile(backups[0]); err != nil || string(data) != string(original) {
+		t.Fatalf("备份内容不完整: %q %v", data, err)
+	}
+}

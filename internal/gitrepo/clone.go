@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 	"unicode"
 )
 
@@ -93,17 +92,11 @@ func Clone(ctx context.Context, source, parent, name string) (*Repository, error
 	}()
 
 	stagePath := filepath.Join(target, stage)
-	args := []string{"clone", "--", source, "."}
-	if os.Getenv("GIT_SSH_COMMAND") == "" && os.Getenv("GIT_SSH") == "" {
-		ssh, err := run(ctx, stagePath, "", 15*time.Second, "config", "--get", "core.sshCommand")
-		if err != nil && !exitCode(err, 1) {
-			return nil, err
-		}
-		if strings.TrimSpace(ssh) == "" {
-			args = append([]string{"-c", "core.sshCommand=ssh -oBatchMode=yes -oConnectTimeout=15"}, args...)
-		}
+	options, err := remoteOptions(ctx, stagePath)
+	if err != nil {
+		return nil, err
 	}
-	if _, err := run(ctx, stagePath, "", 5*time.Minute, args...); err != nil {
+	if _, err := run(ctx, stagePath, "", remoteTimeout, append(options, "clone", "--", source, ".")...); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {

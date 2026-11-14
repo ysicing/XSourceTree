@@ -51,7 +51,7 @@ func (repo *Repository) Diff(ctx context.Context, path string, staged bool) (Dif
 		}
 		return repo.diffFileContents(ctx, diff, *selected, staged)
 	}
-	args := []string{"diff", "--no-ext-diff", "--no-textconv", "--find-renames"}
+	args := []string{"diff", "--no-color", "--no-ext-diff", "--no-textconv", "--find-renames"}
 	if staged {
 		args = append(args, "--cached")
 	}
@@ -128,6 +128,6 @@ func (repo *Repository) CommitDiff(ctx context.Context, hash string) (Diff, erro
 	}
 	repo.mu.Lock()
 	defer repo.mu.Unlock()
-	output, err := repo.git(ctx, "show", "--no-show-signature", "--format=fuller", "--root", "--diff-merges=first-parent", "--stat", "--patch", "--no-ext-diff", "--no-textconv", "--find-renames", hash, "--")
+	output, err := repo.git(ctx, "show", "--no-show-signature", "--format=fuller", "--root", "--diff-merges=first-parent", "--stat", "--patch", "--no-color", "--no-ext-diff", "--no-textconv", "--find-renames", hash, "--")
 	return Diff{Text: output, Binary: strings.Contains(output, "Binary files ")}, err
 }

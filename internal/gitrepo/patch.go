@@ -278,11 +278,15 @@ func (repo *Repository) hunkPatch(ctx context.Context, path string, staged bool)
 	if err != nil || head == "" {
 		return patch, err
 	}
-	index, err := repo.git(ctx, "ls-files", "--stage", "-z")
+	index, err := repo.indexDigest(ctx)
 	if err != nil {
 		return patch, err
 	}
-	indexMode, indexHash := patchIndexEntry(index, path)
+	entry, err := repo.git(ctx, "ls-files", "--stage", "-z", "--", path)
+	if err != nil {
+		return patch, err
+	}
+	indexMode, indexHash := patchIndexEntry(entry, path)
 	if indexHash == "" {
 		return patch, nil
 	}
@@ -337,7 +341,7 @@ func (repo *Repository) hunkPatch(ctx context.Context, path string, staged bool)
 	if err != nil {
 		return patch, err
 	}
-	currentIndex, err := repo.git(ctx, "ls-files", "--stage", "-z")
+	currentIndex, err := repo.indexDigest(ctx)
 	if err != nil {
 		return patch, err
 	}
@@ -363,6 +367,12 @@ func (repo *Repository) hunkPatch(ctx context.Context, path string, staged bool)
 		patch.view.Hunks = append(patch.view.Hunks, PatchHunk{ID: id, Header: title})
 	}
 	return patch, nil
+}
+
+// indexDigest 摘要整个索引的路径、模式、对象和冲突阶段，任意条目变化都会使令牌失效；
+// 流式计算避免大仓库的索引列表超过输出上限。
+func (repo *Repository) indexDigest(ctx context.Context) (string, error) {
+	return runDigest(ctx, repo.Path, 30*time.Second, "ls-files", "--stage", "-z")
 }
 
 func patchIndexEntry(index, path string) (mode, hash string) {

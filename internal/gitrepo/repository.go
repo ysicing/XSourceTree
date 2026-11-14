@@ -394,7 +394,7 @@ func (repo *Repository) SwitchBranch(ctx context.Context, name string) error {
 	if err := repo.validateBranch(ctx, name); err != nil {
 		return err
 	}
-	_, err := repo.git(ctx, "switch", "--no-guess", "--", name)
+	_, err := repo.git(ctx, "switch", "--no-guess", "--no-overwrite-ignore", "--", name)
 	return err
 }
 
@@ -416,7 +416,7 @@ func (repo *Repository) Remote(ctx context.Context, action string) error {
 	case "fetch":
 		args = []string{"fetch", "--all"}
 	case "pull":
-		args = []string{"pull", "--ff-only"}
+		return repo.pull(ctx)
 	case "push":
 		branch, err := repo.git(ctx, "symbolic-ref", "--quiet", "HEAD")
 		if err != nil {
@@ -444,16 +444,66 @@ func (repo *Repository) Remote(ctx context.Context, action string) error {
 	return repo.runRemote(ctx, args...)
 }
 
-func (repo *Repository) runRemote(ctx context.Context, args ...string) error {
-	if os.Getenv("GIT_SSH_COMMAND") == "" && os.Getenv("GIT_SSH") == "" {
-		ssh, err := repo.git(ctx, "config", "--get", "core.sshCommand")
-		if err != nil && !exitCode(err, 1) {
+// pull 拆成 fetch 与仅快进合并：git pull 不支持 --no-overwrite-ignore，会覆盖被忽略的本地文件，
+// 还会受 pull.rebase、branch.<name>.mergeOptions 等继承配置影响。
+func (repo *Repository) pull(ctx context.Context) error {
+	branch, err := repo.git(ctx, "symbolic-ref", "--quiet", "HEAD")
+	if err != nil {
+		return errors.New("分离的 HEAD 不能拉取，请先切换分支")
+	}
+	branch = strings.TrimSpace(branch)
+	output, err := repo.git(ctx, "for-each-ref", "--format=%(upstream)%00%(upstream:remotename)", branch)
+	if err != nil {
+		return err
+	}
+	upstream, remote, _ := strings.Cut(strings.TrimSuffix(output, "\n"), "\x00")
+	if upstream == "" {
+		return errors.New("请先为当前分支设置上游")
+	}
+	if remote != "" && remote != "." {
+		if err := repo.runRemote(ctx, "fetch", "--", remote); err != nil {
 			return err
 		}
+	}
+	if err := repo.checkMergeIgnoredPaths(ctx, upstream); err != nil {
+		return err
+	}
+	_, err = run(ctx, repo.Path, "", 2*time.Minute, "-c", "branch."+strings.TrimPrefix(branch, "refs/heads/")+".mergeOptions=",
+		"merge", "--no-edit", "--no-autostash", "--no-overwrite-ignore", "--no-squash", "--ff-only", "--strategy=ort", "--", upstream)
+	return err
+}
+
+// remoteTimeout 只作兜底上限；卡住的连接由 remoteOptions 的无进度检测提前中断，
+// 避免大仓库正常传输被固定时长杀掉。
+const remoteTimeout = 2 * time.Hour
+
+func (repo *Repository) runRemote(ctx context.Context, args ...string) error {
+	options, err := remoteOptions(ctx, repo.Path)
+	if err != nil {
+		return err
+	}
+	_, err = run(ctx, repo.Path, "", remoteTimeout, append(options, args...)...)
+	return err
+}
+
+// remoteOptions 为用户未自定义的连接补上非交互 SSH 与无进度中断，用户配置优先。
+func remoteOptions(ctx context.Context, root string) ([]string, error) {
+	var options []string
+	if os.Getenv("GIT_SSH_COMMAND") == "" && os.Getenv("GIT_SSH") == "" {
+		ssh, err := run(ctx, root, "", 15*time.Second, "config", "--get", "core.sshCommand")
+		if err != nil && !exitCode(err, 1) {
+			return nil, err
+		}
 		if strings.TrimSpace(ssh) == "" {
-			args = append([]string{"-c", "core.sshCommand=ssh -oBatchMode=yes -oConnectTimeout=15"}, args...)
+			options = append(options, "-c", "core.sshCommand=ssh -oBatchMode=yes -oConnectTimeout=15 -oServerAliveInterval=15 -oServerAliveCountMax=4")
 		}
 	}
-	_, err := run(ctx, repo.Path, "", 2*time.Minute, args...)
-	return err
+	speed, err := run(ctx, root, "", 15*time.Second, "config", "--get", "http.lowSpeedLimit")
+	if err != nil && !exitCode(err, 1) {
+		return nil, err
+	}
+	if strings.TrimSpace(speed) == "" {
+		options = append(options, "-c", "http.lowSpeedLimit=1000", "-c", "http.lowSpeedTime=60")
+	}
+	return options, nil
 }

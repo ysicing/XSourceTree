@@ -119,6 +119,6 @@ func (repo *Repository) SwitchCreatedBranch(ctx context.Context, name, hash stri
 	if strings.TrimSpace(actual) != hash {
 		return errors.New("新分支已被其他操作移动，请关闭表单并检查该分支")
 	}
-	_, err = repo.git(ctx, "switch", "--no-guess", "--", name)
+	_, err = repo.git(ctx, "switch", "--no-guess", "--no-overwrite-ignore", "--", name)
 	return err
 }

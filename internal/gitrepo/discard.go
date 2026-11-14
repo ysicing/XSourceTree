@@ -70,11 +70,15 @@ func (repo *Repository) discardState(ctx context.Context, path string) (discardS
 	if !found {
 		return state, nil
 	}
-	index, err := repo.git(ctx, "ls-files", "--stage", "-z")
+	index, err := repo.indexDigest(ctx)
 	if err != nil {
 		return state, err
 	}
-	state.indexMode, state.indexHash = patchIndexEntry(index, path)
+	entry, err := repo.git(ctx, "ls-files", "--stage", "-z", "--", path)
+	if err != nil {
+		return state, err
+	}
+	state.indexMode, state.indexHash = patchIndexEntry(entry, path)
 	if state.view.Untracked == (state.indexHash != "") {
 		return state, nil
 	}

@@ -180,10 +180,8 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 					dismiss = locales.Cancel()
 				}
 				if ui.Button(c, dismiss).Disabled(app.busy).Clicked() {
-					if dialog.cancel != nil {
-						dialog.cancel()
-					}
-					app.dialog = dialog.parent
+					// 与标题栏关闭、Esc 走同一路径，未保存草稿需经 onClose 确认。
+					app.closeDialog(dialog)
 				}
 				if dialog.action != "" {
 					button := ui.PrimaryButton(c, dialog.action).Disabled(app.busy || !dialog.valid())

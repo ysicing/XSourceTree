@@ -198,6 +198,7 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 	dialog := &nativeDialog{title: locales.ApplicationSettings(), titleText: locales.ApplicationSettings, width: 620, height: 520, dismiss: locales.Cancel()}
 	tab := initialTab
 	identity := &nativeIdentityEditor{}
+	app.identityEditor = identity
 	ai := &nativeAISettings{manual: app.prefs.AI.Endpoint != "" || app.prefs.AI.Protocol != ""}
 	app.aiEditor = ai
 	dialog.onClose = func() {

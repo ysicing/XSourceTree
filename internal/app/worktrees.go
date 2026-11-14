@@ -113,6 +113,10 @@ func (app *nativeApp) reviewWorktree(path string, remove bool) {
 			return nil, err
 		}
 		return func() {
+			// 读取期间用户可能已打开设置等弹窗，不能直接替换掉其中的草稿。
+			if app.dialog != nil {
+				return
+			}
 			item := review.Worktree
 			dialog := &nativeDialog{width: 660}
 			if remove {

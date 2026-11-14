@@ -277,7 +277,7 @@ func TestNativeSettingsCloseProtectsIdentityDraft(t *testing.T) {
 		mygo.Use(native.New(updater.Options{DisableAutomaticChecks: true, Language: "zh-Hans"}))
 	})
 	for _, scope := range []string{"global", "repository"} {
-		for _, method := range []string{"button", "escape", "backdrop"} {
+		for _, method := range []string{"button", "escape", "backdrop", "footer"} {
 			t.Run(scope+"/"+method, func(t *testing.T) {
 				app, path, finish := nativeIdentityFixture(t)
 				if scope == "global" {
@@ -326,6 +326,10 @@ func TestNativeSettingsCloseProtectsIdentityDraft(t *testing.T) {
 					tester.Key(0, ui.KeyEscape)
 				case "backdrop":
 					tester.ClickAt(2, 2)
+				case "footer":
+					if err := tester.Click("取消"); err != nil {
+						t.Fatal(err)
+					}
 				}
 				tester.Frame()
 				if app.dialog == nil || app.dialog == settings || app.dialog.parent != settings {
@@ -413,7 +417,15 @@ func TestNativeRepositoryIdentitySaveAndCancel(t *testing.T) {
 	if err := tester.Click("为此仓库单独设置"); err != nil {
 		t.Fatal(err)
 	}
+	opened := app.dialog
 	if err := tester.Click("取消"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Frame()
+	if app.dialog == nil || app.dialog.parent != opened {
+		t.Fatal("底栏取消未确认尚未保存的修改")
+	}
+	if err := tester.Click("放弃修改"); err != nil {
 		t.Fatal(err)
 	}
 	if app.dialog != nil || nativeGit(t, path, "config", "--local", "user.name") != "Native Test" {

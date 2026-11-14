@@ -78,7 +78,7 @@ func (repo *Repository) StashDiff(ctx context.Context, hash string) (Diff, error
 	if _, err := repo.stashIndex(ctx, hash); err != nil {
 		return Diff{}, err
 	}
-	output, err := repo.git(ctx, "stash", "show", "--patch", "--include-untracked", "--no-ext-diff", "--no-textconv", hash)
+	output, err := repo.git(ctx, "stash", "show", "--patch", "--no-color", "--include-untracked", "--no-ext-diff", "--no-textconv", hash)
 	return Diff{Text: output, Binary: strings.Contains(output, "Binary files ")}, err
 }
 

@@ -177,7 +177,7 @@ func (repo *Repository) CheckoutRemote(ctx context.Context, remoteBranch, name s
 	} else if !exitCode(err, 1) {
 		return err
 	}
-	_, err = repo.git(ctx, "switch", "--create", name, "--track=direct", "--", ref)
+	_, err = repo.git(ctx, "switch", "--create", name, "--track=direct", "--no-overwrite-ignore", "--", ref)
 	return err
 }
 

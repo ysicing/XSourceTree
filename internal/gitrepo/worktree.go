@@ -403,6 +403,10 @@ func (repo *Repository) MergeWorktree(ctx context.Context, path, token string) e
 	if err := state.target.checkIdentity(ctx, common); err != nil {
 		return err
 	}
+	// 非快进合并时 --no-overwrite-ignore 不能阻止覆盖目标工作树中被忽略的文件。
+	if err := repo.checkMergeIgnoredPaths(ctx, review.Worktree.Head); err != nil {
+		return err
+	}
 	_, err = run(ctx, repo.Path, "", 2*time.Minute, "merge", "--no-edit", "--no-autostash",
 		"--no-overwrite-ignore", "--", review.Worktree.Head)
 	return err

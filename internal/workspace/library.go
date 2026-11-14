@@ -72,6 +72,11 @@ func (manager *Manager) saveLocked(next Library) error {
 		temp.Close()
 		return err
 	}
+	// rename 前落盘，避免断电后留下空文件，下次启动被当作损坏记录。
+	if err := temp.Sync(); err != nil {
+		temp.Close()
+		return err
+	}
 	if err := temp.Close(); err != nil {
 		return err
 	}

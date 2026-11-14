@@ -6,8 +6,11 @@ package gitrepo
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -67,11 +70,34 @@ func gitEnvironment() []string {
 			environment = append(environment, entry)
 		}
 	}
+	// 只读刷新（status、diff）默认会顺带回写索引并抢占 index.lock，
+	// 与用户在终端中的提交、暂存冲突；必要的写操作不受此变量影响。
 	return append(environment, "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never", "GIT_PAGER=cat",
-		"GIT_EDITOR=true", "GIT_SEQUENCE_EDITOR=true", "GIT_MERGE_AUTOEDIT=no", "LC_ALL=C")
+		"GIT_EDITOR=true", "GIT_SEQUENCE_EDITOR=true", "GIT_MERGE_AUTOEDIT=no", "GIT_OPTIONAL_LOCKS=0", "LC_ALL=C")
 }
 
 func run(ctx context.Context, root, input string, timeout time.Duration, args ...string) (string, error) {
+	var stdout limitedBuffer
+	if err := runTo(ctx, root, input, timeout, &stdout, func() string { return stdout.String() }, args...); err != nil {
+		return "", err
+	}
+	if stdout.overflow {
+		return "", errors.New("Git 输出超过 4 MiB，请使用命令行查看完整结果")
+	}
+	return stdout.String(), nil
+}
+
+// runDigest 将完整输出流式计入 SHA-256，用于大仓库索引等只需判断是否变化、
+// 不需要保留内容且可能超过输出上限的场景。
+func runDigest(ctx context.Context, root string, timeout time.Duration, args ...string) (string, error) {
+	digest := sha256.New()
+	if err := runTo(ctx, root, "", timeout, digest, func() string { return "" }, args...); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(digest.Sum(nil)), nil
+}
+
+func runTo(ctx context.Context, root, input string, timeout time.Duration, stdout io.Writer, details func() string, args ...string) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	options := []string{"--no-pager", "--literal-pathspecs", "-C", root, "-c", "color.ui=false"}
@@ -79,11 +105,11 @@ func run(ctx context.Context, root, input string, timeout time.Duration, args ..
 	cmd.Env = gitEnvironment()
 	cmd.Stdin = strings.NewReader(input)
 	cmd.WaitDelay = 2 * time.Second
-	var stdout, stderr limitedBuffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	var stderr limitedBuffer
+	cmd.Stdout, cmd.Stderr = stdout, &stderr
 	err := runProcess(ctx, cmd)
 	if ctx.Err() != nil {
-		return "", fmt.Errorf("Git 操作已取消或超时：%w", ctx.Err())
+		return fmt.Errorf("Git 操作已取消或超时：%w", ctx.Err())
 	}
 	if err != nil {
 		code := -1
@@ -92,16 +118,16 @@ func run(ctx context.Context, root, input string, timeout time.Duration, args ..
 			code = failure.ExitCode()
 		}
 		message := strings.TrimSpace(stderr.String())
-		if details := strings.TrimSpace(stdout.String()); details != "" {
+		if details := strings.TrimSpace(details()); details != "" {
 			message = strings.TrimSpace(details + "\n" + message)
 		}
 		if message == "" {
 			message = err.Error()
 		}
-		return "", &commandError{code: code, message: message}
+		return &commandError{code: code, message: message}
 	}
-	if stdout.overflow || stderr.overflow {
-		return "", errors.New("Git 输出超过 4 MiB，请使用命令行查看完整结果")
+	if stderr.overflow {
+		return errors.New("Git 输出超过 4 MiB，请使用命令行查看完整结果")
 	}
-	return stdout.String(), nil
+	return nil
 }

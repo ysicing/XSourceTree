@@ -52,7 +52,7 @@ func (repo *Repository) discardState(ctx context.Context, path string) (discardS
 	if err := ctx.Err(); err != nil {
 		return state, err
 	}
-	files, err := repo.files(ctx)
+	files, err := repo.pathFiles(ctx, []string{path})
 	if err != nil {
 		return state, err
 	}

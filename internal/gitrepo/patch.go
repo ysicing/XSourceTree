@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -314,7 +315,8 @@ func (repo *Repository) hunkPatch(ctx context.Context, path string, staged bool)
 	if (mode.Perm()&0111 != 0) != (indexMode == "100755") {
 		return patch, nil
 	}
-	for _, hash := range []string{fields[2], indexHash} {
+	// 仅工作区有改动时 HEAD 与索引是同一 blob，不重复读取。
+	for _, hash := range slices.Compact([]string{fields[2], indexHash}) {
 		supported, err := repo.patchTextBlob(ctx, hash)
 		if err != nil || !supported {
 			return patch, err

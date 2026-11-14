@@ -197,9 +197,21 @@ func TestNativeReferenceDirectories(t *testing.T) {
 	}
 	app.dialog = nil
 	tester.Frame()
-	if err := tester.RightClick("a/b/c"); err != nil {
-		t.Fatal(err)
+	// 顶部状态也显示当前分支名，按树节点位置点击，避免命中同名文本。
+	treeItem := func(right bool) {
+		t.Helper()
+		item, found := tester.AccessByRole(ui.RoleTreeItem, "a/b/c")
+		if !found {
+			t.Fatal("未找到引用树节点 a/b/c")
+		}
+		x, y := item.Bounds.X+item.Bounds.W/2, item.Bounds.Y+item.Bounds.H/2
+		if right {
+			tester.RightClickAt(x, y)
+		} else {
+			tester.ClickAt(x, y)
+		}
 	}
+	treeItem(true)
 	if err := tester.ChooseMenuItem("重命名分支…"); err != nil {
 		t.Fatal(err)
 	}
@@ -212,17 +224,13 @@ func TestNativeReferenceDirectories(t *testing.T) {
 		t.Fatal(err)
 	}
 	tester.Frame()
-	if err := tester.Click("a/b/c"); err != nil {
-		t.Fatal(err)
-	}
+	treeItem(false) // 本地目录已折叠，此时的树节点是同名标签
 	finish()
 	tester.Frame()
 	if app.screen != "history" || app.commitHash != nativeGit(t, path, "rev-parse", "refs/tags/a/b/c") {
 		t.Fatal("嵌套标签未打开对应提交")
 	}
-	if err := tester.RightClick("a/b/c"); err != nil {
-		t.Fatal(err)
-	}
+	treeItem(true)
 	if err := tester.ChooseMenuItem("删除标签…"); err != nil {
 		t.Fatal(err)
 	}

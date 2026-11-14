@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -50,6 +51,13 @@ func (repo *Repository) remoteConfig(ctx context.Context, name string) (RemoteCo
 	if err != nil {
 		return RemoteConfig{}, fmt.Errorf("远程仓库不存在或无法读取，请刷新：%w", err)
 	}
+	return repo.resolveRemoteConfig(ctx, name, output)
+}
+
+// resolveRemoteConfig 根据 remote.<name>.* 的 --null 输出生成配置与令牌。
+// output 必须与 remoteConfig 单独读取的结果逐字节一致，列表令牌才能在保存、删除和推送时通过校验。
+func (repo *Repository) resolveRemoteConfig(ctx context.Context, name, output string) (RemoteConfig, error) {
+	var err error
 	config := RemoteConfig{Name: name, URLs: []string{}, PushURLs: []string{}}
 	for _, entry := range strings.Split(output, "\x00") {
 		key, value, ok := strings.Cut(entry, "\n")
@@ -78,16 +86,37 @@ func (repo *Repository) RemoteConfigs(ctx context.Context) ([]RemoteConfig, erro
 		return nil, err
 	}
 	defer repo.mu.Unlock()
-	output, err := repo.git(ctx, "remote")
+	// 一次读取全部 remote.* 配置，再按远程拆分，避免每个远程额外启动名称校验和配置读取进程。
+	output, err := repo.git(ctx, "config", "--null", "--get-regexp", "^remote\\.")
+	if exitCode(err, 1) {
+		return []RemoteConfig{}, nil
+	}
 	if err != nil {
 		return nil, err
 	}
-	configs := []RemoteConfig{}
-	for _, name := range strings.Split(strings.TrimSuffix(output, "\n"), "\n") {
-		if name == "" {
-			continue
+	entries := strings.SplitAfter(output, "\x00")
+	var names []string
+	for _, entry := range entries {
+		key, _, _ := strings.Cut(strings.TrimSuffix(entry, "\x00"), "\n")
+		// 与 git remote 一致：任意 remote.<name>.<key> 都会产生远程；remote.pushDefault 等无子节的键除外。
+		name, ok := strings.CutPrefix(key, "remote.")
+		if dot := strings.LastIndexByte(name, '.'); ok && dot > 0 {
+			if name = name[:dot]; !slices.Contains(names, name) {
+				names = append(names, name)
+			}
 		}
-		config, err := repo.remoteConfig(ctx, name)
+	}
+	slices.Sort(names) // git remote 按字节序输出
+	configs := []RemoteConfig{}
+	for _, name := range names {
+		// 等价于 ^remote\.<name>\. 的前缀匹配，保持与 remoteConfig 相同的条目与顺序。
+		var own strings.Builder
+		for _, entry := range entries {
+			if strings.HasPrefix(entry, "remote."+name+".") {
+				own.WriteString(entry)
+			}
+		}
+		config, err := repo.resolveRemoteConfig(ctx, name, own.String())
 		if err != nil {
 			return nil, err
 		}

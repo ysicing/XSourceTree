@@ -99,55 +99,152 @@ func (repo *Repository) head(ctx context.Context) (string, error) {
 }
 
 func (repo *Repository) files(ctx context.Context) ([]File, error) {
-	output, err := repo.git(ctx, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+	_, files, err := repo.status(ctx, false)
+	return files, err
+}
+
+// pathFiles 只读取给定路径的状态，结果与 files 中对应条目一致。
+// 重命名需要成对的两端：按路径限定时新路径显示为新增、旧路径显示为删除，
+// 所以出现 A 或 D 时退回完整 status，保证 OriginalPath 与重命名状态不变。
+// 调用方须先校验 paths。
+func (repo *Repository) pathFiles(ctx context.Context, paths []string) ([]File, error) {
+	// 路径过多时完整扫描与限定扫描相差不大，也避免命令行过长。
+	if len(paths) == 0 || len(paths) > 64 {
+		return repo.files(ctx)
+	}
+	output, err := repo.git(ctx, append([]string{"status", "--porcelain=v2", "-z", "--untracked-files=all", "--"}, paths...)...)
 	if err != nil {
 		return nil, err
 	}
+	_, files, err := parseStatus(output)
+	if err != nil {
+		return nil, err
+	}
+	for _, file := range files {
+		if strings.ContainsAny(file.Index+file.Working, "AD") {
+			return repo.files(ctx)
+		}
+	}
+	return files, nil
+}
+
+// statusBranch 是 status --branch 头部给出的 HEAD 与上游信息。
+type statusBranch struct {
+	head     string // 未出生分支为空
+	branch   string // 分离 HEAD 时为空
+	detached bool
+	upstream string // 仅在上游引用存在、可计算领先落后时设置
+	ahead    int
+	behind   int
+}
+
+// status 用一次 porcelain v2 调用读取文件状态；withBranch 时同时取得 HEAD、
+// 当前分支和领先落后数，替代原先 rev-parse、symbolic-ref、rev-list 等多次进程调用。
+func (repo *Repository) status(ctx context.Context, withBranch bool) (statusBranch, []File, error) {
+	args := []string{"status", "--porcelain=v2", "-z", "--untracked-files=all"}
+	if withBranch {
+		// 显式要求精确计数，忽略用户的 status.aheadBehind=false。
+		args = append(args, "--branch", "--ahead-behind")
+	}
+	output, err := repo.git(ctx, args...)
+	if err != nil {
+		return statusBranch{}, nil, err
+	}
+	return parseStatus(output)
+}
+
+func parseStatus(output string) (statusBranch, []File, error) {
+	var branch statusBranch
 	files := []File{}
+	invalid := errors.New("无法解析 Git 文件状态")
+	// v2 用 "." 表示未变化，转换为 v1 的空格以保持 File 的既有取值。
+	state := func(code string) (string, string) {
+		return strings.ReplaceAll(code[:1], ".", " "), strings.ReplaceAll(code[1:2], ".", " ")
+	}
+	upstream, counted := "", false
 	records := strings.Split(output, "\x00")
 	for index := 0; index < len(records); index++ {
 		record := records[index]
 		if record == "" {
 			continue
 		}
-		if len(record) < 4 || record[2] != ' ' {
-			return nil, errors.New("无法解析 Git 文件状态")
-		}
-		file := File{Path: record[3:], Index: record[:1], Working: record[1:2]}
-		status := record[:2]
-		file.Conflict = strings.Contains(status, "U") || status == "AA" || status == "DD"
-		if strings.ContainsAny(status, "RC") {
-			index++
-			if index >= len(records) || records[index] == "" {
-				return nil, errors.New("Git 重命名记录不完整")
+		switch record[0] {
+		case '#':
+			key, value, _ := strings.Cut(strings.TrimPrefix(record, "# "), " ")
+			switch key {
+			case "branch.oid":
+				if value != "(initial)" {
+					branch.head = value
+				}
+			case "branch.head":
+				if value == "(detached)" {
+					branch.detached = true
+				} else {
+					branch.branch = value
+				}
+			case "branch.upstream":
+				upstream = value
+			case "branch.ab":
+				fields := strings.Fields(value)
+				if len(fields) != 2 {
+					return branch, nil, invalid
+				}
+				ahead, aheadErr := strconv.Atoi(strings.TrimPrefix(fields[0], "+"))
+				behind, behindErr := strconv.Atoi(strings.TrimPrefix(fields[1], "-"))
+				if aheadErr != nil || behindErr != nil {
+					return branch, nil, invalid
+				}
+				branch.ahead, branch.behind, counted = ahead, behind, true
 			}
-			file.OriginalPath = records[index]
+		case '1', '2', 'u':
+			// 字段数：普通 8、重命名 9、冲突 10，之后是可含空格的路径。
+			count := map[byte]int{'1': 9, '2': 10, 'u': 11}[record[0]]
+			fields := strings.SplitN(record, " ", count)
+			if len(fields) != count || len(fields[1]) != 2 {
+				return branch, nil, invalid
+			}
+			file := File{Path: fields[count-1], Conflict: record[0] == 'u'}
+			file.Index, file.Working = state(fields[1])
+			if record[0] == '2' {
+				index++
+				if index >= len(records) || records[index] == "" {
+					return branch, nil, errors.New("Git 重命名记录不完整")
+				}
+				file.OriginalPath = records[index]
+			}
+			files = append(files, file)
+		case '?':
+			if len(record) < 3 {
+				return branch, nil, invalid
+			}
+			files = append(files, File{Path: record[2:], Index: "?", Working: "?"})
+		case '!':
+		default:
+			return branch, nil, invalid
 		}
-		files = append(files, file)
 	}
-	return files, nil
+	// 上游已配置但远程分支不存在时没有 branch.ab，与 rev-parse @{upstream} 失败时一致地视为无上游。
+	if counted {
+		branch.upstream = upstream
+	}
+	return branch, files, nil
 }
 
 func (repo *Repository) Snapshot(ctx context.Context) (Snapshot, error) {
 	repo.mu.Lock()
 	defer repo.mu.Unlock()
 	state := Snapshot{Name: filepath.Base(repo.Path), Path: repo.Path, Files: []File{}, Remotes: []string{}}
-	var err error
-	if state.Head, err = repo.head(ctx); err != nil {
+	branch, files, err := repo.status(ctx, true)
+	if err != nil {
 		return state, err
 	}
-	state.Unborn = state.Head == ""
-	branch, err := repo.git(ctx, "symbolic-ref", "--quiet", "--short", "HEAD")
-	if err != nil && !exitCode(err, 1) {
-		return state, err
-	}
-	state.Detached = exitCode(err, 1)
-	state.Branch = strings.TrimSpace(branch)
+	state.Files, state.Head, state.Unborn, state.Detached = files, branch.head, branch.head == "", branch.detached
+	state.Branch = branch.branch
 	if state.Detached {
 		state.Branch = state.Head[:min(8, len(state.Head))]
 	}
-	if state.Files, err = repo.files(ctx); err != nil {
-		return state, err
+	if !state.Unborn && !state.Detached {
+		state.Upstream, state.Ahead, state.Behind = branch.upstream, branch.ahead, branch.behind
 	}
 	if state.Operation, err = repo.operation(ctx); err != nil {
 		return state, err
@@ -159,21 +256,6 @@ func (repo *Repository) Snapshot(ctx context.Context) (Snapshot, error) {
 	for _, remote := range strings.Split(strings.TrimSpace(remotes), "\n") {
 		if remote != "" {
 			state.Remotes = append(state.Remotes, remote)
-		}
-	}
-	if !state.Unborn && !state.Detached {
-		upstream, upstreamErr := repo.git(ctx, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
-		if upstreamErr == nil {
-			state.Upstream = strings.TrimSpace(upstream)
-			counts, countErr := repo.git(ctx, "rev-list", "--left-right", "--count", "HEAD...@{upstream}")
-			if countErr != nil {
-				return state, countErr
-			}
-			fields := strings.Fields(counts)
-			if len(fields) == 2 {
-				state.Ahead, _ = strconv.Atoi(fields[0])
-				state.Behind, _ = strconv.Atoi(fields[1])
-			}
 		}
 	}
 	return state, nil
@@ -199,7 +281,12 @@ func (repo *Repository) changedPaths(ctx context.Context, paths []string, forUns
 	if len(paths) == 0 {
 		return nil, errors.New("请选择文件")
 	}
-	files, err := repo.files(ctx)
+	for _, path := range paths {
+		if err := validPath(path); err != nil {
+			return nil, err
+		}
+	}
+	files, err := repo.pathFiles(ctx, paths)
 	if err != nil {
 		return nil, err
 	}
@@ -210,9 +297,6 @@ func (repo *Repository) changedPaths(ctx context.Context, paths []string, forUns
 	result := []string{}
 	seen := map[string]bool{}
 	for _, path := range paths {
-		if err := validPath(path); err != nil {
-			return nil, err
-		}
 		file, exists := known[path]
 		if !exists {
 			return nil, fmt.Errorf("文件状态已改变，请刷新：%s", path)
@@ -488,22 +572,29 @@ func (repo *Repository) runRemote(ctx context.Context, args ...string) error {
 
 // remoteOptions 为用户未自定义的连接补上非交互 SSH 与无进度中断，用户配置优先。
 func remoteOptions(ctx context.Context, root string) ([]string, error) {
-	var options []string
-	if os.Getenv("GIT_SSH_COMMAND") == "" && os.Getenv("GIT_SSH") == "" {
-		ssh, err := run(ctx, root, "", 15*time.Second, "config", "--get", "core.sshCommand")
-		if err != nil && !exitCode(err, 1) {
-			return nil, err
-		}
-		if strings.TrimSpace(ssh) == "" {
-			options = append(options, "-c", "core.sshCommand=ssh -oBatchMode=yes -oConnectTimeout=15 -oServerAliveInterval=15 -oServerAliveCountMax=4")
-		}
-	}
-	speed, err := run(ctx, root, "", 15*time.Second, "config", "--get", "http.lowSpeedLimit")
+	// 一次读取相关键；匹配的是规范化后的键名（节与变量名小写）。
+	output, err := run(ctx, root, "", 15*time.Second, "config", "--null", "--get-regexp",
+		`^(core\.sshcommand|http\.lowspeedlimit|fetch\.writecommitgraph)$`)
 	if err != nil && !exitCode(err, 1) {
 		return nil, err
 	}
-	if strings.TrimSpace(speed) == "" {
+	configured := map[string]string{}
+	for _, entry := range strings.Split(output, "\x00") {
+		if key, value, _ := strings.Cut(entry, "\n"); key != "" {
+			configured[key] = value // 多值时与 --get 相同，以最后一个为准
+		}
+	}
+	var options []string
+	if os.Getenv("GIT_SSH_COMMAND") == "" && os.Getenv("GIT_SSH") == "" && strings.TrimSpace(configured["core.sshcommand"]) == "" {
+		options = append(options, "-c", "core.sshCommand=ssh -oBatchMode=yes -oConnectTimeout=15 -oServerAliveInterval=15 -oServerAliveCountMax=4")
+	}
+	if strings.TrimSpace(configured["http.lowspeedlimit"]) == "" {
 		options = append(options, "-c", "http.lowSpeedLimit=1000", "-c", "http.lowSpeedTime=60")
+	}
+	// 获取时顺带增量写入 commit-graph，大仓库按拓扑排序读取历史可快数倍；
+	// 只写 objects/info 下的缓存文件，不改变仓库内容，用户显式配置优先。
+	if _, set := configured["fetch.writecommitgraph"]; !set {
+		options = append(options, "-c", "fetch.writeCommitGraph=true")
 	}
 	return options, nil
 }

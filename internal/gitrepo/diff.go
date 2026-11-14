@@ -30,7 +30,7 @@ func (repo *Repository) Diff(ctx context.Context, path string, staged bool) (Dif
 		return Diff{}, err
 	}
 	defer repo.mu.Unlock()
-	files, err := repo.files(ctx)
+	files, err := repo.pathFiles(ctx, []string{path})
 	if err != nil {
 		return Diff{}, err
 	}

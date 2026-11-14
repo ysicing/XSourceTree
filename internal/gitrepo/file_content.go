@@ -95,7 +95,8 @@ func (repo *Repository) treeFileContent(ctx context.Context, path, revision, has
 	if hash == "" {
 		return side, nil
 	}
-	output, err := repo.git(ctx, "ls-tree", "-z", hash, "--", path)
+	// -l 同时给出 blob 大小，省去单独的 cat-file -s。
+	output, err := repo.git(ctx, "ls-tree", "-l", "-z", hash, "--", path)
 	if err != nil {
 		return nil, err
 	}
@@ -105,14 +106,20 @@ func (repo *Repository) treeFileContent(ctx context.Context, path, revision, has
 			continue
 		}
 		fields := strings.Fields(metadata)
-		if len(fields) != 3 {
+		if len(fields) != 4 {
 			return nil, errors.New("无法解析文件树对象")
 		}
 		// 目录本身不是 diff 的文件一侧（例如文件改为同名目录）。
 		if fields[1] == "tree" {
 			return side, nil
 		}
-		return repo.blobFileContent(ctx, side, fields[0], fields[2])
+		size := int64(-1)
+		if fields[1] == "blob" {
+			if size, err = strconv.ParseInt(fields[3], 10, 64); err != nil || size < 0 {
+				return nil, errors.New("文件对象大小无效")
+			}
+		}
+		return repo.blobFileContentSized(ctx, side, fields[0], fields[2], size)
 	}
 	return side, nil
 }
@@ -143,19 +150,26 @@ func (repo *Repository) indexFileContent(ctx context.Context, path string) (*Fil
 }
 
 func (repo *Repository) blobFileContent(ctx context.Context, side *FileContent, mode, hash string) (*FileContent, error) {
+	return repo.blobFileContentSized(ctx, side, mode, hash, -1)
+}
+
+// blobFileContentSized 的 size 为 -1 时先查询大小；已从 ls-tree -l 得到大小时直接使用。
+func (repo *Repository) blobFileContentSized(ctx context.Context, side *FileContent, mode, hash string, size int64) (*FileContent, error) {
 	side.Present = true
 	if mode != "100644" && mode != "100755" {
 		side.Unsupported = true
 		return side, nil
 	}
 	// 先查询大小，避免把大 blob 加载到内存；对象消失或读取失败必须向上报错。
-	output, err := repo.git(ctx, "cat-file", "-s", hash)
-	if err != nil {
-		return nil, err
-	}
-	size, err := strconv.ParseInt(strings.TrimSpace(output), 10, 64)
-	if err != nil || size < 0 {
-		return nil, errors.New("文件对象大小无效")
+	if size < 0 {
+		output, err := repo.git(ctx, "cat-file", "-s", hash)
+		if err != nil {
+			return nil, err
+		}
+		size, err = strconv.ParseInt(strings.TrimSpace(output), 10, 64)
+		if err != nil || size < 0 {
+			return nil, errors.New("文件对象大小无效")
+		}
 	}
 	if size > fileContentLimit {
 		side.Truncated = true

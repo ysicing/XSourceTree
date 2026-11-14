@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,179 @@ import (
 
 	"github.com/egoist/mygo/ui"
 )
+
+func TestNativeBranchContextMergeModes(t *testing.T) {
+	for _, remote := range []bool{false, true} {
+		for _, mode := range []string{"自动（允许快进）", "始终创建合并提交", "仅允许快进", "压缩合并（Squash）"} {
+			t.Run(fmt.Sprintf("remote=%t/%s", remote, mode), func(t *testing.T) {
+				app, path, finish := nativeMergeFixture(t)
+				app.dialog = nil
+				before := nativeGit(t, path, "rev-parse", "HEAD")
+				want := nativeGit(t, path, "rev-parse", "refs/heads/feature/login")
+				nativeGit(t, path, "branch", "aaa-decoy")
+				source := "feature/login"
+				if remote {
+					source = "origin/feature/login"
+					nativeGit(t, path, "update-ref", "refs/remotes/"+source, want)
+					nativeGit(t, path, "branch", source)
+				}
+				app.refresh()
+				finish()
+				tester := ui.NewTester(app.view, 1024, 760)
+				if remote {
+					for _, label := range []string{"本地分支", "远端 origin"} {
+						if err := tester.Click(label); err != nil {
+							t.Fatal(err)
+						}
+					}
+				}
+				if err := tester.RightClick(source); err != nil {
+					t.Fatal(err)
+				}
+				label := "将 " + source + " 合并到 main…"
+				if !slices.Contains(tester.Menu(), label) {
+					t.Fatalf("missing merge entry: %v", tester.Menu())
+				}
+				if err := tester.ChooseMenuItem(label); err != nil {
+					t.Fatal(err)
+				}
+				if app.dialog == nil || app.dialog.title != "合并到 main" {
+					t.Fatalf("wrong merge target: %+v", app.dialog)
+				}
+				if nativeGit(t, path, "symbolic-ref", "--short", "HEAD") != "main" ||
+					nativeGit(t, path, "rev-parse", "HEAD") != before {
+					t.Fatal("opening context merge switched or merged a branch")
+				}
+				sourceMenu, ok := tester.AccessByRole(ui.RoleMenuButton, "来源分支")
+				prefix := "refs/heads/"
+				if remote {
+					prefix = "refs/remotes/"
+				}
+				if !ok || sourceMenu.Description != prefix+source {
+					t.Fatalf("wrong preselected source: %+v", sourceMenu)
+				}
+				if err := tester.Click(mode); err != nil {
+					t.Fatal(err)
+				}
+				tester.Advance(2 * time.Second)
+				action := "合并"
+				if mode == "压缩合并（Squash）" {
+					action = "压缩合并"
+				}
+				if err := tester.Click(action); err != nil {
+					t.Fatal(err)
+				}
+				finish()
+				tester.Frame()
+				if app.dialog != nil || app.problem != "" {
+					t.Fatalf("merge did not complete: %+v, %s", app.dialog, app.problem)
+				}
+				switch mode {
+				case "压缩合并（Squash）":
+					if nativeGit(t, path, "rev-parse", "HEAD") != before ||
+						nativeGit(t, path, "diff", "--cached", "--name-only") != "feature.txt" {
+						t.Fatal("squash did not preserve the staged result")
+					}
+				case "始终创建合并提交":
+					parents := strings.Fields(nativeGit(t, path, "show", "-s", "--format=%P", "HEAD"))
+					if len(parents) != 2 || parents[0] != before || parents[1] != want {
+						t.Fatalf("wrong merge parents: %v", parents)
+					}
+				default:
+					if nativeGit(t, path, "rev-parse", "HEAD") != want {
+						t.Fatal("merged a different branch")
+					}
+				}
+				if nativeGit(t, path, "symbolic-ref", "--short", "HEAD") != "main" {
+					t.Fatal("merge changed the checked-out branch")
+				}
+			})
+		}
+	}
+}
+
+func TestNativeBranchMergeMenuAvailability(t *testing.T) {
+	for _, state := range []string{"ready", "busy", "readonly", "detached", "unborn", "operation", "closed"} {
+		t.Run(state, func(t *testing.T) {
+			app, path, finish := nativeMergeFixture(t)
+			app.dialog = nil
+			nativeGit(t, path, "update-ref", "refs/remotes/origin/topic", "HEAD")
+			app.refresh()
+			finish()
+			tester := ui.NewTester(app.view, 1024, 760)
+			if err := tester.Click("远端 origin"); err != nil {
+				t.Fatal(err)
+			}
+			switch state {
+			case "busy":
+				app.busy = true
+			case "readonly":
+				app.writable = false
+			case "detached":
+				app.repository.snapshot.Detached = true
+			case "unborn":
+				app.repository.snapshot.Unborn = true
+			case "operation":
+				app.repository.snapshot.Operation.Kind = "merge"
+			case "closed":
+				app.closed = true
+			}
+			tester.Frame()
+			for _, source := range []string{"feature/login", "origin/topic"} {
+				if err := tester.RightClick(source); err != nil {
+					t.Fatal(err)
+				}
+				label := "将 " + source + " 合并到 main…"
+				if state != "busy" && !slices.Contains(tester.Menu(), label) {
+					t.Fatalf("missing merge entry in %s: %v", state, tester.Menu())
+				}
+				err := tester.ChooseMenuItem(label)
+				if state == "ready" {
+					if err != nil || app.dialog == nil {
+						t.Fatalf("merge entry unavailable: %v", err)
+					}
+					if err := tester.Click("取消"); err != nil {
+						t.Fatal(err)
+					}
+				} else if err == nil || app.dialog != nil {
+					t.Fatalf("merge entry enabled in %s: %v", state, err)
+				}
+			}
+		})
+	}
+	app, path, finish := nativeMergeFixture(t)
+	app.dialog = nil
+	nativeGit(t, path, "update-ref", "refs/remotes/origin/topic", "HEAD")
+	nativeGit(t, path, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/topic")
+	app.refresh()
+	finish()
+	tester := ui.NewTester(app.view, 1024, 760)
+	if err := tester.RightClick("main"); err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(tester.Menu(), "将 main 合并到 main…") {
+		t.Fatal("current branch exposes a self merge")
+	}
+	tester.Key(0, ui.KeyEscape)
+	if err := tester.Click("远端 origin"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tester.RightClick("origin/HEAD"); err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(tester.Menu(), "将 origin/HEAD 合并到 main…") || app.dialog != nil {
+		t.Fatal("symbolic remote HEAD exposes a merge entry")
+	}
+	tester.Key(0, ui.KeyEscape)
+	app.mergeDialog()
+	tester.Frame()
+	if err := tester.Click("来源分支"); err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(tester.Menu(), "origin/HEAD") || slices.Contains(tester.Menu(), "main") {
+		t.Fatal("source menu exposes symbolic remote HEAD or current branch")
+	}
+}
 
 func nativeMergeFixture(t *testing.T) (*nativeApp, string, func()) {
 	t.Helper()

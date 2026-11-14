@@ -14,7 +14,17 @@ import (
 )
 
 func (app *nativeApp) mergeDialog() {
-	if app.repository == nil || app.busy || !app.writable {
+	app.mergeDialogFrom("")
+}
+
+func (app *nativeApp) canMerge() bool {
+	return app.repository != nil && app.writable && !app.busy && !app.closed &&
+		!app.repository.snapshot.Detached && !app.repository.snapshot.Unborn &&
+		app.repository.snapshot.Operation.Kind == ""
+}
+
+func (app *nativeApp) mergeDialogFrom(sourceRef string) {
+	if !app.canMerge() || app.dialog != nil {
 		return
 	}
 	var names []string
@@ -26,6 +36,9 @@ func (app *nativeApp) mergeDialog() {
 		}
 		ref := "refs/heads/" + branch.Name
 		if branch.Remote {
+			if _, name := remoteBranchParts(branch.Name, app.repository.remotes); name == "HEAD" {
+				continue
+			}
 			ref = "refs/remotes/" + branch.Name
 		}
 		// 显式引用避免远程名称与本地分支同名时合入错误来源。
@@ -46,6 +59,12 @@ func (app *nativeApp) mergeDialog() {
 		}
 	}
 	selected := names[0]
+	if sourceRef != "" {
+		if _, exists := refs[sourceRef]; !exists {
+			return
+		}
+		selected = sourceRef
+	}
 	mode := gitrepo.MergeAuto
 	modes := []gitrepo.MergeMode{gitrepo.MergeAuto, gitrepo.MergeNoFF, gitrepo.MergeFFOnly, gitrepo.MergeSquash}
 	choices := map[gitrepo.MergeMode]*gitrepo.MergeOptions{}
@@ -56,7 +75,7 @@ func (app *nativeApp) mergeDialog() {
 	dialog := &nativeDialog{
 		title: locales.MergeIntoBranch(app.repository.snapshot.Branch), action: locales.Merge(),
 		width: 500, closeLabel: locales.CloseMergeDialog(),
-		canSubmit: func() bool { return app.writable && selected != "" },
+		canSubmit: func() bool { return app.canMerge() && selected != "" },
 	}
 	dialog.body = func(c *ui.Context) {
 		_, height := c.Size()

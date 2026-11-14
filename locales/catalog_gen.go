@@ -1956,6 +1956,18 @@ func (msgs Messages) MergeIntoBranch(branch string) string {
 	return Catalog.Format(msgs.locale, "mergeIntoBranch", map[string]any{"branch": branch})
 }
 
+// MergeBranchInto says "将 {source} 合并到 {target}…"
+// in the language the app shows.
+func MergeBranchInto(source string, target string) string {
+	return In(i18n.Locale()).MergeBranchInto(source, target)
+}
+
+// MergeBranchInto says "将 {source} 合并到 {target}…"
+// in the language of msgs.
+func (msgs Messages) MergeBranchInto(source string, target string) string {
+	return Catalog.Format(msgs.locale, "mergeBranchInto", map[string]any{"source": source, "target": target})
+}
+
 // CloseMergeDialog says "关闭合并窗口"
 // in the language the app shows.
 func CloseMergeDialog() string { return In(i18n.Locale()).CloseMergeDialog() }

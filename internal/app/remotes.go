@@ -57,8 +57,16 @@ func (app *nativeApp) remoteSidebar(c *ui.Context) {
 		_, name := remoteBranchParts(reference, app.repository.remotes)
 		if name == "HEAD" {
 			item.Tooltip(reference + " · " + locales.RemoteHead())
-		} else if item.Clicked() && app.writable {
-			app.checkoutDialog(reference)
+		} else {
+			item.ContextMenu(func(menu *ui.Menu) {
+				if menu.Item(locales.MergeBranchInto(reference, app.repository.snapshot.Branch)).
+					Disabled(!app.canMerge() || app.dialog != nil).Chosen() {
+					app.mergeDialogFrom("refs/remotes/" + reference)
+				}
+			})
+			if item.Clicked() && app.writable {
+				app.checkoutDialog(reference)
+			}
 		}
 	})
 }

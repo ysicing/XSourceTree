@@ -191,6 +191,7 @@
   "noMergeBranches": "No other branches available to merge",
   "mergeIntoCurrent": "Merge into Current Branch",
   "mergeIntoBranch": "Merge into {branch}",
+  "mergeBranchInto": "Merge {source} into {target}…",
   "closeMergeDialog": "Close merge dialog",
   "mergeSource": "Source branch",
   "mergeModeLabel": "Merge method",

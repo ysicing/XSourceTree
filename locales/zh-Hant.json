@@ -191,6 +191,7 @@
   "noMergeBranches": "沒有可合併的其他分支",
   "mergeIntoCurrent": "合併至目前分支",
   "mergeIntoBranch": "合併到 {branch}",
+  "mergeBranchInto": "將 {source} 合併到 {target}…",
   "closeMergeDialog": "關閉合併視窗",
   "mergeSource": "來源分支",
   "mergeModeLabel": "合併方式",

@@ -236,6 +236,13 @@ func (app *nativeApp) localBranchSidebar(c *ui.Context) {
 			item.Tooltip(name + " · " + locales.CurrentBranch())
 		}
 		item.ContextMenu(func(menu *ui.Menu) {
+			if !branch.Current {
+				if menu.Item(locales.MergeBranchInto(name, app.repository.snapshot.Branch)).
+					Disabled(!app.canMerge() || app.dialog != nil).Chosen() {
+					app.mergeDialogFrom("refs/heads/" + name)
+				}
+				menu.Separator()
+			}
 			unavailable := !app.canCreateReference()
 			if menu.Item(locales.BranchFromBranch()).Disabled(unavailable).Chosen() {
 				app.referenceFrom(false, "branch", name)

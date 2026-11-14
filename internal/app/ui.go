@@ -339,7 +339,7 @@ func (app *nativeApp) toolbar(c *ui.Context) {
 			if titlebarButton(c, locales.Branch(), nativeIcons["branch"]).Disabled(disabled || !app.writable).Clicked() {
 				app.branchDialog()
 			}
-			if titlebarButton(c, locales.Merge(), nativeIcons["merge"]).Disabled(disabled || !app.writable).Clicked() {
+			if titlebarButton(c, locales.Merge(), nativeIcons["merge"]).Disabled(disabled || !app.canMerge()).Clicked() {
 				app.mergeDialog()
 			}
 			if titlebarButton(c, locales.RepositorySettings(), nativeIcons["settings"]).Disabled(disabled).Clicked() {

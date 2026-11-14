@@ -182,3 +182,9 @@ MYGO_UPDATER_PRIVATE_KEY="$(cat ~/.config/xsourcetree/update-keys/mygo-update.ke
 CDN 与更新清单验证通过后，脚本自动创建或补齐 `githubRepository`（`ysicing/51code`）中对应 `v<version>` 的 GitHub Release，附加同一产物目录中的 `51code-<version>-arm64.dmg` 和 `51code-<version>-amd64.dmg`。新 Release 先创建草稿，使用更新清单内的版本说明，确认两个附件在 GitHub 上的 SHA-256 digest 与本地一致后才公开。已有同名且 SHA-256 相同的附件直接复用，缺失附件补传，内容不同或无法校验时停止，绝不覆盖。tag 本身没有附件，正式发版不能仅有 tag 或 GitHub 自动生成的源码压缩包。
 
 同一产品发布须串行执行，新旧目录的双架构清单并非原子更新；中途失败可使用同一产物目录重跑，脚本拒绝覆盖新版本清单为旧版本。CDN 已生效但 GitHub 阶段失败会明确报告部分完成；保留原目录重跑，不重建同版本包、不回退清单。若上传失败留下同名 `starter` 占位附件，脚本会停止并提示：先在对应 Release 中核实并手动删除该占位附件，再用原产物目录重跑；脚本不自动删除附件，不允许删除已有完整附件来绕过内容冲突。`--dry-run` 仅列出 GitHub 发布计划，不验证远端 tag 或权限，不创建 Release、不上传附件。脚本不会修改存储权限、创建标签或提交推送 Git。
+
+### Homebrew
+
+正式安装入口为 `brew install --cask ysicing/tap/51code`。发布完成后，在 `ysicing/homebrew-tap` 更新 `Casks/51code.rb` 的版本、双架构 DMG URL 和 SHA-256；使用 `app "51Code.app"`，保留 `com.ysicing.xsourcetree` 等旧身份。
+
+tap 根目录的 `cask_renames.json` 保留 `"xsourcetree": "51code"`，兼容旧名称及已有安装的迁移。只维护 `51code` cask，不保留同名旧 cask 文件，也不添加 `deprecate!`。检查新旧名称均解析为 `51code`，运行 `brew style --cask ysicing/tap/51code` 和 `brew audit --cask --online --arch=all ysicing/tap/51code`；验证已有安装迁移时使用 `brew migrate --cask --dry-run ysicing/tap/51code`，避免改动用户应用。

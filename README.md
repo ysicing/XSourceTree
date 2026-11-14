@@ -19,6 +19,14 @@
 
 目前管理本机已有仓库，尚无克隆入口、交互式 rebase 或凭证配置界面。远程操作沿用系统 Git/SSH 凭证。丢弃文件修改前会保存恢复副本，详见[使用说明](docs/usage.md)。
 
+## 安装
+
+```sh
+brew install --cask ysicing/tap/51code
+```
+
+旧名称 `xsourcetree` 通过 Homebrew 改名映射兼容。已有安装先运行 `brew update`，需要手动迁移安装记录时运行 `brew migrate --cask ysicing/tap/51code`。
+
 ## 本地运行
 
 需要 Go **1.27.3+**、Bun、Git 和 Task；macOS 另需 Xcode Command Line Tools。

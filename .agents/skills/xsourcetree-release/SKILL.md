@@ -95,7 +95,7 @@ bun run publish --dir "$RELEASE_DIR"
 
 ## Homebrew tap
 
-对象与 CDN 验收通过后，更新 `ysicing/homebrew-tap`（tap 名称 `ysicing/tap`）。先核对远端默认分支、适用规则、已有 cask、CI 和本地工作区修改。兼容现有安装入口时继续更新 `Casks/xsourcetree.rb`，产品名称改为 51Code；如用户另行要求改 cask token，需同时处理旧入口迁移。只修改该产品及其安装说明，不改其他产品或添加无关自动化。没有正式发布新安装包时，不提前把线上 cask 指向尚未上传的 URL。
+对象与 CDN 验收通过后，更新 `ysicing/homebrew-tap`（tap 名称 `ysicing/tap`）。先核对远端默认分支、适用规则、已有 cask、CI 和本地工作区修改。正式 cask 为 `Casks/51code.rb`，token 为 `51code`；tap 根目录 `cask_renames.json` 保留 `"xsourcetree": "51code"`，兼容旧名称及已有安装的迁移。只维护新 cask，不恢复 `Casks/xsourcetree.rb`，不添加 `deprecate!`。只修改该产品及其安装说明，不改其他产品或添加无关自动化。没有正式发布新安装包时，不提前把线上 cask 指向尚未上传的 URL。
 
 - `version` 与源码 tag、两个固定更新清单一致。
 - 用 `arch arm: "arm64", intel: "amd64"` 和对应 `sha256 arm: ..., intel: ...`；URL 为 `<downloadBase>/51code-#{version}-#{arch}.dmg`。
@@ -106,11 +106,14 @@ bun run publish --dir "$RELEASE_DIR"
 使用本地 Homebrew 能解析到的 tap 工作区，运行：
 
 ```sh
-brew style --cask ysicing/tap/xsourcetree
-brew audit --cask --online --arch=all ysicing/tap/xsourcetree
+brew style --cask ysicing/tap/51code
+brew audit --cask --online --arch=all ysicing/tap/51code
+brew info --cask --json=v2 ysicing/tap/51code
+brew info --cask --json=v2 ysicing/tap/xsourcetree
+brew migrate --cask --dry-run ysicing/tap/51code
 ```
 
-这些检查不能代替双架构 DMG 回读和 hash 校验，也不要求安装或覆盖用户应用。检查通过后，单独提交 tap cask 改动并推送实际默认分支；核实远端包含该提交，且公开 cask 的版本、双架构 URL 与 SHA-256 正确。安装入口为 `brew install --cask ysicing/tap/xsourcetree`。
+确认新旧名称均解析为 `51code`，旧 token 出现在改名信息中，双架构 URL 与 SHA-256 保持一致，且没有弃用标记。迁移只预览，不改动用户已有安装；未进行真实安装、迁移或卸载的事项分别报告。这些检查不能代替双架构 DMG 回读和 hash 校验，也不要求安装或覆盖用户应用。检查通过后，单独提交 tap cask 改动并推送实际默认分支；核实远端包含该提交，且公开 cask 的版本、双架构 URL 与 SHA-256 正确。安装入口为 `brew install --cask ysicing/tap/51code`，旧名称通过改名映射兼容。
 
 ## 恢复与验收
 

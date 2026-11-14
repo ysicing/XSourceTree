@@ -12,7 +12,7 @@ import (
 
 func TestNativeKeychainRoundTrip(t *testing.T) {
 	if os.Getenv("XSOURCETREE_TEST_KEYCHAIN") != "1" {
-		t.Skip("仅在显式启用时使用临时钥匙串记录")
+		t.Skip("仅在显式启用时使用临时系统凭证记录")
 	}
 	store := Store{Service: fmt.Sprintf("com.ysicing.xsourcetree.test.%d", time.Now().UnixNano())}
 	t.Cleanup(func() {

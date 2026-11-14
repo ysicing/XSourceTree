@@ -9,7 +9,7 @@
     "build": "bun scripts/build.mjs",
     "release": "bun scripts/publish-release.mjs --build",
     "publish": "bun scripts/publish-release.mjs",
-    "test:release": "bun test scripts/build.test.mjs scripts/publish-release.test.mjs",
+    "test:release": "bun test scripts/build.test.mjs scripts/publish-release.test.mjs scripts/desktop-release.test.mjs",
     "test:ui": "GOMAXPROCS=2 go test -p=1 -parallel=2 ./internal/app"
   },
   "devDependencies": {

@@ -101,3 +101,123 @@ func TestApplyLinesRejectsJoiningUnterminatedLines(t *testing.T) {
 		t.Fatal("partial selection silently joined lines")
 	}
 }
+
+func TestApplyLinesCRLFChineseLiteralPath(t *testing.T) {
+	for _, normalize := range []bool{false, true} {
+		for _, staged := range []bool{false, true} {
+			t.Run(fmt.Sprintf("normalize=%t/staged=%t", normalize, staged), func(t *testing.T) {
+				repo, dir := fixture(t)
+				ctx := context.Background()
+				path := "目录/中文[1] & 文件.txt"
+				decoy := "目录/中文1 & 文件.txt"
+				git(t, dir, "config", "core.autocrlf", "true")
+				attributes := "*.txt -text\n"
+				ending := "\r\n"
+				if normalize {
+					attributes = "*.txt text eol=crlf\n"
+					ending = "\n"
+				}
+				write(t, dir, ".gitattributes", attributes)
+				base := "原始首行\r\n" + strings.Repeat("上下文\r\n", 12) + "原始末行\r\n"
+				changed := strings.ReplaceAll(base, "原始", "修改")
+				write(t, dir, path, base)
+				write(t, dir, decoy, "相邻文件\r\n")
+				git(t, dir, "add", ".")
+				git(t, dir, "commit", "-m", "CRLF Chinese paths")
+				head := git(t, dir, "rev-parse", "HEAD")
+				write(t, dir, path, changed)
+				write(t, dir, decoy, "未选择的修改\r\n")
+				if staged {
+					if err := repo.Stage(ctx, []string{path}); err != nil {
+						t.Fatal(err)
+					}
+				}
+				view, err := repo.Patch(ctx, path, staged)
+				if err != nil || !view.Supported || len(view.Hunks) != 2 {
+					t.Fatalf("CRLF patch: %+v, %v", view, err)
+				}
+				before := git(t, dir, "write-tree")
+				for _, unsafe := range []string{"../中文.txt", ".git/config", ".GiT/config", decoy} {
+					if err := repo.ApplyLines(ctx, unsafe, staged, view.Token, []int{0, 1}); err == nil {
+						t.Fatalf("token accepted for path %q", unsafe)
+					}
+				}
+				if got := git(t, dir, "write-tree"); got != before {
+					t.Fatal("rejected path changed index")
+				}
+				// 只处理首个替换；末行变更继续留在原来一侧。
+				if err := repo.ApplyLines(ctx, path, staged, view.Token, []int{0, 1}); err != nil {
+					t.Fatal(err)
+				}
+				want := strings.Replace(base, "原始首行", "修改首行", 1)
+				if staged {
+					want = strings.Replace(changed, "修改首行", "原始首行", 1)
+				}
+				want = strings.ReplaceAll(want, "\r\n", ending)
+				got, err := repo.git(ctx, "show", ":"+path)
+				if err != nil || got != want {
+					t.Fatalf("index bytes = %q, want %q, err %v", got, want, err)
+				}
+				got, err = repo.git(ctx, "show", ":"+decoy)
+				if err != nil || got != "相邻文件"+ending {
+					t.Fatalf("literal path changed adjacent index entry: %q, %v", got, err)
+				}
+				for name, want := range map[string]string{path: changed, decoy: "未选择的修改\r\n"} {
+					data, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(name)))
+					if err != nil || string(data) != want {
+						t.Fatalf("working bytes for %q = %q, want %q, err %v", name, data, want, err)
+					}
+				}
+				if err := repo.ApplyLines(ctx, path, staged, view.Token, []int{0, 1}); err == nil {
+					t.Fatal("stale CRLF patch accepted")
+				}
+				if got := git(t, dir, "rev-parse", "HEAD"); got != head {
+					t.Fatal("line staging changed HEAD")
+				}
+			})
+		}
+	}
+}
+
+func TestApplyLinesPreservesExecutableIndexModeWhenFileModeIgnored(t *testing.T) {
+	for _, staged := range []bool{false, true} {
+		t.Run(fmt.Sprint(staged), func(t *testing.T) {
+			repo, dir := fixture(t)
+			ctx := context.Background()
+			git(t, dir, "config", "core.filemode", "false")
+			write(t, dir, "script", "old\ncontext\n")
+			git(t, dir, "add", "script")
+			// 直接设置 Git 模式，不依赖宿主文件系统能否提供 Unix 执行位。
+			git(t, dir, "update-index", "--chmod=+x", "--", "script")
+			git(t, dir, "commit", "-m", "executable index entry")
+			write(t, dir, "script", "new\ncontext\n")
+			if staged {
+				if err := repo.Stage(ctx, []string{"script"}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			view, err := repo.Patch(ctx, "script", staged)
+			if err != nil || !view.Supported {
+				t.Fatalf("executable content patch: %+v, %v", view, err)
+			}
+			if err := repo.ApplyLines(ctx, "script", staged, view.Token, []int{0, 1}); err != nil {
+				t.Fatal(err)
+			}
+			want := "new\ncontext\n"
+			if staged {
+				want = "old\ncontext\n"
+			}
+			got, err := repo.git(ctx, "show", ":script")
+			if err != nil || got != want {
+				t.Fatalf("executable index bytes: %q, want %q, %v", got, want, err)
+			}
+			if got := git(t, dir, "ls-files", "--stage", "--", "script"); !strings.HasPrefix(got, "100755 ") {
+				t.Fatalf("content staging lost executable index mode: %s", got)
+			}
+			working, err := os.ReadFile(filepath.Join(dir, "script"))
+			if err != nil || string(working) != "new\ncontext\n" {
+				t.Fatalf("working content changed: %q, %v", working, err)
+			}
+		})
+	}
+}

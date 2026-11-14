@@ -440,19 +440,29 @@ func TestPatchUnsupportedFileChanges(t *testing.T) {
 		{"attributes binary", "file.txt", func(t *testing.T, dir string) {
 			write(t, dir, ".git/info/attributes", "*.txt -diff\n")
 		}},
+		{"index mode", "file.txt", func(t *testing.T, dir string) {
+			git(t, dir, "config", "core.filemode", "false")
+			git(t, dir, "update-index", "--chmod=+x", "--", "file.txt")
+		}},
 		{"mode", "file.txt", func(t *testing.T, dir string) {
 			git(t, dir, "config", "core.filemode", "true")
-			if err := os.Chmod(filepath.Join(dir, "file.txt"), 0755); err != nil {
+			path := filepath.Join(dir, "file.txt")
+			if err := os.Chmod(path, 0755); err != nil {
 				t.Fatal(err)
+			}
+			info, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if info.Mode().Perm()&0111 == 0 {
+				t.Skip("filesystem does not expose executable permission bits")
 			}
 		}},
 		{"symlink", "file.txt", func(t *testing.T, dir string) {
 			if err := os.Remove(filepath.Join(dir, "file.txt")); err != nil {
 				t.Fatal(err)
 			}
-			if err := os.Symlink("other.txt", filepath.Join(dir, "file.txt")); err != nil {
-				t.Skipf("symlink unavailable: %v", err)
-			}
+			testSymlink(t, "other.txt", filepath.Join(dir, "file.txt"))
 		}},
 		{"submodule", "module", func(t *testing.T, dir string) {
 			head := git(t, dir, "rev-parse", "HEAD")
@@ -486,9 +496,7 @@ func TestPatchRejectsSymlinkedAncestor(t *testing.T) {
 	if err := os.Rename(filepath.Join(dir, "directory"), outside); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(outside, filepath.Join(dir, "directory")); err != nil {
-		t.Skipf("symlink unavailable: %v", err)
-	}
+	testSymlink(t, outside, filepath.Join(dir, "directory"))
 	ctx := context.Background()
 	before := git(t, dir, "ls-files", "--stage")
 	if patch, err := repo.Patch(ctx, "directory/file.txt", false); err == nil {
@@ -583,7 +591,7 @@ func TestPatchValidatesPathAndBindsToken(t *testing.T) {
 }
 
 func TestPatchLiteralPathsAndMissingNewline(t *testing.T) {
-	for _, path := range []string{"--cached", ":(glob)*.txt", "你好 space.txt", "quote\"tab\tname.txt", "line\nname.txt"} {
+	for _, path := range []string{"--cached", portableTestPath(":(glob)*.txt", "[literal].txt"), "你好 space.txt", portableTestPath("quote\"tab\tname.txt", "引号' & 文件.txt"), portableTestPath("line\nname.txt", "line name.txt")} {
 		t.Run(path, func(t *testing.T) {
 			repo, dir, _, _ := patchFixture(t, path)
 			ctx := context.Background()

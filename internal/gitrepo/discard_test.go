@@ -117,20 +117,23 @@ func TestDiscardRejectsStalePreviewAndBackupFailure(t *testing.T) {
 
 func TestDiscardRejectsSymlinksMetadataAndOversize(t *testing.T) {
 	repo, dir, _, _ := patchFixture(t, "file")
-	outside := t.TempDir()
-	write(t, outside, "target", "outside")
-	if err := os.Symlink(filepath.Join(outside, "target"), filepath.Join(dir, "link")); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink(outside, filepath.Join(dir, "ancestor")); err != nil {
-		t.Fatal(err)
-	}
 	write(t, dir, "large", strings.Repeat("x", outputLimit+1))
 	for _, path := range []string{"link", "ancestor/target", ".git/config", "../outside", "large"} {
-		view, err := repo.DiscardPreview(context.Background(), path)
-		if err == nil && view.Supported {
-			t.Fatalf("unsafe path %q supported", path)
-		}
+		t.Run(path, func(t *testing.T) {
+			if path == "link" || path == "ancestor/target" {
+				outside := t.TempDir()
+				write(t, outside, "target", "outside")
+				if path == "link" {
+					testSymlink(t, filepath.Join(outside, "target"), filepath.Join(dir, "link"))
+				} else {
+					testSymlink(t, outside, filepath.Join(dir, "ancestor"))
+				}
+			}
+			view, err := repo.DiscardPreview(context.Background(), path)
+			if err == nil && view.Supported {
+				t.Fatalf("unsafe path %q supported", path)
+			}
+		})
 	}
 }
 

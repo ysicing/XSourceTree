@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -68,6 +69,7 @@ func nativeIdentityFixture(t *testing.T) (*nativeApp, string, func()) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(home, ".gitconfig"))
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	config, err := gitrepo.GlobalIdentity(context.Background())
@@ -191,6 +193,40 @@ func TestNativeApplicationSettingsCategories(t *testing.T) {
 	}
 	if err := tester.Click("更新"); err != nil {
 		t.Fatal(err)
+	}
+	if runtime.GOOS != "darwin" {
+		if _, found := tester.Find("自动检查更新"); found {
+			t.Fatal("手动安装的平台不应提供自动更新开关")
+		}
+		if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+			tester.SetDark(false)
+			saveNativeScreenshot(t, tester, directory, "settings-manual-updates-light.png")
+			tester.SetDark(true)
+			saveNativeScreenshot(t, tester, directory, "settings-manual-updates-dark.png")
+		}
+		if err := tester.Click("下载新版本…"); err != nil {
+			t.Fatal(err)
+		}
+		if urls := tester.OpenedURLs(); len(urls) != 1 || urls[0] != "https://github.com/ysicing/51code/releases/latest" {
+			t.Fatalf("新平台未打开安装包下载页面: %v", urls)
+		}
+		tester.SetSize(780, 480)
+		tester.SetDark(false)
+		for _, label := range []string{"关闭设置", "下载新版本…"} {
+			if bounds, found := tester.Find(label); !found || bounds.W <= 0 || bounds.H <= 0 || bounds.Y+bounds.H > 480 {
+				t.Fatalf("小窗口中的设置控件不可见: %s", label)
+			}
+		}
+		if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+			saveNativeScreenshot(t, tester, directory, "settings-manual-updates-small.png")
+		}
+		if err := tester.Click("关闭设置"); err != nil {
+			t.Fatal(err)
+		}
+		if app.dialog != nil {
+			t.Fatal("关闭设置未退出面板")
+		}
+		return
 	}
 	app.availableVersion = "0.0.6"
 	tester.Frame()

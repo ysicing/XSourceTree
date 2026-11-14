@@ -51,7 +51,7 @@ func (editor *nativeAISettings) connectionFields(app *nativeApp, dialog *nativeD
 	aiSettingsRow(c, locales.ApiKey(), func() {
 		ui.Column(c).FillWidth().Gap(6).Children(func() {
 			ui.Row(c).FillWidth().Gap(6).Children(func() {
-				input := ui.TextInput(c, &editor.key).Label(locales.ApiKey()).Placeholder(locales.KeychainKeyHint()).Grow(1).MinWidth(0).Disabled(editor.checking || endpointErr != nil)
+				input := ui.TextInput(c, &editor.key).Label(locales.ApiKey()).Placeholder(credentialKeyHint()).Grow(1).MinWidth(0).Disabled(editor.checking || endpointErr != nil)
 				if !editor.showKey {
 					input.Password()
 				}

@@ -24,7 +24,9 @@ func TestRenamedApplicationKeepsLegacyData(t *testing.T) {
 		t.Run(scenario.name, func(t *testing.T) {
 			home := t.TempDir()
 			t.Setenv("HOME", home)
+			t.Setenv("USERPROFILE", home)
 			t.Setenv("XDG_CONFIG_HOME", home)
+			t.Setenv("APPDATA", home)
 			config, err := os.UserConfigDir()
 			if err != nil {
 				t.Fatal(err)
@@ -104,7 +106,9 @@ func TestRenamedApplicationKeepsIsolatedDataOverride(t *testing.T) {
 func TestRenamedApplicationRejectsUnavailableLegacyDirectory(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", home)
+	t.Setenv("APPDATA", home)
 	config, err := os.UserConfigDir()
 	if err != nil {
 		t.Fatal(err)

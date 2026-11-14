@@ -38,6 +38,7 @@ var nativeIcons = map[string]*ui.SVG{
 	"fetch":    nativeSymbol(`<path d="M7 17H6a4 4 0 0 1-.6-8A6 6 0 0 1 17 9h1a4 4 0 0 1 0 8h-1M12 12v9m-3-3 3 3 3-3"/>`),
 	"pull":     nativeSymbol(`<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>`),
 	"push":     nativeSymbol(`<path d="M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5"/>`),
+	"feedback": nativeSymbol(`<path d="M21 11a8 8 0 0 1-8 8H7l-5 3V11a9 9 0 0 1 19 0Z"/>`),
 }
 
 func nativeSymbol(paths string) *ui.SVG {
@@ -67,7 +68,7 @@ func (app *nativeApp) feedbackButton(c *ui.Context) {
 		color = c.Theme().Accent
 	}
 	if button.Children(func() {
-		sfsymbols.Symbol(c, "bubble.left").Size(14).Color(color).Role(ui.RoleNone)
+		sfsymbols.Symbol(c, "bubble.left").Fallback(nativeIcons["feedback"]).Size(14).Color(color).Role(ui.RoleNone)
 	}).Clicked() {
 		c.OpenURLThen("https://github.com/ysicing/51code/issues/new", func(err error) {
 			if err != nil {
@@ -132,7 +133,7 @@ func (app *nativeApp) view(c *ui.Context) {
 			})
 			app.toolbar(c)
 			ui.Toolbar(c, func() {
-				if iconButton(c, locales.Settings(), nativeIcons["settings"]).Tooltip(locales.Settings() + "（⌘,）").Disabled(app.busy || app.dialog != nil).Clicked() {
+				if iconButton(c, locales.Settings(), nativeIcons["settings"]).Tooltip(locales.Settings() + "（" + shortcutLabel("⌘,") + "）").Disabled(app.busy || app.dialog != nil).Clicked() {
 					app.settingsDialog()
 				}
 			}).Label(locales.ApplicationActions()).Padding(0).Shrink(0)

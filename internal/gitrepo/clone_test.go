@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -159,9 +159,7 @@ func TestClonePreservesExistingTarget(t *testing.T) {
 			case "file":
 				write(t, parent, "repo", "external")
 			case "symlink":
-				if err := os.Symlink(t.TempDir(), target); err != nil {
-					t.Skipf("symlinks unavailable: %v", err)
-				}
+				testSymlink(t, t.TempDir(), target)
 			}
 			before, err := os.Lstat(target)
 			if err != nil {
@@ -221,9 +219,7 @@ func TestCloneCancellationPreservesExternalChanges(t *testing.T) {
 			write(t, external, "keep", "external")
 			if change == "replace symlink" {
 				probe := filepath.Join(t.TempDir(), "link")
-				if err := os.Symlink(external, probe); err != nil {
-					t.Skipf("symlinks unavailable: %v", err)
-				}
+				testSymlink(t, external, probe)
 			}
 			started := make(chan struct{}, 1)
 			release := make(chan struct{})
@@ -272,9 +268,7 @@ func TestCloneCancellationPreservesExternalChanges(t *testing.T) {
 				case "replace file":
 					write(t, parent, "repo", "external")
 				case "replace symlink":
-					if err := os.Symlink(external, target); err != nil {
-						t.Fatal(err)
-					}
+					testSymlink(t, external, target)
 				}
 			}
 			cancel()
@@ -370,21 +364,19 @@ func TestCloneSuccessfulTransferPreservesExternalChanges(t *testing.T) {
 }
 
 func TestCloneRespectsConfiguredSSH(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX SSH wrapper fixture")
-	}
 	for _, setting := range []string{"core.sshCommand", "GIT_SSH", "GIT_SSH_COMMAND"} {
 		t.Run(setting, func(t *testing.T) {
 			cloneEnvironment(t)
 			_, source := fixture(t)
-			script := filepath.Join(t.TempDir(), "ssh-wrapper")
-			scriptBody := "#!/bin/sh\n[ \"$GIT_TERMINAL_PROMPT\" = 0 ] || exit 81\n[ \"$GCM_INTERACTIVE\" = never ] || exit 82\nexec git-upload-pack \"$XSOURCE_CLONE_SOURCE\"\n"
-			if err := os.WriteFile(script, []byte(scriptBody), 0755); err != nil {
+			actual, err := exec.LookPath("git")
+			if err != nil {
 				t.Fatal(err)
 			}
+			t.Setenv("XSOURCE_REAL_GIT", actual)
+			script := gitTestExecutable(t, "ssh-wrapper")
 			t.Setenv("XSOURCE_CLONE_SOURCE", source)
 			t.Setenv("GIT_SSH_VARIANT", "ssh")
-			quoted := "'" + strings.ReplaceAll(script, "'", "'\"'\"'") + "'"
+			quoted := "'" + strings.ReplaceAll(filepath.ToSlash(script), "'", "'\"'\"'") + "'"
 			if setting == "core.sshCommand" {
 				config := filepath.Join(t.TempDir(), "gitconfig")
 				git(t, source, "config", "--file", config, "core.sshCommand", quoted)

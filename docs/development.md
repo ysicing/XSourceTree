@@ -25,6 +25,8 @@ AI 协议适配位于 `internal/commitai/`。空协议保留原有 Magpie 自动
 
 `internal/aikeychain/` 使用已有 purego 依赖调用 macOS Security.framework，不通过命令行传递密钥。钥匙串服务名为 `com.ysicing.xsourcetree.ai`，账号由协议与规范化 Base URL 的 SHA-256 生成。密钥不参与配置 JSON 序列化；读写在后台完成，失败不降级为明文保存或忽略凭证错误发送请求。设置保留未保存的密钥草稿，保存失败允许重试，关闭前确认放弃，写入期间阻止关闭。
 
+Windows 和 Ubuntu 的同一凭证接口使用 MyGo `Secrets.Service`，分别落到 Windows Credential Manager 和 Linux Secret Service。macOS 保留现有实现、服务名及账号生成规则。Ubuntu 除 GTK 3 外，AI 密钥保存需要 libsecret、D-Bus 会话及 Secret Service；服务缺失、锁定或拒绝访问时保留错误和未保存草稿。不会将密钥写入配置文件。`XSOURCETREE_TEST_KEYCHAIN=1` 的合成凭证读写用例支持三平台，默认关闭。
+
 ### 改名兼容
 
 品牌展示名为 `51Code`，Go 模块为 `github.com/ysicing/51code`，安装包前缀使用小写 `51code`。Bundle ID 继续使用 `com.ysicing.xsourcetree`，钥匙串服务名及账号生成规则保持不变，以复用旧 API Key 和系统偏好。
@@ -103,6 +105,13 @@ MYGO_AUTOMATION=/tmp/xsourcetree-e2e.sock node scripts/native-smoke.mjs
 
 测试先确认窗口类型为原生内容，再验证中文路径添加、中文提交说明、暂存与菜单提交、历史工作区的整文件／分组／区块／逐行暂存及取消暂存、并排 Diff、分支创建与切换、标签、历史搜索、远程配置及首次发布、贮藏、备份后丢弃、原生菜单与分组。推送目标全部为临时本地 bare 仓库。启用自动化时，测试应用使用独立的临时数据目录，退出时清理，不影响普通开发版或正式版的本地仓库列表及恢复副本。自动化输入通过框架内容事件发送，菜单快捷键仍需真实键盘验证。
 
+单实例锁按应用名和 Bundle ID 区分，临时数据目录本身不会改变锁。已有开发实例运行时，macOS 可用独立的 e2e 二进制进行上述测试，避免接管原开发实例：
+
+```sh
+GOMAXPROCS=2 go build -p=1 -tags=e2e -o /tmp/51code-e2e .
+MYGO_LOCALE=zh-Hans MYGO_AUTOMATION=/tmp/xsourcetree-e2e.sock /tmp/51code-e2e
+```
+
 ## 项目结构
 
 以下路径均相对于仓库根目录：
@@ -133,6 +142,25 @@ Git 命令使用参数数组执行，路径按字面值处理。写操作限定�
 ## 应用更新与发布
 
 以下命令均在仓库根目录执行。
+
+### Windows x64 与 Ubuntu x64
+
+首批目标为 Windows 11 x64 和 Ubuntu 24.04 LTS x64。MyGo 原生界面不需要 WebView2 或 WebKitGTK；Windows 使用系统 Git，Ubuntu 的 Debian 包声明 Git、GTK 3 和 libsecret 依赖，Secret Service 由桌面会话提供。首次远程操作前应在终端配置好 Git/SSH 凭证和签名；应用继续禁止终端交互提示，没有新增账户登录或凭证配置界面。
+
+`.github/workflows/desktop.yml` 对 PR 和主分支串行运行 Windows、Ubuntu、macOS 回归，并构建 Windows 安装器和 Ubuntu Debian 包。Go 使用 `GOMAXPROCS=2`、`-p=1`、`-parallel=2`；Ubuntu 测试使用独立的虚拟显示和 D-Bus/keyring，会话内只存合成测试密钥。各平台保留 `ui.Tester` 浅深色及紧凑布局截图供审阅，这些截图不替代真实系统窗口、输入法及快捷键验收。macOS job 不参与签名、公证或发布。
+
+手动构建新平台安装包：
+
+```sh
+bun scripts/desktop-release.mjs build --platform windows-amd64
+bun scripts/desktop-release.mjs build --platform linux-amd64
+```
+
+产物分别位于 `build/desktop/windows-amd64/` 和 `build/desktop/linux-amd64/`。Windows 安装包为 `51code-setup-<版本>-amd64.exe`，Ubuntu 包为 `51code_<版本>_amd64.deb`。Windows 安装器构建使用 Windows runner；Ubuntu Debian 包也可在 macOS 交叉构建。Windows 首版未配置 Authenticode 签名，GitHub 提供来源和校验和记录。
+
+公开 GitHub Release 后，流水线检出该 tag，核对 `package.json` 版本及提交身份，重新测试并构建新平台附件，再附加到同一 Release。也可手动运行 Desktop platforms 工作流，指定已经公开的稳定版 tag；目标 tag 必须包含本次新增的脚本和适配代码。发布 job 仅获得所需的 Release 写权限，不创建 tag、不创建或公开 Release、不触碰 macOS 安装包、CDN、Homebrew 或更新清单。
+
+发布附件附带来源及 SHA-256 校验。重跑可复用内容相同的已有附件；同名但内容不同则停止，不覆盖安装包。新平台首版在设置页提供 GitHub Release 下载入口，采用手动安装升级；`mygo.config.ts` 只为 macOS 嵌入原有签名更新源。跨编译脚本显式设置 `MYGO_TARGET_OS`，避免在 Mac 上构建新平台时误用 macOS 更新配置。
 
 ### 存储与签名
 

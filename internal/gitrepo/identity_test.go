@@ -6,7 +6,6 @@ package gitrepo
 import (
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -16,6 +15,7 @@ func identityFixture(t *testing.T) (*Repository, string) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(home, ".gitconfig"))
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
@@ -183,7 +183,7 @@ func TestGlobalIdentitySelectsXDGWriteTarget(t *testing.T) {
 func TestIdentityRestoresNameWhenEmailWriteFails(t *testing.T) {
 	for _, phase := range []string{"before-write", "after-write"} {
 		t.Run(phase, func(t *testing.T) {
-			repo, home := identityFixture(t)
+			repo, _ := identityFixture(t)
 			ctx := context.Background()
 			git(t, repo.Path, "config", "--add", "user.name", "First Name")
 			git(t, repo.Path, "config", "--add", "user.name", "Last Name")
@@ -192,27 +192,10 @@ func TestIdentityRestoresNameWhenEmailWriteFails(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			gitPath, err := exec.LookPath("git")
-			if err != nil {
-				t.Fatal(err)
-			}
-			wrapper := filepath.Join(home, "bin")
-			if err := os.Mkdir(wrapper, 0700); err != nil {
-				t.Fatal(err)
-			}
-			t.Setenv("IDENTITY_TEST_GIT", gitPath)
-			failure := "exit 42"
-			if phase == "after-write" {
-				failure = "\"$IDENTITY_TEST_GIT\" \"$@\"; exit 42"
-			}
-			script := "#!/bin/sh\ncase \"$*\" in *'--replace-all user.email new@example.test') " + failure + ";; esac\nexec \"$IDENTITY_TEST_GIT\" \"$@\"\n"
-			if err := os.WriteFile(filepath.Join(wrapper, "git"), []byte(script), 0700); err != nil {
-				t.Fatal(err)
-			}
-			t.Setenv("PATH", wrapper+string(os.PathListSeparator)+os.Getenv("PATH"))
+			installGitTestWrapper(t, "identity-"+phase)
 			err = repo.SaveIdentity(ctx, IdentityRequest{Name: "New Name", Email: "new@example.test", Token: settings.Token})
-			if err == nil {
-				t.Fatal("邮箱写入失败却返回成功")
+			if !exitCode(err, 42) {
+				t.Fatalf("未触发指定的邮箱写入失败: %v", err)
 			}
 			after, err := repo.Identity(ctx)
 			if err != nil || after.Token != settings.Token {

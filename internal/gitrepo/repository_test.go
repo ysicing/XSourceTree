@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -35,6 +36,8 @@ func fixture(t *testing.T) (*Repository, string) {
 	git(t, dir, "config", "user.name", "Test User")
 	git(t, dir, "config", "user.email", "test@example.test")
 	git(t, dir, "config", "commit.gpgsign", "false")
+	git(t, dir, "config", "core.autocrlf", "false")
+	git(t, dir, "config", "core.symlinks", "true")
 	repo, err := Open(context.Background(), dir)
 	if err != nil {
 		t.Fatal(err)
@@ -97,11 +100,16 @@ func TestInitialCommitWorkflow(t *testing.T) {
 func TestStageUsesLiteralPaths(t *testing.T) {
 	repo, dir := fixture(t)
 	ctx := context.Background()
-	names := []string{":(glob)*", "-leading.txt", "line\nbreak.txt", "tabs\tfile.txt", "spaces file.txt"}
+	literal := "[literal].txt"
+	names := []string{literal, "l.txt", "-leading.txt", "spaces file.txt", "中文 & 文件.txt"}
+	if runtime.GOOS != "windows" {
+		literal = ":(glob)*"
+		names = append(names, literal, "line\nbreak.txt", "tabs\tfile.txt")
+	}
 	for _, name := range names {
 		write(t, dir, name, name+"\n")
 	}
-	if err := repo.Stage(ctx, []string{":(glob)*"}); err != nil {
+	if err := repo.Stage(ctx, []string{literal}); err != nil {
 		t.Fatal(err)
 	}
 	state, err := repo.Snapshot(ctx)
@@ -112,7 +120,7 @@ func TestStageUsesLiteralPaths(t *testing.T) {
 	for _, file := range state.Files {
 		if file.Index != "?" && file.Index != " " {
 			staged++
-			if file.Path != ":(glob)*" {
+			if file.Path != literal {
 				t.Fatal("wildcard staged another file:", file.Path)
 			}
 		}
@@ -283,17 +291,17 @@ func TestBinaryAndSymlinkPreview(t *testing.T) {
 	if err != nil || !diff.Binary {
 		t.Fatalf("binary preview: %+v %v", diff, err)
 	}
-	secret := filepath.Join(t.TempDir(), "secret")
-	if err := os.WriteFile(secret, []byte("do not reveal"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink(secret, filepath.Join(dir, "link")); err != nil {
-		t.Skip(err)
-	}
-	diff, err = repo.Diff(ctx, "link", false)
-	if err != nil || strings.Contains(diff.Text, "do not reveal") || !strings.Contains(diff.Text, secret) {
-		t.Fatalf("symlink preview: %+v %v", diff, err)
-	}
+	t.Run("symlink", func(t *testing.T) {
+		secret := filepath.Join(t.TempDir(), "secret")
+		if err := os.WriteFile(secret, []byte("do not reveal"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		testSymlink(t, secret, filepath.Join(dir, "link"))
+		diff, err := repo.Diff(ctx, "link", false)
+		if err != nil || strings.Contains(diff.Text, "do not reveal") || !strings.Contains(diff.Text, secret) {
+			t.Fatalf("symlink preview: %+v %v", diff, err)
+		}
+	})
 }
 
 func TestLocalRemoteRoundTrip(t *testing.T) {

@@ -50,9 +50,29 @@ func TestRecentRepositoriesPersistAndRequireExplicitOpen(t *testing.T) {
 		t.Fatal("duplicate recent repository")
 	}
 	info, err := os.Stat(settings)
-	if err != nil || info.Mode().Perm()&0077 != 0 {
-		t.Fatalf("settings permissions: %v %v", info, err)
+	if err != nil {
+		t.Fatal(err)
 	}
+	t.Run("private permissions", func(t *testing.T) {
+		// 在同一文件系统独立探测权限位，不能因目标文件权限错误而跳过安全断言。
+		probe := filepath.Join(filepath.Dir(settings), "permission-probe")
+		if err := os.WriteFile(probe, nil, 0666); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(probe, 0600); err != nil {
+			t.Fatal(err)
+		}
+		probeInfo, err := os.Stat(probe)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if probeInfo.Mode().Perm() != 0600 {
+			t.Skipf("filesystem does not expose Unix private permission bits: %v", probeInfo.Mode())
+		}
+		if info.Mode().Perm()&0077 != 0 {
+			t.Fatalf("settings permissions: %v", info.Mode())
+		}
+	})
 }
 
 func TestFailedOpenDoesNotChangeRecent(t *testing.T) {

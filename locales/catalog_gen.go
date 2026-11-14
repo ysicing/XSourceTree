@@ -3022,6 +3022,36 @@ func (msgs Messages) RevealFinder() string {
 	return Catalog.Format(msgs.locale, "revealFinder", nil)
 }
 
+// OpenRepositoryFolder says "打开仓库文件夹"
+// in the language the app shows.
+func OpenRepositoryFolder() string { return In(i18n.Locale()).OpenRepositoryFolder() }
+
+// OpenRepositoryFolder says "打开仓库文件夹"
+// in the language of msgs.
+func (msgs Messages) OpenRepositoryFolder() string {
+	return Catalog.Format(msgs.locale, "openRepositoryFolder", nil)
+}
+
+// DownloadRelease says "下载新版本…"
+// in the language the app shows.
+func DownloadRelease() string { return In(i18n.Locale()).DownloadRelease() }
+
+// DownloadRelease says "下载新版本…"
+// in the language of msgs.
+func (msgs Messages) DownloadRelease() string {
+	return Catalog.Format(msgs.locale, "downloadRelease", nil)
+}
+
+// CredentialKeyHint says "留空则使用系统凭证存储中的密钥"
+// in the language the app shows.
+func CredentialKeyHint() string { return In(i18n.Locale()).CredentialKeyHint() }
+
+// CredentialKeyHint says "留空则使用系统凭证存储中的密钥"
+// in the language of msgs.
+func (msgs Messages) CredentialKeyHint() string {
+	return Catalog.Format(msgs.locale, "credentialKeyHint", nil)
+}
+
 // RemoveFromListMenu says "从列表移除…"
 // in the language the app shows.
 func RemoveFromListMenu() string { return In(i18n.Locale()).RemoveFromListMenu() }

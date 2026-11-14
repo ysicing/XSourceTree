@@ -10,6 +10,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"syscall"
 	"testing"
 )
 
@@ -134,9 +136,6 @@ func TestScanFindsNestedRepositoriesAndWorktreesWithoutImporting(t *testing.T) {
 	second := localRepo(t, filepath.Join(root, "nested", "two"))
 	localRepo(t, filepath.Join(root, "node_modules", "ignored"))
 	localRepo(t, filepath.Join(root, ".hidden", "ignored"))
-	if err := os.Symlink(root, filepath.Join(root, "cycle")); err != nil {
-		t.Fatal(err)
-	}
 	command := exec.Command("git", "-C", first, "-c", "user.name=Test", "-c", "user.email=test@example.test", "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", "initial")
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("commit: %v: %s", err, output)
@@ -241,5 +240,25 @@ func TestScanReportsDepthLimitAndRejectsFiles(t *testing.T) {
 	}
 	if _, err := manager.Scan(context.Background(), file); err == nil {
 		t.Fatal("accepted a file as scan root")
+	}
+}
+
+func TestScanDoesNotFollowSymlinkCycle(t *testing.T) {
+	root := t.TempDir()
+	path := localRepo(t, filepath.Join(root, "中文 仓库"))
+	if err := os.Symlink(root, filepath.Join(root, "cycle")); err != nil {
+		if errors.Is(err, os.ErrPermission) || errors.Is(err, errors.ErrUnsupported) ||
+			runtime.GOOS == "windows" && (errors.Is(err, syscall.Errno(1314)) || errors.Is(err, syscall.Errno(50))) {
+			t.Skipf("filesystem or account cannot create symlinks: %v", err)
+		}
+		t.Fatal(err)
+	}
+	manager, err := New(filepath.Join(t.TempDir(), "recent.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := manager.Scan(context.Background(), root)
+	if err != nil || result.Truncated || len(result.Repositories) != 1 || result.Repositories[0].Path != path {
+		t.Fatalf("scan followed cycle or lost repository: %+v, %v", result, err)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"runtime"
 	"testing"
 
 	"github.com/ysicing/51code/internal/commitai"
@@ -176,19 +177,23 @@ func TestNativeLocalizedPreferencesKeepStoredValues(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if !app.settingsAutoChecks {
-		if err := tester.Click("Automatically check for updates"); err != nil {
-			t.Fatal(err)
+	wantFrequency := "每天"
+	if runtime.GOOS == "darwin" {
+		if !app.settingsAutoChecks {
+			if err := tester.Click("Automatically check for updates"); err != nil {
+				t.Fatal(err)
+			}
 		}
-	}
-	for _, label := range []string{locales.Daily(), locales.Weekly()} {
-		if err := tester.Click(label); err != nil {
-			t.Fatal(err)
+		for _, label := range []string{locales.Daily(), locales.Weekly()} {
+			if err := tester.Click(label); err != nil {
+				t.Fatal(err)
+			}
 		}
+		wantFrequency = "每周"
 	}
 	restored := newNativeApp(app.service, app.stateFile)
 	defer restored.cancel()
-	if restored.prefs.Appearance != appearanceDark || restored.prefs.UpdateCheckFrequency != "每周" {
+	if restored.prefs.Appearance != appearanceDark || restored.prefs.UpdateCheckFrequency != wantFrequency {
 		t.Fatalf("翻译标签被写入已有配置: %+v", restored.prefs)
 	}
 	language, format := commitai.Chinese, commitai.Conventional

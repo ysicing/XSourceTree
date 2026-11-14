@@ -5,12 +5,45 @@
 
 package aikeychain
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/egoist/mygo"
+)
 
 type Store struct{ Service string }
 
-func (Store) Load(string) (string, error) {
-	return "", errors.New("当前平台不支持 macOS 钥匙串")
+func (store Store) secrets() (mygo.SecretsModule, error) {
+	if store.Service == "" {
+		return mygo.SecretsModule{}, errors.New("系统凭证存储的服务名不能为空")
+	}
+	return mygo.Secrets.Service(store.Service), nil
 }
-func (Store) Save(string, string) error { return errors.New("当前平台不支持 macOS 钥匙串") }
-func (Store) Delete(string) error       { return errors.New("当前平台不支持 macOS 钥匙串") }
+
+func (store Store) Load(account string) (string, error) {
+	secrets, err := store.secrets()
+	if err != nil {
+		return "", err
+	}
+	value, err := secrets.Get(account)
+	if errors.Is(err, mygo.ErrSecretNotFound) {
+		return "", nil
+	}
+	return string(value), err
+}
+
+func (store Store) Save(account, value string) error {
+	secrets, err := store.secrets()
+	if err != nil {
+		return err
+	}
+	return secrets.Set(account, []byte(value))
+}
+
+func (store Store) Delete(account string) error {
+	secrets, err := store.secrets()
+	if err != nil {
+		return err
+	}
+	return secrets.Delete(account)
+}

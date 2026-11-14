@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -45,6 +46,7 @@ func nativeFixture(t *testing.T) (*nativeApp, string, func()) {
 	nativeGit(t, path, "config", "user.name", "Native Test")
 	nativeGit(t, path, "config", "user.email", "native@example.test")
 	nativeGit(t, path, "config", "commit.gpgsign", "false")
+	nativeGit(t, path, "config", "core.autocrlf", "false")
 	writeNativeFile(t, path, "hello.txt", "原始内容\n")
 	nativeGit(t, path, "add", ".")
 	nativeGit(t, path, "commit", "-m", "初始提交")
@@ -764,6 +766,9 @@ func TestNativeRepositoryActionsMenu(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []string{"新建标签…", "贮藏更改…", "-", "在 Finder 中显示", "打开恢复副本文件夹"}
+	if runtime.GOOS != "darwin" {
+		want[3] = "打开仓库文件夹"
+	}
 	if got := tester.Menu(); !slices.Equal(got, want) || app.dialog != nil {
 		t.Fatalf("应直接展开仓库菜单，菜单=%v，弹窗=%v", got, app.dialog)
 	}

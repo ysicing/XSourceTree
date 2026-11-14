@@ -12,7 +12,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -73,18 +72,7 @@ func TestSearchHistoryBeyondLoadedPage(t *testing.T) {
 	}
 	calls := filepath.Join(t.TempDir(), "log-calls")
 	t.Setenv("XSOURCE_LOG_CALLS", calls)
-	installHistoryGitWrapper(t, `for argument do
-  if [ "$argument" = log ]; then
-    printf 'log\n' >> "$XSOURCE_LOG_CALLS"
-    for option do
-      case "$option" in
-        --skip=*|-n|--max-count=*) printf 'repeated traversal is forbidden\n' >&2; exit 91 ;;
-      esac
-    done
-  fi
-done
-exec "$XSOURCE_REAL_GIT" "$@"
-`)
+	installGitTestWrapper(t, "history-count")
 	for _, query := range []string{"[LITERAL].*", "hidden body NEEDLE", "ARCHIVE PERSON", "ARCHIVE@EXAMPLE.TEST", strings.ToUpper(oldest[:12])} {
 		t.Run(query, func(t *testing.T) {
 			before := historyLogCallCount(t, calls)
@@ -121,7 +109,7 @@ exec "$XSOURCE_REAL_GIT" "$@"
 func TestSearchHistoryAcrossBranchesAndLiteralPaths(t *testing.T) {
 	repo, dir := fixture(t)
 	ctx := context.Background()
-	literal := ":(glob)*"
+	literal := portableTestPath(":(glob)*", "[literal].txt")
 	write(t, dir, literal, "literal\n")
 	write(t, dir, "other.txt", "other\n")
 	git(t, dir, "add", ".")
@@ -153,7 +141,7 @@ func TestSearchHistoryAcrossBranchesAndLiteralPaths(t *testing.T) {
 			t.Fatalf("literal path %q, query %q: %v, want %v", literal, query, hashes, expected)
 		}
 	}
-	for _, path := range []string{"-leading.txt", "line\nbreak.txt", "tabs\tfile.txt", "你好 file.txt", "wild[1]*.txt"} {
+	for _, path := range []string{"-leading.txt", portableTestPath("line\nbreak.txt", "line break.txt"), portableTestPath("tabs\tfile.txt", "tabs file.txt"), "你好 file.txt", portableTestPath("wild[1]*.txt", "wild[1].txt")} {
 		write(t, dir, path, path+"\n")
 		git(t, dir, "add", ".")
 		git(t, dir, "commit", "-m", "special path")
@@ -183,8 +171,8 @@ func TestSearchHistoryAcrossBranchesAndLiteralPaths(t *testing.T) {
 func TestCommitFilesAndDiffRootAndRename(t *testing.T) {
 	repo, dir := fixture(t)
 	ctx := context.Background()
-	original := "old\tname\n.txt"
-	renamed := ":(glob)*"
+	original := portableTestPath("old\tname\n.txt", "旧 文件.txt")
+	renamed := portableTestPath(":(glob)*", "[新 文件].txt")
 	write(t, dir, original, "first\nsecond\nthird\n")
 	write(t, dir, "other.txt", "unrelated\n")
 	write(t, dir, "binary.bin", "\x00binary\xff\n")
@@ -305,7 +293,7 @@ func TestHistorySearchRejectsInvalidParameters(t *testing.T) {
 	if _, err := repo.SearchHistory(ctx, "bad\x00query", "", 0, HistoryFilter{}); err == nil {
 		t.Fatal("accepted NUL in query")
 	}
-	for _, path := range []string{"", "../escape", "/tmp/escape", ".git/config", "a/../../escape", "bad\x00path"} {
+	for _, path := range []string{"", "../escape", filepath.Join(t.TempDir(), "escape"), ".git/config", "a/../../escape", "bad\x00path"} {
 		if path != "" {
 			if _, err := repo.SearchHistory(ctx, "", path, 0, HistoryFilter{}); err == nil {
 				t.Fatalf("accepted invalid search path: %q", path)
@@ -425,23 +413,6 @@ func TestHistorySearchCancellationWhileRepositoryBusy(t *testing.T) {
 	}
 }
 
-func installHistoryGitWrapper(t *testing.T, body string) {
-	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("Git process wrapper requires a POSIX shell")
-	}
-	actual, err := exec.LookPath("git")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("XSOURCE_REAL_GIT", actual)
-	directory := t.TempDir()
-	if err := os.WriteFile(filepath.Join(directory, "git"), []byte("#!/bin/sh\n"+body), 0755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", directory+string(os.PathListSeparator)+os.Getenv("PATH"))
-}
-
 func historyLogCallCount(t *testing.T, path string) int {
 	t.Helper()
 	data, err := os.ReadFile(path)
@@ -548,7 +519,7 @@ func TestHistoryStreamCallerCancellationWinsOverFullPage(t *testing.T) {
 func TestHistoryStreamCommandErrorsAndUserCancellation(t *testing.T) {
 	t.Run("command failure", func(t *testing.T) {
 		repo, _ := fixture(t)
-		installHistoryGitWrapper(t, "printf 'history failure\\n' >&2\nexit 73\n")
+		installGitTestWrapper(t, "history-failure")
 		_, err := repo.SearchHistory(context.Background(), "query", "", 0, HistoryFilter{})
 		if !exitCode(err, 73) || !strings.Contains(err.Error(), "history failure") {
 			t.Fatalf("stream command error: %v", err)
@@ -558,7 +529,7 @@ func TestHistoryStreamCommandErrorsAndUserCancellation(t *testing.T) {
 		repo, _ := fixture(t)
 		started := filepath.Join(t.TempDir(), "started")
 		t.Setenv("XSOURCE_STARTED", started)
-		installHistoryGitWrapper(t, "printf started > \"$XSOURCE_STARTED\"\nsleep 10\n")
+		installGitTestWrapper(t, "history-cancel")
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		done := make(chan error, 1)
@@ -588,7 +559,7 @@ func TestHistoryStreamCommandErrorsAndUserCancellation(t *testing.T) {
 	})
 	t.Run("bounded stderr", func(t *testing.T) {
 		repo, _ := fixture(t)
-		installHistoryGitWrapper(t, "head -c 4194305 /dev/zero >&2\n")
+		installGitTestWrapper(t, "history-stderr")
 		_, err := repo.SearchHistory(context.Background(), "query", "", 0, HistoryFilter{})
 		if err == nil || !strings.Contains(err.Error(), "4 MiB") {
 			t.Fatalf("oversized stderr was accepted: %v", err)
@@ -597,9 +568,6 @@ func TestHistoryStreamCommandErrorsAndUserCancellation(t *testing.T) {
 }
 
 func TestHistoryCommandsDisableSignatureVerification(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("signature marker requires a POSIX shell")
-	}
 	repo, dir := fixture(t)
 	write(t, dir, "signed.txt", "signed content\n")
 	git(t, dir, "add", ".")
@@ -618,10 +586,7 @@ func TestHistoryCommandsDisableSignatureVerification(t *testing.T) {
 	git(t, dir, "update-ref", "refs/heads/main", hash)
 	marker := filepath.Join(t.TempDir(), "gpg-called")
 	t.Setenv("XSOURCE_GPG_MARKER", marker)
-	gpg := filepath.Join(t.TempDir(), "gpg")
-	if err := os.WriteFile(gpg, []byte("#!/bin/sh\nprintf called > \"$XSOURCE_GPG_MARKER\"\nexit 1\n"), 0755); err != nil {
-		t.Fatal(err)
-	}
+	gpg := gitTestExecutable(t, "gpg")
 	git(t, dir, "config", "gpg.program", gpg)
 	git(t, dir, "config", "gpg.format", "openpgp")
 	git(t, dir, "config", "log.showSignature", "true")
@@ -657,7 +622,7 @@ func TestHistoryCommandsDisableSignatureVerification(t *testing.T) {
 }
 
 func TestCommitFileDiffExcludesDirectoryDescendants(t *testing.T) {
-	for _, path := range []string{"entry", "entry with space", "中文\tquote\"back\\line\nentry"} {
+	for _, path := range []string{"entry", "entry with space", portableTestPath("中文\tquote\"back\\line\nentry", "中文 quote' back line entry")} {
 		t.Run(path, func(t *testing.T) {
 			repo, dir := fixture(t)
 			write(t, dir, path, "removed file content\n")
@@ -700,8 +665,8 @@ func TestCommitFileDiffRenameWithReusedSource(t *testing.T) {
 	for _, directory := range []bool{false, true} {
 		t.Run(fmt.Sprint(directory), func(t *testing.T) {
 			repo, dir := fixture(t)
-			original := "old\t\"中文\nfile"
-			renamed := "new \"\t中文\nfile"
+			original := portableTestPath("old\t\"中文\nfile", "old 中文 文件")
+			renamed := portableTestPath("new \"\t中文\nfile", "new 中文 文件")
 			write(t, dir, original, "first\nsecond\nthird\n")
 			git(t, dir, "add", ".")
 			git(t, dir, "commit", "-m", "base")
@@ -752,9 +717,6 @@ func TestCommitFileDiffRenameWithReusedSource(t *testing.T) {
 }
 
 func TestCommitFileDiffPreservesBothSidesOfTypeChange(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink fixture requires Unix symlink permissions")
-	}
 	repo, dir := fixture(t)
 	write(t, dir, "entry", "original content\n")
 	write(t, dir, "other.txt", "base\n")
@@ -763,9 +725,7 @@ func TestCommitFileDiffPreservesBothSidesOfTypeChange(t *testing.T) {
 	if err := os.Remove(filepath.Join(dir, "entry")); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink("target.txt", filepath.Join(dir, "entry")); err != nil {
-		t.Fatal(err)
-	}
+	testSymlink(t, "target.txt", filepath.Join(dir, "entry"))
 	write(t, dir, "other.txt", "unrelated modification\n")
 	git(t, dir, "add", "-A")
 	git(t, dir, "commit", "-m", "regular file to symlink")

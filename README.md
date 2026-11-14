@@ -4,7 +4,7 @@
 
 # 51Code
 
-51Code（原 XSourceTree）是轻量的开源 Git 桌面客户端，专注 SourceTree 中常用的工作流。优先支持 macOS，使用 Go 和 [MyGo Native UI](https://mygo.egoist.dev/docs/ui) 构建界面，使用系统 Git。
+51Code（原 XSourceTree）是轻量的开源 Git 桌面客户端，专注 SourceTree 中常用的工作流。支持 macOS、Windows 11 x64 和 Ubuntu 24.04 LTS x64，使用 Go 和 [MyGo Native UI](https://mygo.egoist.dev/docs/ui) 构建界面，使用系统 Git。
 
 ## 功能
 
@@ -15,11 +15,13 @@
 - **远程同步**：管理远程地址、Fetch、快进 Pull、Push 与领先/落后计数
 - **贮藏与合并**：管理贮藏、合并分支、编辑冲突，继续或中止进行中的 Git 操作
 - **工作树（Worktree）**：发现、打开、创建工作目录，合并到当前工作树并核对状态后移除已合并目录
-- **桌面体验**：浅色/深色外观、原生菜单、快捷键、可调整面板与应用内签名更新；搜索、版本比较、贮藏和工作树侧栏入口可独立显示或隐藏
+- **桌面体验**：浅色/深色外观、原生菜单、快捷键、可调整面板与 macOS 应用内签名更新；搜索、版本比较、贮藏和工作树侧栏入口可独立显示或隐藏
 
 目前管理本机已有仓库，尚无克隆入口、交互式 rebase 或凭证配置界面。远程操作沿用系统 Git/SSH 凭证。丢弃文件修改前会保存恢复副本，详见[使用说明](docs/usage.md)。
 
 ## 安装
+
+macOS：
 
 ```sh
 brew install --cask ysicing/tap/51code
@@ -27,22 +29,26 @@ brew install --cask ysicing/tap/51code
 
 旧名称 `xsourcetree` 通过 Homebrew 改名映射兼容。已有安装先运行 `brew update`，需要手动迁移安装记录时运行 `brew migrate --cask ysicing/tap/51code`。
 
+Windows 和 Ubuntu 安装包从 [GitHub Releases](https://github.com/ysicing/51code/releases) 下载：Windows 使用 `51code-setup-<版本>-amd64.exe`，Ubuntu 使用 `51code_<版本>_amd64.deb`，执行 `sudo apt install ./51code_<版本>_amd64.deb`。Windows 需先安装 [Git for Windows](https://gitforwindows.org/) 并确保 `git` 在 PATH 中；首版 Windows 安装包未提供 Authenticode 签名。新平台通过“设置 → 更新 → 下载新版本…”下载后手动升级，macOS 保留原有自动更新方式。
+
+Ubuntu 需要 GTK 3 桌面环境；AI 密钥保存还需要运行中的 Secret Service（如 GNOME Keyring）。最小桌面缺少凭证服务时会显示保存错误并保留草稿，不降级为明文保存。
+
 ## 本地运行
 
-需要 Go **1.27.3+**、Bun、Git 和 Task；macOS 另需 Xcode Command Line Tools。
+需要 Go **1.27.3+**、Bun、Git 和 Task；macOS 另需 Xcode Command Line Tools，Ubuntu 需要 GTK 3。Windows 可用 `bun run dev` 启动，打包由 GitHub Actions 的 Windows runner 完成。
 
 ```sh
 task setup
 task dev
 ```
 
-构建 macOS 应用与 DMG：
+构建当前平台应用与安装包：
 
 ```sh
 task build
 ```
 
-产物位于 `build/darwin-arm64/` 或 `build/darwin-amd64/`。本地构建使用 ad-hoc 签名；正式发布流程使用 Developer ID 签名、Apple 公证及 Gatekeeper 校验，详见[开发与发布](docs/development.md)。
+macOS 产物位于 `build/darwin-arm64/` 或 `build/darwin-amd64/`，本地构建使用 ad-hoc 签名；正式发布流程使用 Developer ID 签名、Apple 公证及 Gatekeeper 校验。Windows x64 和 Ubuntu x64 的构建发布由 GitHub Actions 执行，详见[开发与发布](docs/development.md)。
 
 运行 `task` 查看全部任务，`task fmt` 补齐版权头并格式化 Go 代码，`task check` 串行执行文件头与格式检查、Go 测试、原生界面测试、发布脚本测试及 golangci-lint。Bun 仅用于打包工具和发布脚本，界面无需 WebView 或前端构建。
 

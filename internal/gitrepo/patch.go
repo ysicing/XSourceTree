@@ -312,7 +312,14 @@ func (repo *Repository) hunkPatch(ctx context.Context, path string, staged bool)
 		return patch, err
 	}
 	if (mode.Perm()&0111 != 0) != (indexMode == "100755") {
-		return patch, nil
+		// Windows 等文件系统无法提供执行位；Git 忽略工作区模式时仍须保留索引模式。
+		filemode, err := repo.git(ctx, "config", "--bool", "--get", "core.filemode")
+		if err != nil && !exitCode(err, 1) {
+			return patch, err
+		}
+		if strings.TrimSpace(filemode) != "false" {
+			return patch, nil
+		}
 	}
 	for _, hash := range []string{fields[2], indexHash} {
 		supported, err := repo.patchTextBlob(ctx, hash)

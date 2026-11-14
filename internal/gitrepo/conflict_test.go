@@ -171,21 +171,21 @@ func TestModifyDeleteConflictAndSafeSymlink(t *testing.T) {
 	if got := git(t, dir, "ls-files", "--unmerged"); got != "" {
 		t.Fatalf("unresolved deletion: %s", got)
 	}
-	outside := t.TempDir()
-	write(t, outside, "secret.txt", "untouched\n")
-	if err := os.Symlink(outside, filepath.Join(dir, "escape")); err != nil {
-		t.Skipf("symlink unavailable: %v", err)
-	}
-	if _, err := repo.Conflict(ctx, "escape/secret.txt"); err == nil {
-		t.Fatal("nonconflicting external file accepted")
-	}
 	if err := repo.ResolveConflict(ctx, "../secret.txt", "token", "result", "overwritten"); err == nil {
 		t.Fatal("path escape accepted")
 	}
-	data, _ := os.ReadFile(filepath.Join(outside, "secret.txt"))
-	if string(data) != "untouched\n" {
-		t.Fatal("external file changed")
-	}
+	t.Run("symlink ancestor", func(t *testing.T) {
+		outside := t.TempDir()
+		write(t, outside, "secret.txt", "untouched\n")
+		testSymlink(t, outside, filepath.Join(dir, "escape"))
+		if _, err := repo.Conflict(ctx, "escape/secret.txt"); err == nil {
+			t.Fatal("nonconflicting external file accepted")
+		}
+		data, _ := os.ReadFile(filepath.Join(outside, "secret.txt"))
+		if string(data) != "untouched\n" {
+			t.Fatal("external file changed")
+		}
+	})
 }
 
 func TestSymlinkConflictChoiceDoesNotFollowTarget(t *testing.T) {
@@ -196,26 +196,20 @@ func TestSymlinkConflictChoiceDoesNotFollowTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	link := filepath.Join(dir, "link")
-	if err := os.Symlink("base", link); err != nil {
-		t.Skipf("symlink unavailable: %v", err)
-	}
+	testSymlink(t, "base", link)
 	git(t, dir, "add", ".")
 	git(t, dir, "commit", "-m", "base")
 	git(t, dir, "switch", "-c", "topic")
 	if err := os.Remove(link); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(external, link); err != nil {
-		t.Fatal(err)
-	}
+	testSymlink(t, external, link)
 	git(t, dir, "commit", "-am", "theirs")
 	git(t, dir, "switch", "main")
 	if err := os.Remove(link); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink("ours", link); err != nil {
-		t.Fatal(err)
-	}
+	testSymlink(t, "ours", link)
 	git(t, dir, "commit", "-am", "ours")
 	_ = repo.Merge(ctx, "topic")
 	view, err := repo.Conflict(ctx, "link")
@@ -257,9 +251,7 @@ func TestConflictRejectsSymlinkedAncestorToGitMetadata(t *testing.T) {
 	if err := os.Remove(filepath.Join(dir, "directory")); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(".git", filepath.Join(dir, "directory")); err != nil {
-		t.Skipf("symlink unavailable: %v", err)
-	}
+	testSymlink(t, ".git", filepath.Join(dir, "directory"))
 	if view, err := repo.Conflict(ctx, "directory/config"); err == nil {
 		t.Fatalf("Git metadata exposed as conflict result: %+v", view)
 	}

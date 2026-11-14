@@ -68,7 +68,8 @@ func TestCompareSnapshotsAndMergeBase(t *testing.T) {
 func TestCompareFileVersionsAndPaths(t *testing.T) {
 	repo, dir := fixture(t)
 	ctx := context.Background()
-	oldPath, newPath := "旧\t名字.txt", "目录/新\n名字.txt"
+	oldPath := portableTestPath("旧\t名字.txt", "旧 名字.txt")
+	newPath := portableTestPath("目录/新\n名字.txt", "目录/新 名字.txt")
 	write(t, dir, oldPath, strings.Repeat("unchanged\n", 10))
 	write(t, dir, "deleted.txt", "deleted\n")
 	write(t, dir, "binary.bin", "old\x00bytes")

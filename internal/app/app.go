@@ -6,6 +6,7 @@ package app
 import (
 	"log"
 	"path/filepath"
+	"runtime"
 
 	"github.com/ysicing/51code/internal/workspace"
 	"github.com/ysicing/51code/locales"
@@ -38,7 +39,8 @@ func Run(info BuildInfo) {
 	service := &RepositoryService{manager: manager}
 	desktop := newNativeApp(service, filepath.Join(dir, "native-state.json"))
 	mygo.Use(native.New(updater.Options{
-		Interval: nativeUpdateCheckInterval(desktop.prefs.UpdateCheckFrequency),
+		Interval:               nativeUpdateCheckInterval(desktop.prefs.UpdateCheckFrequency),
+		DisableAutomaticChecks: runtime.GOOS != "darwin",
 	}))
 	open := func() {
 		if desktop == nil {
@@ -68,12 +70,23 @@ func Run(info BuildInfo) {
 	}
 	app.OnSecondInstance(func(_ []string, _ string) { open() })
 	setMenu := func() {
-		app.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
+		updates := &mygo.MenuItem{
+			Label: locales.DownloadRelease(),
+			Click: command(func(desktop *nativeApp) {
+				if err := mygo.Shell.OpenExternal(desktopReleasesURL); err != nil {
+					desktop.problem = err.Error()
+				}
+			}),
+		}
+		if runtime.GOOS == "darwin" {
+			updates = updater.MenuItem()
+		}
+		app.SetMenu(mygo.NewMenu(platformMenu([]*mygo.MenuItem{
 			{Label: "51Code", Submenu: []*mygo.MenuItem{
 				{Label: locales.About(), Click: func(_ *mygo.MenuItem, _ *mygo.Window) {
 					showNativeAbout()
 				}},
-				updater.MenuItem(),
+				updates,
 				{ID: "settings", Label: locales.SettingsMenu(), Accelerator: "CmdOrCtrl+,", Click: command(func(desktop *nativeApp) { desktop.settingsDialog() })},
 				mygo.Separator(),
 				{Role: mygo.RoleServices},
@@ -101,7 +114,7 @@ func Run(info BuildInfo) {
 			}},
 			{Role: mygo.RoleViewMenu},
 			{Role: mygo.RoleWindowMenu},
-		}))
+		}, runtime.GOOS)))
 		if desktop != nil {
 			applyNativeShortcuts(desktop.prefs.Shortcuts)
 		}
@@ -111,7 +124,9 @@ func Run(info BuildInfo) {
 		app.OnLocaleChanged(func(_ string) { setMenu() })
 		open()
 	})
-	app.OnWindowAllClosed(func() {})
+	if runtime.GOOS == "darwin" {
+		app.OnWindowAllClosed(func() {})
+	}
 	app.OnActivate(func(visible bool) {
 		if !visible {
 			open()

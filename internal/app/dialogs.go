@@ -338,7 +338,7 @@ func (app *nativeApp) repositoryEntryDialog(entry workspace.LocalRepository) {
 			})
 		},
 		body: func(c *ui.Context) {
-			if ui.Button(c, locales.RevealFinder()).FillWidth().Clicked() {
+			if ui.Button(c, revealRepositoryLabel()).FillWidth().Clicked() {
 				if err := app.service.RevealRepository(entry.Path); err != nil {
 					app.problem = err.Error()
 				}

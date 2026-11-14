@@ -9,6 +9,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -229,7 +230,7 @@ func (app *nativeApp) open() {
 	app.chosenLanguage = mygo.App.ChosenLocale()
 	app.win = mygo.NewWindow(mygo.WindowOptions{
 		Title: "51Code", Width: 1320, Height: 860, MinWidth: 1024, MinHeight: 680,
-		TitleBarStyle: mygo.TitleBarHiddenInset, TitleBarHeight: 52,
+		TitleBarStyle: platformTitleBarStyle(), TitleBarHeight: 52,
 		BackgroundColor: appearanceBackground(app.prefs.Appearance), StateKey: "main",
 		Content: ui.View(app.view),
 	})
@@ -266,6 +267,13 @@ func (app *nativeApp) open() {
 		}
 	})
 	app.win.OnFocus(app.refreshOnFocus)
+}
+
+func platformTitleBarStyle() mygo.TitleBarStyle {
+	if runtime.GOOS == "darwin" {
+		return mygo.TitleBarHiddenInset
+	}
+	return mygo.TitleBarDefault
 }
 
 func (app *nativeApp) savePreferences() error {

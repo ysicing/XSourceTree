@@ -37,3 +37,14 @@ func (app *nativeApp) versionButton(c *ui.Context) bool {
 		ui.Text(c, text).FontSize(11).SingleLine()
 	}).Clicked()
 }
+
+func (app *nativeApp) manualUpdatePreferences(c *ui.Context) {
+	if ui.Button(c, locales.DownloadRelease()).Clicked() {
+		app.settingsError = ""
+		c.OpenURLThen(desktopReleasesURL, func(err error) {
+			if err != nil {
+				app.settingsError = err.Error()
+			}
+		})
+	}
+}

@@ -4,6 +4,7 @@
 package app
 
 import (
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -37,15 +38,15 @@ type nativeShortcuts struct {
 }
 
 var nativeShortcutChoices = []string{
-	"⌘⇧L",
-	"⌘O",
-	"⌘⇧O",
-	"⌘R",
-	"⌘↩",
-	"⌘⇧R",
-	"⌘⇧↩",
-	"⌥⌘L",
-	"⌥⌘R",
+	shortcutLabel("⌘⇧L"),
+	shortcutLabel("⌘O"),
+	shortcutLabel("⌘⇧O"),
+	shortcutLabel("⌘R"),
+	shortcutLabel("⌘↩"),
+	shortcutLabel("⌘⇧R"),
+	shortcutLabel("⌘⇧↩"),
+	shortcutLabel("⌥⌘L"),
+	shortcutLabel("⌥⌘R"),
 }
 
 var nativeUpdateCheckFrequencies = []string{"每小时", "每 6 小时", "每天", "每周"}
@@ -65,7 +66,8 @@ func nativeUpdateCheckInterval(frequency string) time.Duration {
 
 func defaultNativeShortcuts() nativeShortcuts {
 	return nativeShortcuts{
-		Library: "⌘⇧L", AddRepository: "⌘O", Scan: "⌘⇧O", Refresh: "⌘R", Commit: "⌘↩",
+		Library: shortcutLabel("⌘⇧L"), AddRepository: shortcutLabel("⌘O"), Scan: shortcutLabel("⌘⇧O"),
+		Refresh: shortcutLabel("⌘R"), Commit: shortcutLabel("⌘↩"),
 	}
 }
 
@@ -99,6 +101,12 @@ func normalizeNativePreferences(prefs *nativePreferences) {
 		prefs.Appearance = appearanceSystem
 	}
 	defaults := defaultNativeShortcuts()
+	for _, value := range []*string{
+		&prefs.Shortcuts.Library, &prefs.Shortcuts.AddRepository, &prefs.Shortcuts.Scan,
+		&prefs.Shortcuts.Refresh, &prefs.Shortcuts.Commit,
+	} {
+		*value = shortcutLabel(*value)
+	}
 	if prefs.Shortcuts.Library == "" {
 		prefs.Shortcuts.Library = defaults.Library
 	}
@@ -176,6 +184,10 @@ func applyNativeShortcuts(shortcuts nativeShortcuts) {
 		if item := menu.ItemByID(id); item != nil {
 			item.SetAccelerator(accelerator)
 		}
+	}
+	if runtime.GOOS != "darwin" {
+		// MyGo 0.9 的 Windows/GTK 后端仅在安装菜单时重建原生快捷键绑定。
+		mygo.App.SetMenu(menu)
 	}
 }
 
@@ -260,6 +272,10 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 								}
 							})
 						case 3:
+							if runtime.GOOS != "darwin" {
+								app.manualUpdatePreferences(c)
+								break
+							}
 							if ui.Checkbox(c, &app.settingsAutoChecks, locales.AutomaticUpdates()).Changed() {
 								updater.SetAutomaticChecks(app.settingsAutoChecks)
 							}

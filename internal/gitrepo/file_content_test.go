@@ -83,7 +83,8 @@ func TestFileContentIndexAndWorktree(t *testing.T) {
 func TestFileContentNewRootRenameDelete(t *testing.T) {
 	repo, dir := fixture(t)
 	ctx := context.Background()
-	name, renamed := "目录/old\tname.txt", "目录/new\nname.txt"
+	name := portableTestPath("目录/old\tname.txt", "目录/旧 文件.txt")
+	renamed := portableTestPath("目录/new\nname.txt", "目录/新 文件.txt")
 	write(t, dir, name, "first\nsecond\nthird\n")
 	diff, err := repo.Diff(ctx, name, false)
 	old, next := contentSides(t, diff, err)
@@ -178,35 +179,38 @@ func TestFileContentBinaryAndLimit(t *testing.T) {
 }
 
 func TestFileContentSymlinkAndGitlink(t *testing.T) {
-	repo, dir := fixture(t)
-	ctx := context.Background()
-	secret := filepath.Join(t.TempDir(), "secret")
-	if err := os.WriteFile(secret, []byte("external secret"), 0600); err != nil {
-		t.Fatal(err)
+	for _, kind := range []string{"symlink", "gitlink"} {
+		t.Run(kind, func(t *testing.T) {
+			repo, dir := fixture(t)
+			ctx := context.Background()
+			check := func(diff Diff, err error) {
+				t.Helper()
+				_, next := contentSides(t, diff, err)
+				if !next.Present || !next.Unsupported || next.Text != "" || next.Binary {
+					t.Fatalf("unsupported side: %+v", next)
+				}
+				if strings.Contains(diff.Text, "external secret") {
+					t.Fatal("followed external symlink")
+				}
+			}
+			path := "module"
+			if kind == "symlink" {
+				secret := filepath.Join(t.TempDir(), "secret")
+				write(t, filepath.Dir(secret), "secret", "external secret")
+				testSymlink(t, secret, filepath.Join(dir, "link"))
+				path = "link"
+				check(repo.Diff(ctx, path, false))
+				git(t, dir, "add", ".")
+			} else {
+				git(t, dir, "commit", "--allow-empty", "-m", "base")
+				hash := git(t, dir, "rev-parse", "HEAD")
+				git(t, dir, "update-index", "--add", "--cacheinfo", "160000,"+hash+",module")
+			}
+			check(repo.Diff(ctx, path, true))
+			git(t, dir, "commit", "-m", kind)
+			check(repo.CommitFileDiff(ctx, git(t, dir, "rev-parse", "HEAD"), path))
+		})
 	}
-	if err := os.Symlink(secret, filepath.Join(dir, "link")); err != nil {
-		t.Fatal(err)
-	}
-	check := func(diff Diff, err error) {
-		t.Helper()
-		_, next := contentSides(t, diff, err)
-		if !next.Present || !next.Unsupported || next.Text != "" || next.Binary {
-			t.Fatalf("unsupported side: %+v", next)
-		}
-		if strings.Contains(diff.Text, "external secret") {
-			t.Fatal("followed external symlink")
-		}
-	}
-	check(repo.Diff(ctx, "link", false))
-	git(t, dir, "add", ".")
-	check(repo.Diff(ctx, "link", true))
-	git(t, dir, "commit", "-m", "link")
-	hash := git(t, dir, "rev-parse", "HEAD")
-	check(repo.CommitFileDiff(ctx, hash, "link"))
-	git(t, dir, "update-index", "--add", "--cacheinfo", "160000,"+hash+",module")
-	check(repo.Diff(ctx, "module", true))
-	git(t, dir, "commit", "-m", "gitlink")
-	check(repo.CommitFileDiff(ctx, git(t, dir, "rev-parse", "HEAD"), "module"))
 }
 
 func TestFileContentCancellationAndSummary(t *testing.T) {
@@ -296,9 +300,7 @@ func TestFileContentRejectsSymlinkAncestor(t *testing.T) {
 	repo, dir := fixture(t)
 	outside := t.TempDir()
 	write(t, outside, "file", "external secret\n")
-	if err := os.Symlink(outside, filepath.Join(dir, "linked")); err != nil {
-		t.Fatal(err)
-	}
+	testSymlink(t, outside, filepath.Join(dir, "linked"))
 	if side, err := repo.worktreeFileContent(context.Background(), "linked/file"); err != nil || side.Present || !side.Unsupported || side.Text != "" {
 		t.Fatalf("symlink ancestor was followed or hid the deleted side: %+v %v", side, err)
 	}
@@ -346,9 +348,7 @@ func TestFileContentDirectoryReplacementKeepsDeletedDiff(t *testing.T) {
 			} else {
 				outside := t.TempDir()
 				write(t, outside, "file.txt", "external secret\n")
-				if err := os.Symlink(outside, filepath.Join(dir, "dir")); err != nil {
-					t.Fatal(err)
-				}
+				testSymlink(t, outside, filepath.Join(dir, "dir"))
 			}
 			files, err := repo.files(ctx)
 			if err != nil {

@@ -6,6 +6,7 @@ package gitrepo
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,8 +25,12 @@ func worktreeFixture(t *testing.T) (*Repository, string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(parent, "中文\n工作区")
+	path := filepath.Join(parent, portableTestPath("中文\n工作区", "中文 工作区"))
 	git(t, dir, "worktree", "add", "-b", "topic", path, "HEAD")
+	path, err = filepath.EvalSymlinks(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return repo, dir, path
 }
 
@@ -102,7 +107,7 @@ func TestWorktreeCreateNewExistingAndOccupiedBranches(t *testing.T) {
 		t.Fatal(err)
 	}
 	start := git(t, dir, "rev-parse", "HEAD")
-	created, err := repo.CreateWorktree(ctx, filepath.Join(parent, "new\n中文"), "new/topic", "main", false)
+	created, err := repo.CreateWorktree(ctx, filepath.Join(parent, portableTestPath("new\n中文", "new 中文")), "new/topic", "main", false)
 	if err != nil || created.Head != start || created.Branch != "refs/heads/new/topic" || created.Problem != "" {
 		t.Fatalf("new branch: %+v, %v", created, err)
 	}
@@ -138,31 +143,34 @@ func TestWorktreeCreateRejectsUnsafePathsWithoutTouchingData(t *testing.T) {
 	}
 	write(t, parent, "occupied/keep", "precious")
 	write(t, parent, "file", "precious")
-	if err := os.Symlink(linked, filepath.Join(parent, "link")); err != nil {
-		t.Fatal(err)
-	}
-	outside, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Mkdir(filepath.Join(outside, "existing"), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink(outside, filepath.Join(parent, "outside-link")); err != nil {
-		t.Fatal(err)
-	}
+
 	for index, path := range []string{
 		repo.Path, filepath.Join(repo.Path, "nested"), filepath.Join(linked, "nested"),
 		filepath.Join(repo.Path, ".git", "nested"), filepath.Join(parent, "occupied"),
-		filepath.Join(parent, "file"), filepath.Join(parent, "link"),
-		filepath.Join(parent, "link", "nested"), filepath.Join(parent, "arbitrary", ".git", "nested"),
-		filepath.Join(parent, "outside-link", "nested"), filepath.Join(parent, "outside-link", "existing", "nested"),
+		filepath.Join(parent, "file"), filepath.Join(parent, "arbitrary", ".git", "nested"),
 	} {
 		branch := "unsafe-" + strings.Repeat("x", index+1)
 		if _, err := repo.CreateWorktree(context.Background(), path, branch, "HEAD", false); err == nil {
 			t.Errorf("accepted path %q", path)
 		}
 	}
+	t.Run("symlink paths", func(t *testing.T) {
+		testSymlink(t, linked, filepath.Join(parent, "link"))
+		outside := t.TempDir()
+		if err := os.Mkdir(filepath.Join(outside, "existing"), 0755); err != nil {
+			t.Fatal(err)
+		}
+		testSymlink(t, outside, filepath.Join(parent, "outside-link"))
+		for index, path := range []string{
+			filepath.Join(parent, "link"), filepath.Join(parent, "link", "nested"),
+			filepath.Join(parent, "outside-link", "nested"), filepath.Join(parent, "outside-link", "existing", "nested"),
+		} {
+			branch := fmt.Sprintf("unsafe-link-%d", index)
+			if _, err := repo.CreateWorktree(context.Background(), path, branch, "HEAD", false); err == nil {
+				t.Errorf("accepted symlink path %q", path)
+			}
+		}
+	})
 	if data, err := os.ReadFile(filepath.Join(parent, "occupied", "keep")); err != nil || string(data) != "precious" {
 		t.Fatalf("existing data changed: %q %v", data, err)
 	}
@@ -213,7 +221,7 @@ func TestWorktreeReviewProtectsDirtyIgnoredAndOperations(t *testing.T) {
 			case "tracked":
 				write(t, path, "base.txt", "changed\n")
 			case "untracked":
-				write(t, path, "untracked\n中文", "precious")
+				write(t, path, portableTestPath("untracked\n中文", "untracked 中文"), "precious")
 			case "ignored":
 				write(t, path, "ignored/precious", "precious")
 			case "merge":
@@ -445,9 +453,7 @@ func TestWorktreesRejectSymlinkReplacement(t *testing.T) {
 	if err := os.Rename(path, path+"-original"); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(path+"-original", path); err != nil {
-		t.Fatal(err)
-	}
+	testSymlink(t, path+"-original", path)
 	list, err := repo.Worktrees(context.Background())
 	if err != nil || len(list) != 2 || list[1].Problem == "" {
 		t.Fatalf("symlink entry: %+v, %v", list, err)

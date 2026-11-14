@@ -277,11 +277,22 @@ func TestMergePreservesIgnoredCaseAlias(t *testing.T) {
 	git(t, dir, "checkout", "main")
 	write(t, dir, ".git/info/exclude", "Cache/\n")
 	write(t, dir, "Cache/secret.txt", "local data\n")
-	if _, err := os.Stat(filepath.Join(dir, "cache/secret.txt")); os.IsNotExist(err) {
+	alias, err := os.Stat(filepath.Join(dir, "cache/secret.txt"))
+	if os.IsNotExist(err) {
 		t.Skip("filesystem is case-sensitive")
 	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, err := os.Stat(filepath.Join(dir, "Cache/secret.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !os.SameFile(alias, original) {
+		t.Skip("case variants identify different files")
+	}
 	before := git(t, dir, "rev-parse", "HEAD")
-	err := repo.MergeWithOptions(context.Background(), "topic", MergeOptions{Mode: MergeNoFF, Commit: true})
+	err = repo.MergeWithOptions(context.Background(), "topic", MergeOptions{Mode: MergeNoFF, Commit: true})
 	data, readErr := os.ReadFile(filepath.Join(dir, "Cache/secret.txt"))
 	if err == nil || readErr != nil || string(data) != "local data\n" || git(t, dir, "rev-parse", "HEAD") != before {
 		t.Fatalf("case alias overwrote ignored data: %q, %v, %v", data, err, readErr)

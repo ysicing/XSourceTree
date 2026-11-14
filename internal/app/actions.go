@@ -387,7 +387,7 @@ func (app *nativeApp) repositoryActions(menu *ui.Menu) {
 		app.stashDialog()
 	}
 	menu.Separator()
-	if menu.Item(locales.RevealFinder()).Disabled(unavailable).Chosen() {
+	if menu.Item(revealRepositoryLabel()).Disabled(unavailable).Chosen() {
 		if err := app.service.RevealRepository(app.repository.snapshot.Path); err != nil {
 			app.problem = err.Error()
 		}

@@ -108,6 +108,8 @@ func (app *nativeApp) fileHistoryAction() {
 	file := app.selectedFile
 	if (app.screen == "history" || app.screen == "search") && !app.historyWorking {
 		file = app.commitFile
+	} else if app.screen == "compare" && app.comparison != nil {
+		file = app.comparison.file
 	}
 	if app.fileViewer.full {
 		if source := app.fileViewer.sources[app.fileViewer.side]; source != nil {
@@ -150,6 +152,8 @@ func (app *nativeApp) fileDiffPanel(c *ui.Context) {
 				}
 			} else if app.screen == "stash" {
 				title = locales.StashDiff()
+			} else if app.screen == "compare" && app.comparison != nil {
+				title = app.comparison.file
 			}
 			if full == 1 {
 				if source := app.fileViewer.sources[app.fileViewer.side]; source != nil {

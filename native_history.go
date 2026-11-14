@@ -447,36 +447,44 @@ func (app *nativeApp) historyDetails(c *ui.Context) {
 }
 
 func (app *nativeApp) historyFiles(c *ui.Context) {
+	empty := ""
+	if app.commitHash != "" {
+		empty = locales.EmptyCommit()
+	}
+	app.revisionFileList(c, app.commitFiles, app.commitList, &app.commitSelected, locales.CommitFileList(), empty, func(file string) {
+		if file != app.commitFile || app.readTask != nil || app.problem != "" {
+			app.selectCommitFile(file)
+		}
+	})
+}
+
+func (app *nativeApp) revisionFileList(c *ui.Context, files []gitrepo.CommitFile, list *ui.ListState, selected *int, label, empty string, choose func(string)) {
 	theme := *c.Theme()
 	theme.Accent = theme.Accent.Alpha(0.16)
 	theme.InactiveAccent, theme.AccentText = theme.Accent, theme.Text
 	ui.Themed(c, &theme).Fill().MinWidth(0).Children(func() {
 		ui.Row(c).FillWidth().Height(49).Padding(0, 12).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, locales.ChangedFiles(fmt.Sprint(len(app.commitFiles)))).FontSize(12).Bold()
+			ui.Text(c, locales.ChangedFiles(fmt.Sprint(len(files)))).FontSize(12).Bold()
 		})
 		ui.Divider(c)
-		if len(app.commitFiles) == 0 {
-			if app.commitHash != "" {
-				ui.Text(c, locales.EmptyCommit()).Padding(12).FontSize(12).TextColor(c.Theme().TextMuted)
+		if len(files) == 0 {
+			if empty != "" {
+				ui.Text(c, empty).Padding(12).FontSize(12).TextColor(c.Theme().TextMuted)
 			}
 			return
 		}
-		app.commitList.Selected = &app.commitSelected
-		files := app.commitFiles
-		app.commitList.Key = func(index int) any { return files[index].Path }
-		app.commitList.Label = func(index int) string { return files[index].Path }
-		if ui.List(c, app.commitList, len(app.commitFiles), func(index int) {
-			file := app.commitFiles[index]
+		list.Selected = selected
+		list.Key = func(index int) any { return files[index].Path }
+		list.Label = func(index int) string { return files[index].Path }
+		if ui.List(c, list, len(files), func(index int) {
+			file := files[index]
 			ui.Row(c).FillWidth().Height(30).Padding(0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
 				nativeFileIcon(c, file.Path)
 				ui.Text(c, file.Path).FontSize(12).Grow(1).MinWidth(0).SingleLine().Tooltip(file.Path)
 				ui.Text(c, file.Status).FontSize(10).TextColor(c.Theme().TextMuted)
 			})
-		}).FillWidth().Grow(1).MinHeight(0).Disabled(app.readTask != nil && app.readTask.kind != nativeReadDiff).Label(locales.CommitFileList()).Changed() && app.commitSelected >= 0 && app.commitSelected < len(app.commitFiles) {
-			file := app.commitFiles[app.commitSelected].Path
-			if file != app.commitFile || app.readTask != nil || app.problem != "" {
-				app.selectCommitFile(file)
-			}
+		}).FillWidth().Grow(1).MinHeight(0).Disabled(app.readTask != nil && app.readTask.kind != nativeReadDiff).Label(label).Changed() && *selected >= 0 && *selected < len(files) {
+			choose(files[*selected].Path)
 		}
 	})
 }

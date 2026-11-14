@@ -73,6 +73,13 @@ func (app *nativeApp) switchWorkspace(screen string) {
 	app.refSelected = nativeRefKey{}
 	app.screen = screen
 	switch screen {
+	case "compare":
+		app.nativeHistoryState = newNativeHistoryState()
+		if app.comparison == nil {
+			app.comparison = &nativeComparison{base: "HEAD", target: "HEAD", selected: -1, list: &ui.ListState{}}
+		}
+		app.setDiff(app.comparison.diff)
+		return
 	case "history":
 		app.nativeHistoryState = app.browseState
 	case "search":

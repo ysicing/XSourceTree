@@ -122,6 +122,8 @@ func (app *nativeApp) view(c *ui.Context) {
 						app.libraryView(c)
 					case "history", "search":
 						app.historyWorkspace(c)
+					case "compare":
+						app.comparisonWorkspace(c)
 					default:
 						ui.Split(c, &app.prefs.Files, func() { app.repositoryPanel(c) }, func() { app.diffPanel(c) }).Grow(1).MinHeight(0).FillWidth()
 					}
@@ -216,6 +218,7 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 				})
 				ui.SidebarItem(c, "screen:history", nil, locales.CommitHistory()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
 				ui.SidebarItem(c, "screen:search", nil, locales.Search()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
+				ui.SidebarItem(c, "screen:compare", nil, locales.CompareVersions()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
 			})
 			app.localBranchSidebar(c)
 			app.tagSidebar(c)

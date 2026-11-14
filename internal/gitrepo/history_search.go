@@ -140,6 +140,10 @@ func (repo *Repository) commitFiles(ctx context.Context, hash string) ([]CommitF
 	if err != nil {
 		return nil, err
 	}
+	return parseCommitFiles(output)
+}
+
+func parseCommitFiles(output string) ([]CommitFile, error) {
 	files := []CommitFile{}
 	if output == "" {
 		return files, nil

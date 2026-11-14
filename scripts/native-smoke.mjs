@@ -141,6 +141,7 @@ try {
   await capture("native-desktop-working-history.png");
   await press("前往文件变更");
   await press("hello.txt");
+  await press("差异");
   await press("差异布局");
   await press("并排");
   await capture("native-desktop-diff.png");
@@ -157,6 +158,34 @@ try {
   assert.equal(git("log", "-1", "--format=%s"), "使用原生 UI 提交");
   assert.equal(git("status", "--porcelain"), "");
   console.log("✓ 原生窗口、中文输入、并排 Diff、暂存和菜单提交");
+
+  await press("版本比较");
+  await fill("基准版本", "HEAD~1");
+  await fill("目标版本", "HEAD");
+  await press("比较");
+  await shown("hello.txt");
+  await shown("比较结果");
+  await capture("native-desktop-compare.png");
+  for (const [appearance, suffix] of [["浅色", "light"], ["深色", "dark"]]) {
+    await press("设置");
+    await press(appearance);
+    await press("关闭设置");
+    await capture(`native-desktop-compare-${suffix}.png`);
+  }
+  await press("全文");
+  const comparedFull = (await shown("文件全文")).find((node) => node.label === "文件全文");
+  assert(comparedFull.states?.includes("readOnly"), "比较全文必须只读");
+  await capture("native-desktop-compare-full.png");
+  await press("差异");
+  await press("交换比较方向");
+  await shown("比较结果");
+  await capture("native-desktop-compare-reverse.png");
+  await press("共同祖先");
+  await press("比较");
+  await shown("两个版本之间没有文件变更");
+  await capture("native-desktop-compare-empty.png");
+  await press("文件变更");
+  console.log("✓ 两版本比较、只读全文、交换方向和共同祖先空状态");
 
   await press("分支");
   await fill("分支名称", "main");
@@ -229,7 +258,9 @@ try {
   await press("储藏");
   assert.equal(git("status", "--porcelain"), "");
   await press("储藏");
-  const stashNode = (await tree()).find((node) => node.role === "button" && node.label?.includes("原生储藏"));
+  const stashNodes = await waitFor((nodes) => nodes.some((node) =>
+    node.role === "button" && node.label?.includes("原生储藏")), "储藏记录");
+  const stashNode = stashNodes.find((node) => node.role === "button" && node.label?.includes("原生储藏"));
   assert(stashNode, "未显示储藏记录");
   await press(stashNode.label);
   await press("应用并删除");

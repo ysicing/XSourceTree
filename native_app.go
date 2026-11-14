@@ -94,6 +94,7 @@ type nativeApp struct {
 	hunkOffsets           []int
 	rawDiff               editor.State
 	fileViewer            nativeFileViewer
+	comparison            *nativeComparison
 	diffWidth             float32
 	diffAutoSplit         bool
 	lineChoices           []nativeLine
@@ -344,6 +345,7 @@ func (app *nativeApp) readRepository(ctx context.Context, path string, open bool
 func (app *nativeApp) adopt(result *repositoryView) {
 	if app.repository == nil || app.repository.snapshot.Path != result.snapshot.Path {
 		app.stopCommitAI()
+		app.comparison = nil
 	}
 	app.repository, app.writable = result, true
 	app.library = app.service.Library()
@@ -500,6 +502,9 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 				} else {
 					app.historyWorking = false
 					app.adopt(result)
+					if screen == "compare" && app.comparison != nil {
+						app.setDiff(app.comparison.diff)
+					}
 				}
 			}
 			app.writable = refreshErr == nil

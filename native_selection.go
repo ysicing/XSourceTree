@@ -49,6 +49,9 @@ func (app *nativeApp) cancelRead() {
 	if app.readTask != nil {
 		app.readTask.cancel()
 		app.readTask = nil
+		if app.screen == "compare" && app.comparison != nil {
+			app.comparison.restoreSelection()
+		}
 	}
 }
 

@@ -36,6 +36,146 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// CompareVersions says "版本比较"
+// in the language the app shows.
+func CompareVersions() string { return In(i18n.Locale()).CompareVersions() }
+
+// CompareVersions says "版本比较"
+// in the language of msgs.
+func (msgs Messages) CompareVersions() string {
+	return Catalog.Format(msgs.locale, "compareVersions", nil)
+}
+
+// ComparisonBase says "基准版本"
+// in the language the app shows.
+func ComparisonBase() string { return In(i18n.Locale()).ComparisonBase() }
+
+// ComparisonBase says "基准版本"
+// in the language of msgs.
+func (msgs Messages) ComparisonBase() string {
+	return Catalog.Format(msgs.locale, "comparisonBase", nil)
+}
+
+// ComparisonTarget says "目标版本"
+// in the language the app shows.
+func ComparisonTarget() string { return In(i18n.Locale()).ComparisonTarget() }
+
+// ComparisonTarget says "目标版本"
+// in the language of msgs.
+func (msgs Messages) ComparisonTarget() string {
+	return Catalog.Format(msgs.locale, "comparisonTarget", nil)
+}
+
+// SwapComparison says "交换比较方向"
+// in the language the app shows.
+func SwapComparison() string { return In(i18n.Locale()).SwapComparison() }
+
+// SwapComparison says "交换比较方向"
+// in the language of msgs.
+func (msgs Messages) SwapComparison() string {
+	return Catalog.Format(msgs.locale, "swapComparison", nil)
+}
+
+// CompareSnapshots says "两端快照"
+// in the language the app shows.
+func CompareSnapshots() string { return In(i18n.Locale()).CompareSnapshots() }
+
+// CompareSnapshots says "两端快照"
+// in the language of msgs.
+func (msgs Messages) CompareSnapshots() string {
+	return Catalog.Format(msgs.locale, "compareSnapshots", nil)
+}
+
+// CompareMergeBase says "共同祖先"
+// in the language the app shows.
+func CompareMergeBase() string { return In(i18n.Locale()).CompareMergeBase() }
+
+// CompareMergeBase says "共同祖先"
+// in the language of msgs.
+func (msgs Messages) CompareMergeBase() string {
+	return Catalog.Format(msgs.locale, "compareMergeBase", nil)
+}
+
+// ComparisonMode says "比较方式"
+// in the language the app shows.
+func ComparisonMode() string { return In(i18n.Locale()).ComparisonMode() }
+
+// ComparisonMode says "比较方式"
+// in the language of msgs.
+func (msgs Messages) ComparisonMode() string {
+	return Catalog.Format(msgs.locale, "comparisonMode", nil)
+}
+
+// ComparisonRevisionHint says "提交、分支或标签"
+// in the language the app shows.
+func ComparisonRevisionHint() string { return In(i18n.Locale()).ComparisonRevisionHint() }
+
+// ComparisonRevisionHint says "提交、分支或标签"
+// in the language of msgs.
+func (msgs Messages) ComparisonRevisionHint() string {
+	return Catalog.Format(msgs.locale, "comparisonRevisionHint", nil)
+}
+
+// ReadingComparison says "正在比较版本…"
+// in the language the app shows.
+func ReadingComparison() string { return In(i18n.Locale()).ReadingComparison() }
+
+// ReadingComparison says "正在比较版本…"
+// in the language of msgs.
+func (msgs Messages) ReadingComparison() string {
+	return Catalog.Format(msgs.locale, "readingComparison", nil)
+}
+
+// RunComparison says "比较"
+// in the language the app shows.
+func RunComparison() string { return In(i18n.Locale()).RunComparison() }
+
+// RunComparison says "比较"
+// in the language of msgs.
+func (msgs Messages) RunComparison() string {
+	return Catalog.Format(msgs.locale, "runComparison", nil)
+}
+
+// ComparisonStartHint says "选择两个版本开始比较"
+// in the language the app shows.
+func ComparisonStartHint() string { return In(i18n.Locale()).ComparisonStartHint() }
+
+// ComparisonStartHint says "选择两个版本开始比较"
+// in the language of msgs.
+func (msgs Messages) ComparisonStartHint() string {
+	return Catalog.Format(msgs.locale, "comparisonStartHint", nil)
+}
+
+// ComparisonResult says "比较结果"
+// in the language the app shows.
+func ComparisonResult() string { return In(i18n.Locale()).ComparisonResult() }
+
+// ComparisonResult says "比较结果"
+// in the language of msgs.
+func (msgs Messages) ComparisonResult() string {
+	return Catalog.Format(msgs.locale, "comparisonResult", nil)
+}
+
+// ComparisonFileList says "比较文件列表"
+// in the language the app shows.
+func ComparisonFileList() string { return In(i18n.Locale()).ComparisonFileList() }
+
+// ComparisonFileList says "比较文件列表"
+// in the language of msgs.
+func (msgs Messages) ComparisonFileList() string {
+	return Catalog.Format(msgs.locale, "comparisonFileList", nil)
+}
+
+// EmptyComparison says "两个版本之间没有文件变更"
+// in the language the app shows.
+func EmptyComparison() string { return In(i18n.Locale()).EmptyComparison() }
+
+// EmptyComparison says "两个版本之间没有文件变更"
+// in the language of msgs.
+func (msgs Messages) EmptyComparison() string {
+	return Catalog.Format(msgs.locale, "emptyComparison", nil)
+}
+
 // SearchAllContent says "全部内容"
 // in the language the app shows.
 func SearchAllContent() string { return In(i18n.Locale()).SearchAllContent() }

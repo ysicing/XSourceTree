@@ -66,6 +66,22 @@ func (service *RepositoryService) CommitFileDiff(ctx context.Context, path, hash
 	return repo.CommitFileDiff(ctx, hash, file)
 }
 
+func (service *RepositoryService) Compare(ctx context.Context, path, base, target string, mergeBase bool) (gitrepo.Comparison, error) {
+	repo, err := service.manager.Get(path)
+	if err != nil {
+		return gitrepo.Comparison{}, err
+	}
+	return repo.Compare(ctx, base, target, mergeBase)
+}
+
+func (service *RepositoryService) CompareFileDiff(ctx context.Context, path, from, target, file string) (gitrepo.Diff, error) {
+	repo, err := service.manager.Get(path)
+	if err != nil {
+		return gitrepo.Diff{}, err
+	}
+	return repo.CompareFileDiff(ctx, from, target, file)
+}
+
 func (service *RepositoryService) Tags(ctx context.Context, path string) ([]gitrepo.Tag, error) {
 	repo, err := service.manager.Get(path)
 	if err != nil {

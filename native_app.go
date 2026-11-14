@@ -95,6 +95,8 @@ type nativeApp struct {
 	rawDiff               editor.State
 	fileViewer            nativeFileViewer
 	comparison            *nativeComparison
+	worktrees             *nativeWorktrees
+	fileMetrics           nativeFileMetrics
 	diffWidth             float32
 	diffAutoSplit         bool
 	lineChoices           []nativeLine
@@ -346,8 +348,10 @@ func (app *nativeApp) adopt(result *repositoryView) {
 	if app.repository == nil || app.repository.snapshot.Path != result.snapshot.Path {
 		app.stopCommitAI()
 		app.comparison = nil
+		app.worktrees = nil
 	}
 	app.repository, app.writable = result, true
+	app.fileMetrics = nativeFileMetrics{}
 	app.library = app.service.Library()
 	app.selectedFiles = map[string]bool{}
 	app.selectedFile = ""
@@ -452,6 +456,10 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 		var headFiles []gitrepo.CommitFile
 		var headDiff gitrepo.Diff
 		var detailErr error
+		var worktreeItems []gitrepo.Worktree
+		if refreshErr == nil && screen == "worktrees" {
+			worktreeItems, detailErr = app.service.Worktrees(ctx, path)
+		}
 		restoreWorking := wasWorking && refreshErr == nil && historyOffset == 0 &&
 			historyRequest.query == "" && historyRequest.file == ""
 		if restoreWorking {
@@ -508,6 +516,9 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 				}
 			}
 			app.writable = refreshErr == nil
+			if screen == "worktrees" && refreshErr == nil && detailErr == nil && app.worktrees != nil {
+				app.worktrees.setItems(worktreeItems)
+			}
 			if historyScreen && refreshErr == nil {
 				app.history, app.historyMore = history, len(history) == 100
 				app.historyLoaded = true

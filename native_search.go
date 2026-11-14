@@ -73,6 +73,12 @@ func (app *nativeApp) switchWorkspace(screen string) {
 	app.refSelected = nativeRefKey{}
 	app.screen = screen
 	switch screen {
+	case "worktrees":
+		app.nativeHistoryState = newNativeHistoryState()
+		if app.worktrees == nil {
+			app.worktrees = &nativeWorktrees{selected: -1, list: &ui.ListState{}}
+		}
+		return
 	case "compare":
 		app.nativeHistoryState = newNativeHistoryState()
 		if app.comparison == nil {

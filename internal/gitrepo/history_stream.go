@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -177,6 +178,11 @@ func (repo *Repository) readHistory(ctx context.Context, path string, filter His
 		historyFormat}
 	if filter.HideRemotes {
 		args = append(args, "--decorate-refs-exclude=refs/remotes/*")
+	}
+	if stdout.skip > 0 && stdout.query == "" && filter.Since == "" && filter.Until == "" {
+		// 无内容筛选时让 Git 跳过前页，避免把不会展示的正文传输并解析到内存。
+		args = append(args, "--skip="+strconv.Itoa(stdout.skip))
+		stdout.skip = 0
 	}
 	if filter.Mode == "changes" && stdout.query != "" {
 		args = append(args, "-G"+regexp.QuoteMeta(stdout.query), "--regexp-ignore-case", "--diff-merges=first-parent",

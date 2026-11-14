@@ -139,6 +139,29 @@ type nativeFileNode struct {
 	children []*nativeFileNode
 }
 
+type nativeFileMetrics struct {
+	source *repositoryView
+	font   string
+	zoom   float32
+	widths map[string]float32
+}
+
+func (app *nativeApp) filePathWidth(c *ui.Context, path string) float32 {
+	metrics := &app.fileMetrics
+	if metrics.source != app.repository || metrics.font != c.Theme().Font || metrics.zoom != c.Zoom() {
+		// 宽度只复用当前快照及字体环境，不缓存文件状态或 Git 内容。
+		*metrics = nativeFileMetrics{
+			source: app.repository, font: c.Theme().Font, zoom: c.Zoom(), widths: make(map[string]float32),
+		}
+	}
+	if width, exists := metrics.widths[path]; exists {
+		return width
+	}
+	width, _ := c.MeasureText(0, ui.Span{Text: path, Font: c.Theme().Font, Size: 12})
+	metrics.widths[path] = width
+	return width
+}
+
 func nativeFileNodes(files []gitrepo.File, order string, descending, staged bool) []*nativeFileNode {
 	var roots []*nativeFileNode
 	directories := make(map[string]*nativeFileNode)
@@ -243,7 +266,11 @@ func (app *nativeApp) changeFileRow(c *ui.Context, file gitrepo.File, staged boo
 	ui.Row(c).Key("file:" + key).FillWidth().PaddingStart(float32(depth) * 16).Gap(2).AlignItems(ui.Center).Children(func() {
 		checked := app.selectedFiles[key]
 		if ui.Checkbox(c, &checked, "").Label(label).Disabled(file.Conflict || !app.writable).Changed() {
-			app.selectedFiles[key] = checked
+			if checked {
+				app.selectedFiles[key] = true
+			} else {
+				delete(app.selectedFiles, key)
+			}
 		}
 		selected := app.selectedFile == file.Path && app.staged == staged
 		var row ui.Element

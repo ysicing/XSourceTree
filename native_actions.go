@@ -31,7 +31,7 @@ func (app *nativeApp) visibleFiles(staged bool) []gitrepo.File {
 
 func (app *nativeApp) checkedFiles(staged bool) []string {
 	var files []string
-	if app.repository == nil {
+	if app.repository == nil || len(app.selectedFiles) == 0 {
 		return files
 	}
 	for _, file := range app.visibleFiles(staged) {

@@ -124,6 +124,8 @@ func (app *nativeApp) view(c *ui.Context) {
 						app.historyWorkspace(c)
 					case "compare":
 						app.comparisonWorkspace(c)
+					case "worktrees":
+						app.worktreePanel(c)
 					default:
 						ui.Split(c, &app.prefs.Files, func() { app.repositoryPanel(c) }, func() { app.diffPanel(c) }).Grow(1).MinHeight(0).FillWidth()
 					}
@@ -219,6 +221,7 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 				ui.SidebarItem(c, "screen:history", nil, locales.CommitHistory()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
 				ui.SidebarItem(c, "screen:search", nil, locales.Search()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
 				ui.SidebarItem(c, "screen:compare", nil, locales.CompareVersions()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
+				ui.SidebarItem(c, "screen:worktrees", nil, locales.Worktrees()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
 			})
 			app.localBranchSidebar(c)
 			app.tagSidebar(c)
@@ -236,7 +239,9 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 				app.leaveConflict(func() {
 					app.switchWorkspace(screen)
 					app.group = ""
-					if screen == "history" && !app.historyLoaded {
+					if screen == "worktrees" {
+						app.loadWorktrees()
+					} else if screen == "history" && !app.historyLoaded {
 						app.searchHistory(false)
 					} else if (screen == "history" || screen == "search" && app.historyLoaded) &&
 						app.historyNeedsRefresh() {
@@ -497,8 +502,7 @@ func (app *nativeApp) changesSection(c *ui.Context, staged bool) {
 		if !file.Conflict {
 			count++
 		}
-		width, _ := c.MeasureText(0, ui.Span{Text: file.Path, Font: c.Theme().Font, Size: 12})
-		pathWidth = max(pathWidth, width)
+		pathWidth = max(pathWidth, app.filePathWidth(c, file.Path))
 	}
 	rowCount, listWidth := len(files), pathWidth+88
 	var nodes []*nativeFileNode
@@ -552,21 +556,23 @@ func (app *nativeApp) changesSection(c *ui.Context, staged bool) {
 			ui.Text(c, message).FontSize(12).TextColor(c.Theme().TextMuted).Padding(6, 12)
 			return
 		}
-		scroll := ui.ScrollBoth(c).Label(locales.SectionList(label)).Grow(1).MinHeight(0).FillWidth().Padding(0, 6, 6)
-		scroll.Children(func() {
-			ui.Column(c).FillWidth().MinWidth(max(listWidth, scroll.LayoutBounds().W-12)).Children(func() {
-				if app.prefs.FileTree {
+		if app.prefs.FileTree {
+			scroll := ui.ScrollBoth(c).Label(locales.SectionList(label)).Grow(1).MinHeight(0).FillWidth().Padding(0, 6, 6)
+			scroll.Children(func() {
+				ui.Column(c).FillWidth().MinWidth(max(listWidth, scroll.LayoutBounds().W-12)).Children(func() {
 					tree := ui.TreeBase(c)
 					tree.Root.Label(locales.SectionTree(label)).FillWidth().Children(func() {
 						app.fileTree(c, tree, nodes, staged, 0)
 					})
-				} else {
-					for _, file := range files {
-						app.changeFileRow(c, file, staged, nil, 0)
-					}
-				}
+				})
 			})
-		})
+		} else {
+			ui.List(c, nil, len(files)).
+				ItemKey(func(index int) any { return files[index].Path }).
+				Label(locales.SectionList(label)).Grow(1).MinHeight(0).FillWidth().
+				Padding(0, 6, 6).RowWidth(listWidth).
+				Rows(func(row ui.ListRow) { app.changeFileRow(row.Context, files[row.Index], staged, nil, 0) })
+		}
 		if count := len(app.checkedFiles(staged)); count > 0 {
 			ui.Toolbar(c, func() {
 				if ui.Button(c, fmt.Sprintf("%s (%d)", selectedAction, count)).Label(selectedAction).Disabled(!app.writable).Clicked() {

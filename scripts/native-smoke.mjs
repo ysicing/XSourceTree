@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import net from "node:net";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
@@ -274,6 +274,39 @@ try {
   await press("丢弃修改");
   assert.equal(git("status", "--porcelain"), "");
   console.log("✓ 创建、预览、应用储藏，以及备份后丢弃修改");
+
+  const linked = join(root, "中文工作区");
+  const mainHead = git("rev-parse", "HEAD");
+  await press("Worktree");
+  await press("新建 Worktree…");
+  await fill("工作目录", linked);
+  await fill("分支名称", "native-worktree");
+  await fill("起点", "HEAD");
+  await capture("native-worktree-create.png");
+  await press("创建");
+  await shown(realpathSync(linked));
+  assert.equal(git("rev-parse", "HEAD"), mainHead);
+  assert.equal(gitAt(linked, "branch", "--show-current"), "native-worktree");
+  await press(realpathSync(linked));
+  for (const [appearance, suffix] of [["浅色", "light"], ["深色", "dark"]]) {
+    await press("设置");
+    await press(appearance);
+    await press("关闭设置");
+    await capture(`native-worktrees-${suffix}.png`);
+  }
+  await press("打开工作区");
+  await shown("文件变更");
+  writeFileSync(join(linked, "worktree-feature.txt"), "来自链接工作区\n");
+  gitAt(linked, "add", ".");
+  gitAt(linked, "commit", "-m", "worktree feature");
+  await press("Worktree");
+  await press(realpathSync(fixture));
+  await press("打开工作区");
+  await press("Worktree");
+  await press(realpathSync(linked));
+  assert(existsSync(linked), "打开另一个工作目录不应移除链接工作区");
+  assert.equal(git("rev-parse", "HEAD"), mainHead, "切换工作区不应隐式合并提交");
+  console.log("✓ Worktree 创建、发现、打开与浅深色界面");
 
   await request("menu", { path: ["文件", "本地仓库"] });
   await ready();

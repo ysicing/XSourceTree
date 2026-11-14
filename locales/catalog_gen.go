@@ -1946,6 +1946,186 @@ func (msgs Messages) MergeIntoCurrent() string {
 	return Catalog.Format(msgs.locale, "mergeIntoCurrent", nil)
 }
 
+// MergeIntoBranch says "合并到 {branch}"
+// in the language the app shows.
+func MergeIntoBranch(branch string) string { return In(i18n.Locale()).MergeIntoBranch(branch) }
+
+// MergeIntoBranch says "合并到 {branch}"
+// in the language of msgs.
+func (msgs Messages) MergeIntoBranch(branch string) string {
+	return Catalog.Format(msgs.locale, "mergeIntoBranch", map[string]any{"branch": branch})
+}
+
+// CloseMergeDialog says "关闭合并窗口"
+// in the language the app shows.
+func CloseMergeDialog() string { return In(i18n.Locale()).CloseMergeDialog() }
+
+// CloseMergeDialog says "关闭合并窗口"
+// in the language of msgs.
+func (msgs Messages) CloseMergeDialog() string {
+	return Catalog.Format(msgs.locale, "closeMergeDialog", nil)
+}
+
+// MergeSource says "来源分支"
+// in the language the app shows.
+func MergeSource() string { return In(i18n.Locale()).MergeSource() }
+
+// MergeSource says "来源分支"
+// in the language of msgs.
+func (msgs Messages) MergeSource() string {
+	return Catalog.Format(msgs.locale, "mergeSource", nil)
+}
+
+// MergeModeLabel says "合并方式"
+// in the language the app shows.
+func MergeModeLabel() string { return In(i18n.Locale()).MergeModeLabel() }
+
+// MergeModeLabel says "合并方式"
+// in the language of msgs.
+func (msgs Messages) MergeModeLabel() string {
+	return Catalog.Format(msgs.locale, "mergeModeLabel", nil)
+}
+
+// MergeAutomatic says "自动（允许快进）"
+// in the language the app shows.
+func MergeAutomatic() string { return In(i18n.Locale()).MergeAutomatic() }
+
+// MergeAutomatic says "自动（允许快进）"
+// in the language of msgs.
+func (msgs Messages) MergeAutomatic() string {
+	return Catalog.Format(msgs.locale, "mergeAutomatic", nil)
+}
+
+// MergeAlwaysCommit says "始终创建合并提交"
+// in the language the app shows.
+func MergeAlwaysCommit() string { return In(i18n.Locale()).MergeAlwaysCommit() }
+
+// MergeAlwaysCommit says "始终创建合并提交"
+// in the language of msgs.
+func (msgs Messages) MergeAlwaysCommit() string {
+	return Catalog.Format(msgs.locale, "mergeAlwaysCommit", nil)
+}
+
+// MergeFastForwardOnly says "仅允许快进"
+// in the language the app shows.
+func MergeFastForwardOnly() string { return In(i18n.Locale()).MergeFastForwardOnly() }
+
+// MergeFastForwardOnly says "仅允许快进"
+// in the language of msgs.
+func (msgs Messages) MergeFastForwardOnly() string {
+	return Catalog.Format(msgs.locale, "mergeFastForwardOnly", nil)
+}
+
+// MergeSquashLabel says "压缩合并（Squash）"
+// in the language the app shows.
+func MergeSquashLabel() string { return In(i18n.Locale()).MergeSquashLabel() }
+
+// MergeSquashLabel says "压缩合并（Squash）"
+// in the language of msgs.
+func (msgs Messages) MergeSquashLabel() string {
+	return Catalog.Format(msgs.locale, "mergeSquashLabel", nil)
+}
+
+// SquashMerge says "压缩合并"
+// in the language the app shows.
+func SquashMerge() string { return In(i18n.Locale()).SquashMerge() }
+
+// SquashMerge says "压缩合并"
+// in the language of msgs.
+func (msgs Messages) SquashMerge() string {
+	return Catalog.Format(msgs.locale, "squashMerge", nil)
+}
+
+// MergeAutoCommit says "合并后立即提交"
+// in the language the app shows.
+func MergeAutoCommit() string { return In(i18n.Locale()).MergeAutoCommit() }
+
+// MergeAutoCommit says "合并后立即提交"
+// in the language of msgs.
+func (msgs Messages) MergeAutoCommit() string {
+	return Catalog.Format(msgs.locale, "mergeAutoCommit", nil)
+}
+
+// MergeAutomaticHint says "可快进时直接更新分支；分叉时创建合并提交。"
+// in the language the app shows.
+func MergeAutomaticHint() string { return In(i18n.Locale()).MergeAutomaticHint() }
+
+// MergeAutomaticHint says "可快进时直接更新分支；分叉时创建合并提交。"
+// in the language of msgs.
+func (msgs Messages) MergeAutomaticHint() string {
+	return Catalog.Format(msgs.locale, "mergeAutomaticHint", nil)
+}
+
+// MergeAlwaysHint says "即使可以快进，也创建一个合并提交。"
+// in the language the app shows.
+func MergeAlwaysHint() string { return In(i18n.Locale()).MergeAlwaysHint() }
+
+// MergeAlwaysHint says "即使可以快进，也创建一个合并提交。"
+// in the language of msgs.
+func (msgs Messages) MergeAlwaysHint() string {
+	return Catalog.Format(msgs.locale, "mergeAlwaysHint", nil)
+}
+
+// MergeOnlyHint says "只移动分支指针；存在分叉时停止合并。"
+// in the language the app shows.
+func MergeOnlyHint() string { return In(i18n.Locale()).MergeOnlyHint() }
+
+// MergeOnlyHint says "只移动分支指针；存在分叉时停止合并。"
+// in the language of msgs.
+func (msgs Messages) MergeOnlyHint() string {
+	return Catalog.Format(msgs.locale, "mergeOnlyHint", nil)
+}
+
+// MergeSquashHint says "将变更合成一次普通提交，不保留分支合并关系。"
+// in the language the app shows.
+func MergeSquashHint() string { return In(i18n.Locale()).MergeSquashHint() }
+
+// MergeSquashHint says "将变更合成一次普通提交，不保留分支合并关系。"
+// in the language of msgs.
+func (msgs Messages) MergeSquashHint() string {
+	return Catalog.Format(msgs.locale, "mergeSquashHint", nil)
+}
+
+// MergePendingHint says "结果保留在暂存区，检查后手动提交。"
+// in the language the app shows.
+func MergePendingHint() string { return In(i18n.Locale()).MergePendingHint() }
+
+// MergePendingHint says "结果保留在暂存区，检查后手动提交。"
+// in the language of msgs.
+func (msgs Messages) MergePendingHint() string {
+	return Catalog.Format(msgs.locale, "mergePendingHint", nil)
+}
+
+// MergeFastForwardHint says "快进仍会更新分支；需要检查后提交请选择“始终创建合并提交”。"
+// in the language the app shows.
+func MergeFastForwardHint() string { return In(i18n.Locale()).MergeFastForwardHint() }
+
+// MergeFastForwardHint says "快进仍会更新分支；需要检查后提交请选择“始终创建合并提交”。"
+// in the language of msgs.
+func (msgs Messages) MergeFastForwardHint() string {
+	return Catalog.Format(msgs.locale, "mergeFastForwardHint", nil)
+}
+
+// MergePreview says "提交关系示意"
+// in the language the app shows.
+func MergePreview() string { return In(i18n.Locale()).MergePreview() }
+
+// MergePreview says "提交关系示意"
+// in the language of msgs.
+func (msgs Messages) MergePreview() string {
+	return Catalog.Format(msgs.locale, "mergePreview", nil)
+}
+
+// ReplayMergePreview says "重播演示"
+// in the language the app shows.
+func ReplayMergePreview() string { return In(i18n.Locale()).ReplayMergePreview() }
+
+// ReplayMergePreview says "重播演示"
+// in the language of msgs.
+func (msgs Messages) ReplayMergePreview() string {
+	return Catalog.Format(msgs.locale, "replayMergePreview", nil)
+}
+
 // OptionalDescription says "说明（可选）"
 // in the language the app shows.
 func OptionalDescription() string { return In(i18n.Locale()).OptionalDescription() }

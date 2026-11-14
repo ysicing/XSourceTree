@@ -46,6 +46,7 @@ type nativeDialog struct {
 	canSubmit       func() bool
 	blocked         bool
 	onClose         func()
+	closeLabel      string
 	onChange        func()
 	onResult        func(error)
 	cancel          func()
@@ -103,6 +104,19 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 				title := dialog.title
 				if dialog.titleText != nil {
 					title = dialog.titleText()
+				}
+				if dialog.closeLabel != "" {
+					button := ui.Button(c, "").Label(dialog.closeLabel).Tooltip(dialog.closeLabel).
+						Size(28, 28).Padding(4).Disabled(app.busy)
+					button.Children(func() {
+						sfsymbols.Symbol(c, "xmark.circle.fill").Size(18).Color(c.Theme().TextMuted).Fallback(nativeIcons["close"])
+					})
+					if button.Clicked() {
+						app.closeDialog(dialog)
+					}
+					ui.Text(c, title).FontSize(16).Bold().Grow(1).MinWidth(0).SingleLine().TextAlign(ui.Center).Tooltip(title)
+					ui.Box(c).Size(28, 28)
+					return
 				}
 				ui.Text(c, title).FontSize(fontSize).Bold().Grow(1).MinWidth(0)
 				if dialog.onClose != nil {

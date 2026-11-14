@@ -159,12 +159,12 @@ func (service *RepositoryService) ResolveConflict(ctx context.Context, path, fil
 	return repo.ResolveConflict(ctx, file, token, choice, content)
 }
 
-func (service *RepositoryService) Merge(ctx context.Context, path, branch string) error {
+func (service *RepositoryService) Merge(ctx context.Context, path, branch string, options gitrepo.MergeOptions) error {
 	repo, err := service.manager.Get(path)
 	if err != nil {
 		return err
 	}
-	return repo.Merge(ctx, branch)
+	return repo.MergeWithOptions(ctx, branch, options)
 }
 
 func (service *RepositoryService) OperationAction(ctx context.Context, path, kind, token, action string) error {

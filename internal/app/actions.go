@@ -127,32 +127,6 @@ func (app *nativeApp) deleteTag(name string) {
 	})
 }
 
-func (app *nativeApp) mergeDialog() {
-	var names []string
-	for _, branch := range app.repository.branches {
-		if !branch.Current {
-			names = append(names, branch.Name)
-		}
-	}
-	if len(names) == 0 {
-		app.problem = locales.NoMergeBranches()
-		return
-	}
-	app.dialog = &nativeDialog{
-		title: locales.MergeIntoCurrent(), detail: app.repository.snapshot.Branch, action: locales.Merge(),
-		options: names, choice: names[0],
-		submit: func(dialog *nativeDialog) {
-			name := dialog.choice
-			app.leaveConflict(func() {
-				app.dialog = dialog
-				app.mutateForm(dialog, locales.Merging(), func(ctx context.Context, path string) error {
-					return app.service.Merge(ctx, path, name)
-				})
-			})
-		},
-	}
-}
-
 func (app *nativeApp) stashDialog() {
 	app.dialog = &nativeDialog{
 		title: locales.NewStash(), action: locales.Stash(), fields: []nativeField{{label: locales.OptionalDescription(), optional: true}},

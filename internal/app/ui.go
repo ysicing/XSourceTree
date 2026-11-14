@@ -12,6 +12,7 @@ import (
 	"github.com/ysicing/51code/internal/workspace"
 	"github.com/ysicing/51code/locales"
 
+	"github.com/egoist/mygo/plugins/sfsymbols"
 	"github.com/egoist/mygo/plugins/updater"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
@@ -51,6 +52,29 @@ func iconButton(c *ui.Context, label string, icon *ui.SVG) ui.Element {
 		button.Background(c.Theme().SurfaceHover)
 	}
 	return button.Children(func() { ui.Icon(c, icon).FontSize(16) })
+}
+
+func (app *nativeApp) feedbackButton(c *ui.Context) {
+	label := locales.Feedback()
+	button := ui.ButtonBase(c).Key("feedback").Label(label).Tooltip(label).
+		Padding(6).Radius(c.Theme().Radius).Shrink(0).AlignItems(ui.Center)
+	color := c.Theme().TextMuted
+	if button.Pressed() {
+		button.Background(c.Theme().SurfacePressed)
+		color = c.Theme().Accent
+	} else if button.Hovered() {
+		button.Background(c.Theme().SurfaceHover)
+		color = c.Theme().Accent
+	}
+	if button.Children(func() {
+		sfsymbols.Symbol(c, "bubble.left").Size(14).Color(color).Role(ui.RoleNone)
+	}).Clicked() {
+		c.OpenURLThen("https://github.com/ysicing/51code/issues/new", func(err error) {
+			if err != nil {
+				app.problem = locales.FeedbackOpenFailed(err.Error())
+			}
+		})
+	}
 }
 
 func toolButton(c *ui.Context, label string, icon *ui.SVG) ui.Element {
@@ -169,6 +193,7 @@ func (app *nativeApp) view(c *ui.Context) {
 				ui.Text(c, locales.LocalRepositoryCount(len(app.library.Repositories))).FontSize(12).TextColor(c.Theme().TextMuted)
 			}
 			ui.Spacer(c)
+			app.feedbackButton(c)
 			if app.versionButton(c) {
 				updater.CheckForUpdates()
 			}

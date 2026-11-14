@@ -398,6 +398,8 @@
   "newVersion": "New version v{version}",
   "checkNow": "Check Now",
   "checkUpdates": "Check for Updates",
+  "feedback": "Report a problem or suggestion",
+  "feedbackOpenFailed": "Unable to open the feedback page: {reason}",
   "currentVersion": "Current version: {version}",
   "connectionAndModel": "Connection & Model",
   "allRepositories": "Applies to all repositories",

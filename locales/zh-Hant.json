@@ -398,6 +398,8 @@
   "newVersion": "新版本 v{version}",
   "checkNow": "立即檢查更新",
   "checkUpdates": "檢查更新",
+  "feedback": "回報問題或建議",
+  "feedbackOpenFailed": "無法開啟回饋頁面：{reason}",
   "currentVersion": "目前版本：{version}",
   "connectionAndModel": "連線與模型",
   "allRepositories": "適用於所有儲存庫",

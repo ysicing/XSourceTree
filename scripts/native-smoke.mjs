@@ -128,6 +128,13 @@ async function capture(name) {
 try {
   const windows = (await request("windows")).windows;
   assert.equal(windows[0].kind, "content", "应用仍在使用 WebView");
+  const feedbackNodes = await shown("反馈问题或建议");
+  const feedback = feedbackNodes.find((node) => node.label === "反馈问题或建议");
+  const version = feedbackNodes.find((node) => node.label === "检查更新");
+  assert(feedback.actions?.includes("press") && !feedback.states?.includes("disabled"), "反馈入口不可用");
+  assert(version && feedback.bounds.x + feedback.bounds.width <= version.bounds.x &&
+    feedback.bounds.y >= version.bounds.y - 6, "反馈入口未显示在版本号左侧");
+  await capture("native-feedback-library.png");
   await request("menu", { path: ["文件", "本地仓库"] });
   await ready();
   await press("输入路径");

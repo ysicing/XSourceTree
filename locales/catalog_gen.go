@@ -4034,6 +4034,26 @@ func (msgs Messages) CheckUpdates() string {
 	return Catalog.Format(msgs.locale, "checkUpdates", nil)
 }
 
+// Feedback says "反馈问题或建议"
+// in the language the app shows.
+func Feedback() string { return In(i18n.Locale()).Feedback() }
+
+// Feedback says "反馈问题或建议"
+// in the language of msgs.
+func (msgs Messages) Feedback() string {
+	return Catalog.Format(msgs.locale, "feedback", nil)
+}
+
+// FeedbackOpenFailed says "无法打开反馈页面：{reason}"
+// in the language the app shows.
+func FeedbackOpenFailed(reason string) string { return In(i18n.Locale()).FeedbackOpenFailed(reason) }
+
+// FeedbackOpenFailed says "无法打开反馈页面：{reason}"
+// in the language of msgs.
+func (msgs Messages) FeedbackOpenFailed(reason string) string {
+	return Catalog.Format(msgs.locale, "feedbackOpenFailed", map[string]any{"reason": reason})
+}
+
 // CurrentVersion says "当前版本：{version}"
 // in the language the app shows.
 func CurrentVersion(version string) string { return In(i18n.Locale()).CurrentVersion(version) }

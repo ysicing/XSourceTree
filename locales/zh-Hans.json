@@ -398,6 +398,8 @@
   "newVersion": "新版本 v{version}",
   "checkNow": "立即检查更新",
   "checkUpdates": "检查更新",
+  "feedback": "反馈问题或建议",
+  "feedbackOpenFailed": "无法打开反馈页面：{reason}",
   "currentVersion": "当前版本：{version}",
   "connectionAndModel": "连接与模型",
   "allRepositories": "适用于所有仓库",

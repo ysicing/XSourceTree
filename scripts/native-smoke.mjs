@@ -97,7 +97,7 @@ async function ready() {
   await frame();
   // 弹窗会隐藏底部状态文字；其关闭按钮在后台任务执行期间同样被禁用。
   await waitFor((nodes) => !nodes.some((node) =>
-    (node.label === "正在搜索历史…") ||
+    (["正在搜索历史…", "正在加载历史…"].includes(node.label)) ||
     (node.role === "text" && node.label?.startsWith("正在") && !node.label.startsWith("正在进行")) ||
     (node.role === "button" && ["取消", "关闭设置"].includes(node.label) && node.states?.includes("disabled"))), "后台任务");
 }
@@ -407,6 +407,54 @@ try {
   await press("保存");
   await shown("日常开发");
   console.log("✓ 原生菜单、仓库列表和分组");
+
+  const paged = join(root, "连续滚动历史");
+  mkdirSync(paged);
+  gitAt(paged, "init", "-b", "main");
+  let historyStream = "";
+  for (let index = 0; index < 625; index++) {
+    const subject = `滚动提交 ${String(index).padStart(5, "0")}`;
+    historyStream += `commit refs/heads/main\nmark :${index + 1}\ncommitter Native Smoke <native@example.test> ${1800000000 + index} +0000\ndata ${Buffer.byteLength(subject)}\n${subject}\n`;
+    if (index > 0) historyStream += `from :${index}\n`;
+    const content = `history version ${index}\n`;
+    historyStream += `M 100644 inline history.txt\ndata ${Buffer.byteLength(content)}\n${content}\n`;
+  }
+  execFileSync("git", ["-C", paged, "fast-import", "--quiet"], {
+    input: historyStream, env: gitEnv, timeout: 15000, stdio: ["pipe", "pipe", "pipe"],
+  });
+  gitAt(paged, "restore", "--source=HEAD", "--staged", "--worktree", ".");
+  await press("输入路径");
+  await fill("仓库完整路径", paged);
+  await press("添加");
+  await press(basename(paged));
+  await press("提交历史");
+  await shown("滚动提交 00624");
+  await press("滚动提交 00624");
+  await press("history.txt");
+  assert(!(await tree()).some((node) => node.label === "加载更多"), "历史仍显示加载更多按钮");
+  await capture("native-history-initial.png");
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const historyNodes = await tree();
+    if (historyNodes.some((node) => node.label?.includes("滚动提交 00000"))) break;
+    const historyTable = historyNodes.find((node) => node.label === "提交历史表格");
+    assert(historyTable, "续载时历史表格消失");
+    await request("input", { events: [{
+      type: "wheel", precise: true, dx: 0, dy: 2200,
+      x: historyTable.bounds.x + historyTable.bounds.width / 2,
+      y: historyTable.bounds.y + historyTable.bounds.height / 2,
+    }] });
+    await ready();
+  }
+  await waitFor((nodes) => nodes.some((node) => node.label?.includes("滚动提交 00000")), "滚动续载到最早提交");
+  assert(!(await tree()).some((node) => node.label === "加载更多"), "续载后出现加载更多按钮");
+  await shown("history.txt");
+  for (const [appearance, suffix] of [["浅色", "light"], ["深色", "dark"]]) {
+    await press("设置");
+    await press(appearance);
+    await press("关闭设置");
+    await capture(`native-history-pagination-${suffix}.png`);
+  }
+  console.log("✓ 历史连续滚动到最早提交、无加载更多按钮与浅深色界面");
   console.log("Native UI 桌面 smoke 通过");
 } finally {
   socket.end();

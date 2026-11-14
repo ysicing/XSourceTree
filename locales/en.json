@@ -494,6 +494,7 @@
   "optionalFilePath": "File path (optional)",
   "newTag": "New Tag",
   "searchingHistory": "Searching history…",
+  "loadingHistory": "Loading history…",
   "cancelSearch": "Cancel Search",
   "noMatchingCommits": "No matching commits",
   "graph": "Graph",

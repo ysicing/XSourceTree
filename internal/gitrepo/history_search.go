@@ -26,6 +26,11 @@ type HistoryFilter struct {
 	Until         string
 }
 
+const (
+	DefaultHistoryPageSize = 100
+	MaxHistoryPageSize     = 500
+)
+
 func (filter HistoryFilter) validate() error {
 	switch filter.Mode {
 	case "", "message", "hash", "branch", "changes", "author":
@@ -45,7 +50,17 @@ func (filter HistoryFilter) validate() error {
 	return nil
 }
 
-func (repo *Repository) SearchHistory(ctx context.Context, query string, path string, skip int, filter HistoryFilter) ([]Commit, error) {
+func (repo *Repository) SearchHistory(ctx context.Context, query string, path string, skip int, filter HistoryFilter, pageSize ...int) ([]Commit, error) {
+	limit := DefaultHistoryPageSize
+	if len(pageSize) > 1 {
+		return nil, errors.New("历史分页无效")
+	}
+	if len(pageSize) == 1 {
+		limit = pageSize[0]
+	}
+	if limit < 1 || limit > MaxHistoryPageSize {
+		return nil, errors.New("历史分页无效")
+	}
 	if err := filter.validate(); err != nil {
 		return nil, err
 	}
@@ -75,7 +90,7 @@ func (repo *Repository) SearchHistory(ctx context.Context, query string, path st
 			return []Commit{}, nil
 		}
 	}
-	return repo.streamHistory(ctx, query, path, skip, filter)
+	return repo.streamHistory(ctx, query, path, skip, limit, filter)
 }
 
 func validCommitHash(hash string) error {

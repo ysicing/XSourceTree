@@ -243,14 +243,18 @@ func TestNativeHistoryPaginationKeepsSelection(t *testing.T) {
 	finish()
 	hash := app.commitHash
 	tester := ui.NewTester(app.view, 1024, 680)
-	if err := tester.Click("加载更多"); err != nil {
-		t.Fatal(err)
+	app.historyList.ScrollToEnd()
+	tester.Frame()
+	if app.readTask == nil {
+		t.Fatal("滚动到底部未续载历史")
 	}
 	finish()
 	tester.Frame()
 	if len(app.history) != 102 || app.historyMore || app.commitHash != hash || app.historySelected != 0 {
 		t.Fatal("加载更多丢失了选中的提交或分页状态")
 	}
+	app.historyList.ScrollTo(0, ui.Start)
+	tester.Frame()
 	if row, ok := tester.AccessByRole(ui.RoleRow, app.history[0].Subject); !ok || !row.Selected {
 		t.Fatal("加载更多后没有保持选中行")
 	}

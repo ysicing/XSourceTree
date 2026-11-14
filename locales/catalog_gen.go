@@ -4994,6 +4994,16 @@ func (msgs Messages) SearchingHistory() string {
 	return Catalog.Format(msgs.locale, "searchingHistory", nil)
 }
 
+// LoadingHistory says "正在加载历史…"
+// in the language the app shows.
+func LoadingHistory() string { return In(i18n.Locale()).LoadingHistory() }
+
+// LoadingHistory says "正在加载历史…"
+// in the language of msgs.
+func (msgs Messages) LoadingHistory() string {
+	return Catalog.Format(msgs.locale, "loadingHistory", nil)
+}
+
 // CancelSearch says "取消搜索"
 // in the language the app shows.
 func CancelSearch() string { return In(i18n.Locale()).CancelSearch() }

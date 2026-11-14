@@ -494,6 +494,7 @@
   "optionalFilePath": "文件路径（可选）",
   "newTag": "新建标签",
   "searchingHistory": "正在搜索历史…",
+  "loadingHistory": "正在加载历史…",
   "cancelSearch": "取消搜索",
   "noMatchingCommits": "没有匹配的提交",
   "graph": "图谱",

@@ -227,12 +227,7 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 				app.historyFilter.HideRemotes = remote == remotes[1]
 				app.searchHistory(false)
 			})
-			if app.readTask != nil && app.readTask.kind == nativeReadHistory {
-				ui.Spinner(c).Size(14, 14).Label(locales.SearchingHistory())
-				if ui.Button(c, locales.CancelSearch()).Clicked() {
-					app.readTask.cancel()
-				}
-			}
+			app.historyReadControls(c)
 		})
 	}
 	if app.viewedTag != "" {
@@ -394,12 +389,11 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 	if app.screen == "search" {
 		ui.Text(c, app.searchSummary()).FontSize(11).TextColor(c.Theme().TextMuted).Padding(4, 10)
 	}
-	if app.historyMore {
-		if ui.Button(c, locales.LoadMore()).FillWidth().
-			Disabled(app.busy || app.readTask != nil && app.readTask.kind == nativeReadHistory).Clicked() {
-			app.searchHistory(true)
-		}
+	if app.historyMore && app.historyPagePaused {
+		ui.Button(c, locales.Retry()).Disabled(app.busy || app.readTask != nil).
+			OnClick(func() { app.searchHistory(true) })
 	}
+	app.loadHistoryNearEnd(c)
 }
 
 func (app *nativeApp) historyDetails(c *ui.Context) {

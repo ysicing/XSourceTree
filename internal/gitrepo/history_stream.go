@@ -20,6 +20,7 @@ type historyLogWriter struct {
 	cancel      context.CancelFunc
 	query       string
 	skip        int
+	limit       int
 	commits     []Commit
 	fields      [8]string
 	field       []byte
@@ -35,7 +36,7 @@ type historyLogWriter struct {
 
 func newHistoryLogWriter(ctx context.Context, query string, skip int, cancel context.CancelFunc) *historyLogWriter {
 	return &historyLogWriter{
-		ctx: ctx, cancel: cancel, query: strings.ToLower(query), skip: skip, commits: []Commit{},
+		ctx: ctx, cancel: cancel, query: strings.ToLower(query), skip: skip, limit: DefaultHistoryPageSize, commits: []Commit{},
 	}
 }
 
@@ -122,17 +123,17 @@ func (writer *historyLogWriter) accept() {
 		writer.skip--
 		return
 	}
-	if writer.target != "" && len(writer.commits) == 100 {
+	if writer.target != "" && len(writer.commits) == writer.limit {
 		// 定位只保留目标所在的一页，避免把标签之前的全部历史装入内存。
 		writer.commits = writer.commits[:0]
-		writer.offset += 100
+		writer.offset += writer.limit
 	}
 	writer.commits = append(writer.commits, Commit{
 		Hash: writer.fields[0], Parents: strings.Fields(writer.fields[1]), Subject: writer.fields[2],
 		Author: writer.fields[3], Date: writer.fields[4], Refs: writer.fields[5],
 	})
 	writer.found = writer.found || writer.fields[0] == writer.target
-	if len(writer.commits) == 100 && (writer.target == "" || writer.found) {
+	if len(writer.commits) == writer.limit && (writer.target == "" || writer.found) {
 		// 仅停止本次日志子进程；调用方 Context 的取消仍须作为失败返回。
 		writer.stopped = true
 		writer.cancel()
@@ -158,8 +159,9 @@ func (writer *historyLogWriter) finish() error {
 	return nil
 }
 
-func (repo *Repository) streamHistory(ctx context.Context, query, path string, skip int, filter HistoryFilter) ([]Commit, error) {
+func (repo *Repository) streamHistory(ctx context.Context, query, path string, skip, limit int, filter HistoryFilter) ([]Commit, error) {
 	writer := newHistoryLogWriter(ctx, query, skip, nil)
+	writer.limit = limit
 	if err := repo.readHistory(ctx, path, filter, writer); err != nil {
 		return nil, err
 	}

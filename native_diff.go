@@ -160,7 +160,7 @@ func (app *nativeApp) fileDiffPanel(c *ui.Context) {
 					title = source.Path
 				}
 			}
-			if app.readTask != nil && app.readTask.kind != nativeReadHistory {
+			if app.readTask != nil && app.readTask.kind != nativeReadHistory && app.readTask.kind != nativeReadHistoryPage {
 				ui.Spinner(c).Size(14, 14)
 				title = app.readTask.label
 			}

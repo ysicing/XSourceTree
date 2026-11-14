@@ -72,6 +72,8 @@ type nativeApp struct {
 	readOnlyBusy          bool
 	scanning              bool
 	readTask              *nativeRead
+	focusRefresh          *nativeRead
+	focusError            string
 	readDone              <-chan struct{}
 	writable              bool
 	status                string
@@ -250,11 +252,7 @@ func (app *nativeApp) open() {
 			app.stopLocale = nil
 		}
 	})
-	app.win.OnFocus(func() {
-		if !app.busy && app.readTask == nil && app.dialog == nil && !app.conflictDirty() {
-			app.refresh()
-		}
-	})
+	app.win.OnFocus(app.refreshOnFocus)
 }
 
 func (app *nativeApp) savePreferences() error {
@@ -522,7 +520,8 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 				app.worktrees.setItems(worktreeItems)
 			}
 			if historyScreen && refreshErr == nil {
-				app.history, app.historyMore = history, len(history) == 100
+				app.history, app.historyMore = history, len(history) == gitrepo.DefaultHistoryPageSize
+				app.historyPagePaused = false
 				app.historyLoaded = true
 				app.historyOffset = historyOffset
 				app.historyResult = historyRequest
@@ -598,6 +597,7 @@ func isWorking(file gitrepo.File) bool { return file.Working != " " || file.Conf
 
 func (app *nativeApp) showLibrary() {
 	app.leaveConflict(func() {
+		app.cancelRead()
 		app.stopCommitAI()
 		app.screen = "library"
 	})

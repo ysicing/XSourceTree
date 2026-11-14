@@ -12,7 +12,7 @@ import (
 	"github.com/egoist/mygo"
 )
 
-func (service *RepositoryService) SearchHistory(ctx context.Context, path, query, file string, skip int, filter gitrepo.HistoryFilter) ([]gitrepo.Commit, error) {
+func (service *RepositoryService) SearchHistory(ctx context.Context, path, query, file string, skip int, filter gitrepo.HistoryFilter, pageSize ...int) ([]gitrepo.Commit, error) {
 	repo, err := service.manager.Get(path)
 	if err != nil {
 		return nil, err
@@ -31,7 +31,7 @@ func (service *RepositoryService) SearchHistory(ctx context.Context, path, query
 		service.cancelHistory = nil
 		service.historyMu.Unlock()
 	}()
-	return repo.SearchHistory(ctx, query, file, skip, filter)
+	return repo.SearchHistory(ctx, query, file, skip, filter, pageSize...)
 }
 
 func (service *RepositoryService) CancelHistory() {

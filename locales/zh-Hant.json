@@ -494,6 +494,7 @@
   "optionalFilePath": "檔案路徑（選填）",
   "newTag": "新增標籤",
   "searchingHistory": "正在搜尋歷史…",
+  "loadingHistory": "正在載入歷史…",
   "cancelSearch": "取消搜尋",
   "noMatchingCommits": "沒有符合的提交",
   "graph": "圖譜",

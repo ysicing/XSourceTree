@@ -196,8 +196,10 @@ func TestNativeTagSelectionBeyondFirstPageAndLoadMore(t *testing.T) {
 			app.historyOffset, app.historySelected, len(app.history), app.problem)
 	}
 	tester := ui.NewTester(app.view, 1024, 680)
-	if err := tester.Click("加载更多"); err != nil {
-		t.Fatal(err)
+	app.historyList.ScrollToEnd()
+	tester.Frame()
+	if app.readTask == nil {
+		t.Fatal("滚动到底部未续载标签所在页")
 	}
 	finish()
 	tester.Frame()

@@ -37,6 +37,7 @@ const (
 	nativeReadDiff nativeReadKind = iota
 	nativeReadHistory
 	nativeReadCommit
+	nativeReadHistoryPage
 )
 
 type nativeRead struct {
@@ -46,6 +47,10 @@ type nativeRead struct {
 }
 
 func (app *nativeApp) cancelRead() {
+	if app.focusRefresh != nil {
+		app.focusRefresh.cancel()
+		app.focusRefresh = nil
+	}
 	if app.readTask != nil {
 		app.readTask.cancel()
 		app.readTask = nil
@@ -282,17 +287,24 @@ func (app *nativeApp) searchHistory(more bool) {
 	}
 	more = more && request == app.historyResult
 	skip := 0
+	limit, kind, label := gitrepo.DefaultHistoryPageSize, nativeReadHistory, locales.SearchingHistory()
 	if more {
 		skip = app.historyOffset + len(app.history)
+		limit, kind, label = gitrepo.MaxHistoryPageSize, nativeReadHistoryPage, locales.LoadingHistory()
+		app.historyPagePaused = false
 	}
-	app.load(locales.SearchingHistory(), nativeReadHistory, func(ctx context.Context) (func(), error) {
-		commits, err := app.service.SearchHistory(ctx, path, request.query, request.file, skip, request.filter)
+	app.load(label, kind, func(ctx context.Context) (func(), error) {
+		commits, err := app.service.SearchHistory(ctx, path, request.query, request.file, skip, request.filter, limit)
 		return func() {
 			// 搜索取消或超时时保留已读取结果。
 			if err != nil {
+				if more {
+					app.historyPagePaused = true
+				}
 				return
 			}
 			if more {
+				app.historyList.HoldPlace()
 				app.history = append(app.history, commits...)
 			} else {
 				app.history = commits
@@ -306,7 +318,8 @@ func (app *nativeApp) searchHistory(more bool) {
 			}
 			app.historyResult = request
 			app.historyLoaded = true
-			app.historyMore = len(commits) == 100
+			app.historyMore = len(commits) == limit
+			app.historyPagePaused = false
 		}, err
 	})
 }
@@ -396,7 +409,8 @@ func (app *nativeApp) selectTag(name string, all bool) {
 					index := slices.IndexFunc(app.history, func(commit gitrepo.Commit) bool { return commit.Hash == hash })
 					if all || request != app.historyResult || index < 0 {
 						app.history, app.historyOffset = location.Commits, location.Offset
-						app.historyMore = len(location.Commits) == 100
+						app.historyMore = len(location.Commits) == gitrepo.DefaultHistoryPageSize
+						app.historyPagePaused = false
 						app.historyList = &ui.ListState{}
 					}
 					app.historyResult = request

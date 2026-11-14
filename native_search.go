@@ -20,6 +20,7 @@ type nativeHistoryState struct {
 	historyQuery         string
 	historyFile          string
 	historyMore          bool
+	historyPagePaused    bool
 	historyOffset        int
 	historyFilter        gitrepo.HistoryFilter
 	historyResult        nativeHistoryRequest
@@ -137,10 +138,7 @@ func (app *nativeApp) searchControls(c *ui.Context) {
 			if ui.PrimaryButton(c, locales.Search()).Label(locales.RunSearch()).Disabled(app.busy).Clicked() || submitted || pathSubmitted {
 				app.executeSearch()
 			}
-			if app.readTask != nil && app.readTask.kind == nativeReadHistory {
-				ui.Spinner(c).Size(14, 14).Label(locales.SearchingHistory())
-				ui.Button(c, locales.CancelSearch()).OnClick(app.readTask.cancel)
-			}
+			app.historyReadControls(c)
 		})
 		if app.searchDateEnabled {
 			ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
@@ -211,7 +209,8 @@ func (app *nativeApp) revealSearchCommit(hash string) {
 		}
 		return func() {
 			app.history, app.historyOffset = location.Commits, location.Offset
-			app.historyMore, app.historyLoaded = len(location.Commits) == 100, true
+			app.historyMore, app.historyLoaded = len(location.Commits) == gitrepo.DefaultHistoryPageSize, true
+			app.historyPagePaused = false
 			app.historyQuery, app.historyFile, app.historyFilter = "", "", filter
 			app.historyResult = app.historyRequest()
 			app.viewedTag, app.viewedCommit = "", location.Commit

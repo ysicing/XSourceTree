@@ -45,7 +45,7 @@ func TestNativeFilteredBulkStaging(t *testing.T) {
 }
 
 func TestNativeSelectionDialogsRender(t *testing.T) {
-	app, path, _ := nativeFixture(t)
+	app, path, finish := nativeFixture(t)
 	app.scanResult = &workspace.ScanResult{Repositories: []workspace.LocalRepository{{Path: path}}}
 	app.scanSelected = map[string]bool{}
 	app.scanDialog()
@@ -62,14 +62,21 @@ func TestNativeSelectionDialogsRender(t *testing.T) {
 	if info, ok := tester.AccessByRole(ui.RoleButton, "添加所选仓库"); !ok || !info.Disabled {
 		t.Fatal("未选择仓库仍可添加")
 	}
-	app.lineChoices = []nativeLine{{ID: 1, Text: "+第一行"}, {ID: 2, Text: "-第二行"}}
+	app.dialog = nil
+	writeNativeFile(t, path, "hello.txt", "第一行\n第二行\n")
+	app.refresh()
+	finish()
+	app.selectFile("hello.txt", false)
+	finish()
 	app.linesDialog()
 	tester.Frame()
 	if err := tester.Click("+第一行"); err != nil {
 		t.Fatal(err)
 	}
-	if !app.lineChoices[0].Checked || app.lineChoices[1].Checked {
-		t.Fatal("逐行选择状态串行")
+	for _, line := range app.lineChoices {
+		if line.Checked != (line.Text == "+第一行") {
+			t.Fatal("逐行选择状态串行")
+		}
 	}
 }
 

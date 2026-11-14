@@ -469,6 +469,9 @@ func (app *nativeApp) scanDialog() {
 }
 
 func (app *nativeApp) linesDialog() {
+	if !app.canApplyPatch() {
+		return
+	}
 	app.dialog = &nativeDialog{
 		title: locales.SelectChangedLines(), action: locales.ApplySelectedLines(),
 		detail: locales.SelectLinesDetail(),

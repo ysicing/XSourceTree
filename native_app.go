@@ -31,6 +31,7 @@ type nativePreferences struct {
 	HistoryFiles         float32                     `json:"historyFiles"`
 	ChangesSplit         float32                     `json:"changesSplit,omitempty"`
 	Split                bool                        `json:"split"`
+	DiffLayout           string                      `json:"diffLayout,omitempty"`
 	Wrap                 bool                        `json:"wrap"`
 	FileSort             string                      `json:"fileSort"`
 	FileDescending       bool                        `json:"fileDescending"`
@@ -92,6 +93,9 @@ type nativeApp struct {
 	diffNames             []string
 	hunkOffsets           []int
 	rawDiff               editor.State
+	fileViewer            nativeFileViewer
+	diffWidth             float32
+	diffAutoSplit         bool
 	lineChoices           []nativeLine
 	conflict              *gitrepo.Conflict
 	conflictEdit          editor.State
@@ -134,7 +138,7 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 		aiKeys: aikeychain.Store{Service: "com.ysicing.xsourcetree.ai"},
 		screen: "library", library: service.Library(), selectedFiles: map[string]bool{},
 		prefs: nativePreferences{
-			Sidebar: 226, Files: 360, History: 56, HistoryFiles: 280, Wrap: true, Drafts: map[string]string{},
+			Sidebar: 226, Files: 360, History: 56, HistoryFiles: 280, Wrap: true, DiffLayout: "auto", Drafts: map[string]string{},
 			Appearance: appearanceSystem, Shortcuts: defaultNativeShortcuts(),
 		},
 		nativeHistoryState: newNativeHistoryState(),
@@ -145,7 +149,9 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 	if data, err := os.ReadFile(stateFile); err == nil {
 		stored := struct {
 			*nativePreferences
-			ByName bool `json:"byName"`
+			ByName     bool    `json:"byName"`
+			Split      *bool   `json:"split"`
+			DiffLayout *string `json:"diffLayout"`
 		}{nativePreferences: &app.prefs}
 		if err := json.Unmarshal(data, &stored); err != nil {
 			app.problem = locales.LoadPreferencesFailed()
@@ -153,6 +159,23 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 		if app.prefs.FileSort == "" && stored.ByName {
 			app.prefs.FileSort = "name"
 		}
+		if stored.Split != nil {
+			app.prefs.Split = *stored.Split
+			if stored.DiffLayout == nil {
+				app.prefs.DiffLayout = "unified"
+				if *stored.Split {
+					app.prefs.DiffLayout = "split"
+				}
+			}
+		}
+		if stored.DiffLayout != nil {
+			app.prefs.DiffLayout = *stored.DiffLayout
+		}
+	}
+	switch app.prefs.DiffLayout {
+	case "auto", "unified", "split":
+	default:
+		app.prefs.DiffLayout = "auto"
 	}
 	switch app.prefs.FileSort {
 	case "path", "name", "status":

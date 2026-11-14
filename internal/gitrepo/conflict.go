@@ -21,6 +21,8 @@ import (
 
 const conflictTextLimit = 1 << 20
 
+var errUnsupportedAncestor = errors.New("冲突路径的父目录不能是符号链接或普通文件")
+
 type ConflictSide struct {
 	Present bool   `json:"present"`
 	Text    string `json:"text"`
@@ -178,7 +180,7 @@ func (repo *Repository) checkConflictAncestors(ctx context.Context, root *os.Roo
 		}
 		// Root 允许仓库内链接，因此还需拒绝链接祖先及实际 Git 元数据目录。
 		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
-			return errors.New("冲突路径的父目录不能是符号链接或普通文件")
+			return errUnsupportedAncestor
 		}
 		for _, directory := range metadata {
 			if os.SameFile(info, directory) {

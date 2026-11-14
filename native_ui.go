@@ -611,78 +611,13 @@ func (app *nativeApp) stashPanel(c *ui.Context) {
 }
 
 func (app *nativeApp) diffPanel(c *ui.Context) {
-	ui.Column(c).Fill().MinWidth(0).Disabled(app.readTask != nil).Children(func() {
-		if app.conflict != nil {
-			app.conflictPanel(c)
-			return
-		}
-		ui.Row(c).FillWidth().Padding(10, 14).Gap(8).AlignItems(ui.Center).Children(func() {
-			title := app.selectedFile
-			if (app.screen == "history" || app.screen == "search") && !app.historyWorking {
-				title = app.commitFile
-				if title == "" {
-					title = shortHash(app.commitHash)
-				}
-			} else if app.screen == "stash" {
-				title = locales.StashDiff()
-			}
-			if app.readTask != nil && app.readTask.kind != nativeReadHistory {
-				ui.Spinner(c).Size(14, 14)
-				title = app.readTask.label
-			}
-			ui.Text(c, title).Bold().Grow(1).MinWidth(0).MaxLines(1).Tooltip(title)
-			layout := 0
-			if app.prefs.Split {
-				layout = 1
-			}
-			if ui.Segmented(c, &layout, locales.UnifiedDiff(), locales.SplitDiff()).Label(locales.DiffLayout()).Changed() {
-				app.prefs.Split = layout == 1
-			}
-			ui.Checkbox(c, &app.prefs.Wrap, locales.Wrap())
-		})
-		if app.screen == "changes" && app.selectedFile != "" {
-			app.patchToolbar(c)
-		}
-		ui.Divider(c)
-		if app.diff.Truncated {
-			ui.Text(c, locales.TruncatedPreview()).Padding(10).TextColor(c.Theme().Warning)
-		}
-		if len(app.diffViews) == 1 {
-			app.configureDiff(app.diffViews[0])
-			editor.DiffView(c, app.diffViews[0]).Grow(1).FillWidth().MinHeight(0)
-		} else if len(app.diffViews) > 1 {
-			ui.Scroll(c).Grow(1).MinHeight(0).FillWidth().Children(func() {
-				for index, state := range app.diffViews {
-					ui.Column(c).Key(index).FillWidth().Children(func() {
-						ui.Text(c, app.diffNames[index]).Bold().Padding(10, 14)
-						app.configureDiff(state)
-						state.FitContent = true
-						editor.DiffView(c, state).FillWidth()
-					})
-				}
-			})
-		} else if app.rawDiff.Buffer != nil && app.diff.Text != "" {
-			app.rawDiff.SoftWrap = app.prefs.Wrap
-			editor.View(c, &app.rawDiff).Grow(1).FillWidth().MinHeight(0)
-		} else {
-			ui.Column(c).Grow(1).FillWidth().Center().Gap(8).Children(func() {
-				message := locales.SelectFileOrCommit()
-				if app.screen == "stash" {
-					message = locales.SelectStash()
-					if len(app.repository.stashes) == 0 {
-						message = locales.EmptyStashDiff()
-					}
-				}
-				ui.Text(c, message).TextColor(c.Theme().TextMuted)
-			})
-		}
-	})
+	app.fileDiffPanel(c)
 }
 
 func (app *nativeApp) configureDiff(state *editor.DiffState) {
 	state.Wrap = app.prefs.Wrap
 	state.Layout = editor.DiffUnified
-	if app.prefs.Split {
+	if app.prefs.DiffLayout == "split" || app.prefs.DiffLayout == "auto" && app.diffAutoSplit {
 		state.Layout = editor.DiffSplit
 	}
 }
@@ -693,20 +628,16 @@ func (app *nativeApp) patchToolbar(c *ui.Context) {
 		if app.staged {
 			action = locales.UnstageFile()
 		}
-		if ui.Button(c, action).Clicked() {
+		if ui.Button(c, action).Disabled(!app.writable).Clicked() {
 			app.stageSelectedFile()
 		}
+		if ui.Button(c, locales.FileHistory()).Clicked() {
+			app.fileHistoryAction()
+		}
 		if !app.staged {
-			if ui.Button(c, locales.DiscardChangesMenu()).Clicked() {
+			if ui.Button(c, locales.DiscardChangesMenu()).Disabled(!app.writable).Clicked() {
 				app.discardFile()
 			}
-		}
-		if ui.Button(c, locales.FileHistory()).Clicked() {
-			file := app.selectedFile
-			app.switchWorkspace("search")
-			app.historyFile, app.historyQuery, app.historyFilter = file, "", gitrepo.HistoryFilter{}
-			app.searchDateEnabled = false
-			app.executeSearch()
 		}
 		if !app.patch.Supported || len(app.patch.Hunks) == 0 {
 			return
@@ -724,13 +655,13 @@ func (app *nativeApp) patchToolbar(c *ui.Context) {
 		if app.staged {
 			label = locales.UnstageHunk()
 		}
-		if ui.Button(c, label).Clicked() {
+		if ui.Button(c, label).Disabled(!app.writable || !app.canApplyPatch()).Clicked() {
 			app.applyHunk()
 		}
-		if ui.Button(c, locales.SelectLinesMenu()).Clicked() {
+		if ui.Button(c, locales.SelectLinesMenu()).Disabled(!app.writable || !app.canApplyPatch()).Clicked() {
 			app.linesDialog()
 		}
-	}).Label(locales.DiffActions()).FillWidth().Padding(2, 10, 8).Disabled(!app.writable)
+	}).Label(locales.DiffActions()).FillWidth().Padding(2, 0, 6)
 }
 
 func (app *nativeApp) conflictPanel(c *ui.Context) {

@@ -505,5 +505,19 @@
   "operationFailed": "Operation Failed",
   "gitOperationFailed": "Git operation failed. View details for more information.",
   "showDetails": "View Details",
-  "dismissNotice": "Dismiss"
+  "dismissNotice": "Dismiss",
+  "fileDiff": "Diff",
+  "fullFile": "Full File",
+  "fileViewMode": "File View Mode",
+  "fileContentLabel": "Full File Content",
+  "fileVersion": "File Version",
+  "workingVersion": "Working Tree",
+  "indexVersion": "Index",
+  "commitVersion": "Commit {hash}",
+  "absentVersion": "This file does not exist in this version.",
+  "automaticDiff": "Auto",
+  "findInFile": "Find",
+  "fileContentTooLarge": "The full file exceeds 1 MiB. Open it in an external editor.",
+  "fileContentUnsupported": "Full-file previews are unavailable for symbolic links, submodules, and special files.",
+  "diffContextChanged": "The file no longer matches the diff. Original hunks are preserved. Refresh to retry."
 }

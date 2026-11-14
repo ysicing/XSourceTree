@@ -163,7 +163,7 @@ func TestNativeHistoryWorkspace(t *testing.T) {
 	if app.commitFile != "hello.txt" {
 		t.Fatal("文件列表不支持方向键选择")
 	}
-	for _, label := range []string{"并排", "换行"} {
+	for _, label := range []string{"差异布局", "并排", "换行"} {
 		if err := tester.Click(label); err != nil {
 			t.Fatal(err)
 		}

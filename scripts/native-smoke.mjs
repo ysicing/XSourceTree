@@ -141,8 +141,14 @@ try {
   await capture("native-desktop-working-history.png");
   await press("前往文件变更");
   await press("hello.txt");
+  await press("差异布局");
   await press("并排");
   await capture("native-desktop-diff.png");
+  await press("全文");
+  const full = (await shown("文件全文")).find((node) => node.label === "文件全文");
+  assert(full.states?.includes("readOnly"), "全文预览必须只读");
+  await capture("native-desktop-full-file.png");
+  await press("差异");
   await press("暂存文件");
   await fill("提交说明", "使用原生 UI 提交");
   await request("menu", { path: ["仓库", "提交"] });

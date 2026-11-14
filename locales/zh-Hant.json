@@ -505,5 +505,19 @@
   "operationFailed": "操作失敗",
   "gitOperationFailed": "Git 操作失敗，請檢視詳細資訊",
   "showDetails": "檢視詳細資訊",
-  "dismissNotice": "關閉提示"
+  "dismissNotice": "關閉提示",
+  "fileDiff": "差異",
+  "fullFile": "全文",
+  "fileViewMode": "檔案檢視模式",
+  "fileContentLabel": "檔案全文",
+  "fileVersion": "檔案版本",
+  "workingVersion": "工作目錄",
+  "indexVersion": "暫存區",
+  "commitVersion": "提交 {hash}",
+  "absentVersion": "此版本不存在該檔案",
+  "automaticDiff": "自動",
+  "findInFile": "尋找",
+  "fileContentTooLarge": "完整檔案超過 1 MiB，請使用外部編輯器檢視。",
+  "fileContentUnsupported": "符號連結、子模組及特殊檔案不提供全文預覽。",
+  "diffContextChanged": "檔案內容與差異不一致，已保留原始區塊。請重新整理後再試。"
 }

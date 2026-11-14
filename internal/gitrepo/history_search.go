@@ -227,7 +227,7 @@ func (repo *Repository) CommitFileDiff(ctx context.Context, hash string, path st
 	if err != nil {
 		return Diff{}, err
 	}
-	return Diff{Text: output, Binary: strings.Contains(output, "Binary files ")}, nil
+	return repo.commitFileContents(ctx, Diff{Text: output, Binary: strings.Contains(output, "Binary files ")}, *selected, hash)
 }
 
 func selectedCommitPatch(output string, file CommitFile) (string, error) {

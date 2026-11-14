@@ -6,6 +6,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"testing"
 
@@ -180,7 +181,7 @@ func TestNativeFileViewKeepsContext(t *testing.T) {
 	choose("文件视图", "目录树")
 	choose("文件排序", "按文件状态排序")
 	choose("文件排序", "倒序")
-	if app.selectedFile != "src/api/main.go" || app.diff != diff || !app.selectedFiles["false:src/api/main.go"] {
+	if app.selectedFile != "src/api/main.go" || !reflect.DeepEqual(app.diff, diff) || !app.selectedFiles["false:src/api/main.go"] {
 		t.Fatal("视图切换丢失文件、Diff 或勾选状态")
 	}
 	if err := tester.Click("src/ui/main.go"); err != nil {
@@ -216,7 +217,7 @@ func TestNativeFileViewKeepsContext(t *testing.T) {
 	if err := tester.Click("清除筛选"); err != nil {
 		t.Fatal(err)
 	}
-	if len(app.checkedFiles(false)) != 1 || app.diff != diff {
+	if len(app.checkedFiles(false)) != 1 || !reflect.DeepEqual(app.diff, diff) {
 		t.Fatal("清除筛选未恢复勾选或改变了 Diff")
 	}
 	for _, size := range []struct {
@@ -257,7 +258,7 @@ func TestNativeFileViewKeepsContext(t *testing.T) {
 	}
 	choose("文件排序", "按文件状态排序")
 	choose("文件视图", "平面列表")
-	if app.diff != diff || !app.selectedFiles["false:src/api/main.go"] {
+	if !reflect.DeepEqual(app.diff, diff) || !app.selectedFiles["false:src/api/main.go"] {
 		t.Fatal("返回平面列表丢失审阅状态")
 	}
 	app.fileFilter, app.fileQuery = "conflicts", "old-query"

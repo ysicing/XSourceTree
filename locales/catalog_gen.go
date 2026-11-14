@@ -5115,3 +5115,143 @@ func DismissNotice() string { return In(i18n.Locale()).DismissNotice() }
 func (msgs Messages) DismissNotice() string {
 	return Catalog.Format(msgs.locale, "dismissNotice", nil)
 }
+
+// FileDiff says "差异"
+// in the language the app shows.
+func FileDiff() string { return In(i18n.Locale()).FileDiff() }
+
+// FileDiff says "差异"
+// in the language of msgs.
+func (msgs Messages) FileDiff() string {
+	return Catalog.Format(msgs.locale, "fileDiff", nil)
+}
+
+// FullFile says "全文"
+// in the language the app shows.
+func FullFile() string { return In(i18n.Locale()).FullFile() }
+
+// FullFile says "全文"
+// in the language of msgs.
+func (msgs Messages) FullFile() string {
+	return Catalog.Format(msgs.locale, "fullFile", nil)
+}
+
+// FileViewMode says "文件查看模式"
+// in the language the app shows.
+func FileViewMode() string { return In(i18n.Locale()).FileViewMode() }
+
+// FileViewMode says "文件查看模式"
+// in the language of msgs.
+func (msgs Messages) FileViewMode() string {
+	return Catalog.Format(msgs.locale, "fileViewMode", nil)
+}
+
+// FileContentLabel says "文件全文"
+// in the language the app shows.
+func FileContentLabel() string { return In(i18n.Locale()).FileContentLabel() }
+
+// FileContentLabel says "文件全文"
+// in the language of msgs.
+func (msgs Messages) FileContentLabel() string {
+	return Catalog.Format(msgs.locale, "fileContentLabel", nil)
+}
+
+// FileVersion says "文件版本"
+// in the language the app shows.
+func FileVersion() string { return In(i18n.Locale()).FileVersion() }
+
+// FileVersion says "文件版本"
+// in the language of msgs.
+func (msgs Messages) FileVersion() string {
+	return Catalog.Format(msgs.locale, "fileVersion", nil)
+}
+
+// WorkingVersion says "工作区"
+// in the language the app shows.
+func WorkingVersion() string { return In(i18n.Locale()).WorkingVersion() }
+
+// WorkingVersion says "工作区"
+// in the language of msgs.
+func (msgs Messages) WorkingVersion() string {
+	return Catalog.Format(msgs.locale, "workingVersion", nil)
+}
+
+// IndexVersion says "暂存区"
+// in the language the app shows.
+func IndexVersion() string { return In(i18n.Locale()).IndexVersion() }
+
+// IndexVersion says "暂存区"
+// in the language of msgs.
+func (msgs Messages) IndexVersion() string {
+	return Catalog.Format(msgs.locale, "indexVersion", nil)
+}
+
+// CommitVersion says "提交 {hash}"
+// in the language the app shows.
+func CommitVersion(hash string) string { return In(i18n.Locale()).CommitVersion(hash) }
+
+// CommitVersion says "提交 {hash}"
+// in the language of msgs.
+func (msgs Messages) CommitVersion(hash string) string {
+	return Catalog.Format(msgs.locale, "commitVersion", map[string]any{"hash": hash})
+}
+
+// AbsentVersion says "此版本不存在该文件"
+// in the language the app shows.
+func AbsentVersion() string { return In(i18n.Locale()).AbsentVersion() }
+
+// AbsentVersion says "此版本不存在该文件"
+// in the language of msgs.
+func (msgs Messages) AbsentVersion() string {
+	return Catalog.Format(msgs.locale, "absentVersion", nil)
+}
+
+// AutomaticDiff says "自动"
+// in the language the app shows.
+func AutomaticDiff() string { return In(i18n.Locale()).AutomaticDiff() }
+
+// AutomaticDiff says "自动"
+// in the language of msgs.
+func (msgs Messages) AutomaticDiff() string {
+	return Catalog.Format(msgs.locale, "automaticDiff", nil)
+}
+
+// FindInFile says "查找"
+// in the language the app shows.
+func FindInFile() string { return In(i18n.Locale()).FindInFile() }
+
+// FindInFile says "查找"
+// in the language of msgs.
+func (msgs Messages) FindInFile() string {
+	return Catalog.Format(msgs.locale, "findInFile", nil)
+}
+
+// FileContentTooLarge says "完整文件超过 1 MiB，请使用外部编辑器查看。"
+// in the language the app shows.
+func FileContentTooLarge() string { return In(i18n.Locale()).FileContentTooLarge() }
+
+// FileContentTooLarge says "完整文件超过 1 MiB，请使用外部编辑器查看。"
+// in the language of msgs.
+func (msgs Messages) FileContentTooLarge() string {
+	return Catalog.Format(msgs.locale, "fileContentTooLarge", nil)
+}
+
+// FileContentUnsupported says "符号链接、子模块及特殊文件不提供全文预览。"
+// in the language the app shows.
+func FileContentUnsupported() string { return In(i18n.Locale()).FileContentUnsupported() }
+
+// FileContentUnsupported says "符号链接、子模块及特殊文件不提供全文预览。"
+// in the language of msgs.
+func (msgs Messages) FileContentUnsupported() string {
+	return Catalog.Format(msgs.locale, "fileContentUnsupported", nil)
+}
+
+// DiffContextChanged says "文件内容与差异不一致，已保留原始区块。请刷新后重试。"
+// in the language the app shows.
+func DiffContextChanged() string { return In(i18n.Locale()).DiffContextChanged() }
+
+// DiffContextChanged says "文件内容与差异不一致，已保留原始区块。请刷新后重试。"
+// in the language of msgs.
+func (msgs Messages) DiffContextChanged() string {
+	return Catalog.Format(msgs.locale, "diffContextChanged", nil)
+}

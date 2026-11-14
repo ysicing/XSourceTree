@@ -719,6 +719,9 @@ func TestNativeUIChineseDraftAndDiffLayouts(t *testing.T) {
 	app.selectFile("hello.txt", false)
 	finish()
 	tester.Frame()
+	if err := tester.Click("差异布局"); err != nil {
+		t.Fatal(err)
+	}
 	if err := tester.Click("并排"); err != nil {
 		t.Fatal(err)
 	}
@@ -732,6 +735,9 @@ func TestNativeUIChineseDraftAndDiffLayouts(t *testing.T) {
 	tester.Frame()
 	if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
 		saveNativeScreenshot(t, tester, directory, "native-diff.png")
+	}
+	if err := tester.Click("差异布局"); err != nil {
+		t.Fatal(err)
 	}
 	if err := tester.Click("统一"); err != nil {
 		t.Fatal(err)

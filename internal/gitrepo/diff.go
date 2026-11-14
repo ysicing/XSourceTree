@@ -15,16 +15,20 @@ import (
 )
 
 type Diff struct {
-	Text      string `json:"text"`
-	Binary    bool   `json:"binary"`
-	Truncated bool   `json:"truncated"`
+	Text      string       `json:"text"`
+	Binary    bool         `json:"binary"`
+	Truncated bool         `json:"truncated"`
+	Old       *FileContent `json:"old,omitempty"`
+	New       *FileContent `json:"new,omitempty"`
 }
 
 func (repo *Repository) Diff(ctx context.Context, path string, staged bool) (Diff, error) {
 	if err := validPath(path); err != nil {
 		return Diff{}, err
 	}
-	repo.mu.Lock()
+	if err := repo.lockHistory(ctx); err != nil {
+		return Diff{}, err
+	}
 	defer repo.mu.Unlock()
 	files, err := repo.files(ctx)
 	if err != nil {
@@ -41,7 +45,11 @@ func (repo *Repository) Diff(ctx context.Context, path string, staged bool) (Dif
 		return Diff{}, errors.New("文件状态已改变，请刷新")
 	}
 	if !staged && selected.Index == "?" {
-		return repo.untrackedDiff(path)
+		diff, err := repo.untrackedDiff(path)
+		if err != nil {
+			return Diff{}, err
+		}
+		return repo.diffFileContents(ctx, diff, *selected, staged)
 	}
 	args := []string{"diff", "--no-ext-diff", "--no-textconv", "--find-renames"}
 	if staged {
@@ -52,7 +60,10 @@ func (repo *Repository) Diff(ctx context.Context, path string, staged bool) (Dif
 		args = append(args, selected.OriginalPath)
 	}
 	output, err := repo.git(ctx, args...)
-	return Diff{Text: output, Binary: strings.Contains(output, "Binary files ")}, err
+	if err != nil {
+		return Diff{}, err
+	}
+	return repo.diffFileContents(ctx, Diff{Text: output, Binary: strings.Contains(output, "Binary files ")}, *selected, staged)
 }
 
 func (repo *Repository) untrackedDiff(path string) (Diff, error) {

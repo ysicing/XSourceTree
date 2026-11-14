@@ -162,7 +162,12 @@ func (app *nativeApp) setSelection(selection *nativeSelection) {
 		}
 		return
 	}
-	app.setDiff(selection.diff)
+	diff := selection.diff
+	if selection.patch.Supported {
+		// 展示与操作令牌使用同一份稳定补丁；完整版本不匹配时只允许查看和整文件操作。
+		diff.Text = selection.patch.Text
+	}
+	app.setDiff(diff)
 	if selection.patch.Supported {
 		app.lineChoices = patchLines(selection.patch.Text)
 	}
@@ -183,6 +188,7 @@ func patchLines(text string) []nativeLine {
 
 func (app *nativeApp) setDiff(diff gitrepo.Diff) {
 	app.diff = diff
+	app.fileViewer.setSources(diff)
 	app.diffViews, app.diffNames = nil, nil
 	app.hunkOffsets = nil
 	patches, err := editor.ParsePatch(diff.Text)
@@ -195,6 +201,14 @@ func (app *nativeApp) setDiff(diff gitrepo.Diff) {
 			}
 			state := &editor.DiffState{Wrap: app.prefs.Wrap, Indicators: editor.DiffClassic}
 			state.SetPatch(patch)
+			if len(patches) == 1 && diff.Old != nil && diff.New != nil &&
+				!diff.Old.Binary && !diff.New.Binary && !diff.Old.Truncated && !diff.New.Truncated &&
+				!diff.Old.Unsupported && !diff.New.Unsupported {
+				// 保留 Git 生成的增删段，不能因补齐上下文而改变逐行暂存的坐标。
+				if err := state.SetPatchFiles(patch, diff.Old.Text, diff.New.Text); err != nil {
+					app.fileViewer.contextChanged = true
+				}
+			}
 			app.diffViews = append(app.diffViews, state)
 			name := patch.NewName
 			if name == "" {
@@ -440,7 +454,7 @@ func (app *nativeApp) selectStash(hash string) {
 }
 
 func (app *nativeApp) applyHunk() {
-	if len(app.patch.Hunks) == 0 || !app.patch.Supported {
+	if len(app.patch.Hunks) == 0 || !app.canApplyPatch() {
 		return
 	}
 	file, staged, token, id := app.selectedFile, app.staged, app.patch.Token, app.hunk
@@ -450,6 +464,9 @@ func (app *nativeApp) applyHunk() {
 }
 
 func (app *nativeApp) applyLines() {
+	if !app.canApplyPatch() {
+		return
+	}
 	var ids []int
 	for _, line := range app.lineChoices {
 		if line.Checked {
